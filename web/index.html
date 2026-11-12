@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Suguru</title>
+<meta name="description" content="Suguru med ægte sværhedsgrad, guidede hints og statistik.">
+<meta name="theme-color" id="themeColor" content="#f3f4ef">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Suguru">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho+B1:wght@600;800&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+
+<!-- ============ FORSIDE ============ -->
+<section class="view" id="v-home" aria-label="Forside">
+  <header class="hero">
+    <div class="stamp" aria-hidden="true">数</div>
+    <h1>Suguru</h1>
+    <p>Logik med regioner og naboer</p>
+  </header>
+
+  <div class="card install" id="installCard" hidden>
+    <svg class="i" viewBox="0 0 24 24"><path d="M12 3v12M8 7l4-4 4 4M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/></svg>
+    <div><strong>Læg Suguru på hjemmeskærmen</strong><span class="sub">Tryk på Del-knappen i Safari og vælg »Føj til hjemmeskærm«. Så kører spillet som en app, også offline.</span></div>
+    <button class="x" id="installX" type="button" aria-label="Skjul">×</button>
+  </div>
+
+  <button class="card" id="contCard" type="button" hidden>
+    <div class="thumb" id="contThumb" aria-hidden="true"></div>
+    <div><span class="eyebrow">Fortsæt</span><strong id="contTitle"></strong><span class="sub" id="contSub"></span></div>
+    <svg class="i chev" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg>
+  </button>
+
+  <button class="card" id="dailyCard" type="button">
+    <div class="cal" aria-hidden="true"><span id="dailyDow"></span><b id="dailyDay"></b></div>
+    <div><span class="eyebrow">Dagens opgave</span><strong id="dailyTitle"></strong><span class="sub" id="dailySub"></span></div>
+    <svg class="i chev" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg>
+  </button>
+
+  <button class="primary big" id="homeNew" type="button">
+    <svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Nyt spil</button>
+
+  <div class="tiles">
+    <button class="tile" id="homeStats" type="button">
+      <svg class="i" viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg><span>Statistik</span><small id="homeStatsSub"></small></button>
+    <button class="tile" id="homeGuide" type="button">
+      <svg class="i" viewBox="0 0 24 24"><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2zM4 5v16M8 7h7"/></svg><span>Guide</span><small>14 teknikker med eksempler</small></button>
+    <button class="tile" id="homeSettings" type="button">
+      <svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg><span>Indstillinger</span><small id="homeSetSub">Tema, hjælp og data</small></button>
+  </div>
+
+  <form class="codeform" id="codeForm">
+    <label for="codeInput">Har du en opgavekode?</label>
+    <div class="coderow">
+      <input id="codeInput" type="text" placeholder="SU1-6X6-…" autocomplete="off" autocapitalize="characters" spellcheck="false">
+      <button class="primary" type="submit">Hent</button>
+    </div>
+  </form>
+  <p class="rules">Hver region med n felter skal indeholde tallene 1 til n. Ens tal må ikke røre hinanden, heller ikke diagonalt.</p>
+</section>
+
+<!-- ============ NYT SPIL ============ -->
+<section class="view" id="v-new" aria-label="Nyt spil">
+  <div class="bar"><button class="iconbtn" type="button" data-back aria-label="Tilbage"><svg class="i" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg></button><h2>Nyt spil</h2><span></span></div>
+  <h3 class="sec">Størrelse</h3>
+  <div class="sizes" id="sizes" role="group" aria-label="Størrelse"></div>
+  <h3 class="sec">Sværhedsgrad</h3>
+  <div id="levels"></div>
+  <h3 class="sec">Nuance <small>· hvor i niveauet</small></h3>
+  <div class="seg" id="nuances" role="group" aria-label="Nuance"></div>
+  <h3 class="sec">Type <small>· ét svært træk eller mange</small></h3>
+  <div class="seg" id="kinds" role="group" aria-label="Type"></div>
+  <h3 class="sec">Teknik <small>· valgfrit</small></h3>
+  <div id="musts"></div>
+  <h3 class="sec">Regioner op til</h3>
+  <div class="seg" id="maxsizes" role="group" aria-label="Største region"></div>
+  <p class="note" id="newNote"></p>
+  <div class="dock"><button class="primary big" id="startBtn" type="button">Start</button></div>
+</section>
+
+<!-- ============ SPIL ============ -->
+<section class="view" id="v-game" aria-label="Spillet">
+  <div class="bar">
+    <button class="iconbtn" type="button" id="gameBack" aria-label="Til forsiden"><svg class="i" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg></button>
+    <button class="titlebtn" type="button" id="gameTitle" aria-label="Om opgaven og sværhedsgraden"><span class="pill" id="levelPill"></span><small id="gameSub"></small></button>
+    <button class="iconbtn" type="button" id="menuBtn" aria-label="Menu"><svg class="i" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/></svg></button>
+  </div>
+  <div class="status" id="status" aria-live="polite"></div>
+  <div class="board"><svg id="grid" role="grid" aria-label="Suguru-gitter"></svg></div>
+
+  <div class="hint" id="hintPanel" hidden aria-live="polite">
+    <div class="hint-head"><span class="hint-tag" id="hintTag">Hint</span>
+      <button type="button" class="hint-close" id="hintClose" aria-label="Luk hint">×</button></div>
+    <p id="hintText"></p>
+    <details id="hintChain" hidden><summary id="hintChainSum">Se hele kæden</summary><ol id="hintChainList"></ol></details>
+    <div class="hint-nav" id="hintNav">
+      <button type="button" id="hintPrev">Forrige</button>
+      <div class="hdots" id="hintDots" aria-hidden="true"></div>
+      <button type="button" class="go" id="hintNext">Næste</button>
+    </div>
+    <button type="button" class="link" id="hintGuide">Læs om teknikken i guiden</button>
+  </div>
+
+  <p class="msg" id="msg" aria-live="polite"></p>
+  <div class="pad" id="pad"></div>
+  <div class="tools">
+    <button type="button" id="noteBtn" aria-pressed="false"><svg class="i" viewBox="0 0 24 24"><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4z"/></svg>Blyant</button>
+    <button type="button" id="eraseBtn"><svg class="i" viewBox="0 0 24 24"><path d="M20 20H8l-4-4a1.5 1.5 0 0 1 0-2.1L13.9 4a1.5 1.5 0 0 1 2.1 0l4 4a1.5 1.5 0 0 1 0 2.1L11 19M7 11l6 6"/></svg>Visk ud</button>
+    <button type="button" id="undoBtn"><svg class="i" viewBox="0 0 24 24"><path d="M9 14L4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>Fortryd</button>
+    <button type="button" id="hintBtn"><svg class="i" viewBox="0 0 24 24"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.6 10.8c.6.5 1 1.2 1.1 2.2h5c.1-1 .5-1.7 1.1-2.2A6 6 0 0 0 12 3z"/></svg>Hint</button>
+  </div>
+  <p class="padhint" id="padhint"></p>
+</section>
+
+<!-- ============ STATISTIK ============ -->
+<section class="view" id="v-stats" aria-label="Statistik">
+  <div class="bar"><button class="iconbtn" type="button" data-back aria-label="Tilbage"><svg class="i" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg></button><h2>Statistik</h2><span></span></div>
+  <div id="statsBody" style="display:flex;flex-direction:column;gap:12px"></div>
+</section>
+
+<!-- ============ INDSTILLINGER ============ -->
+<section class="view" id="v-settings" aria-label="Indstillinger">
+  <div class="bar"><button class="iconbtn" type="button" data-back aria-label="Tilbage"><svg class="i" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg></button><h2>Indstillinger</h2><span></span></div>
+  <div id="setBody" style="display:flex;flex-direction:column;gap:12px"></div>
+</section>
+
+<!-- ============ GUIDE ============ -->
+<section class="view" id="v-guide" aria-label="Guide">
+  <div class="bar"><button class="iconbtn" type="button" data-back aria-label="Tilbage"><svg class="i" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg></button><h2>Guide</h2><span></span></div>
+  <iframe id="guideFrame" title="Suguru-strategier"></iframe>
+</section>
+
+<div class="sheet" id="sheet" hidden><div class="backdrop" id="sheetBackdrop"></div>
+  <div class="panel" role="dialog" aria-modal="true"><div class="grab" aria-hidden="true"></div><div id="sheetBody"></div></div></div>
+<div class="busy" id="busy" hidden><div class="busycard"><div class="spinner" aria-hidden="true">数</div><p id="busyText">Laver opgave …</p>
+  <small id="busySub"></small><button class="secondary" type="button" id="busyCancel">Annullér</button></div></div>
+<div class="tip" id="tip" hidden role="tooltip"></div>
+<div class="toast" id="toast" role="status"></div>
+
+<script src="js/lang/en.js"></script>
+<script src="js/i18n.js"></script>
+<script src="js/engine.js"></script>
+<script src="js/tutor.js"></script>
+<script src="js/grade.js"></script>
+<script src="js/code.js"></script>
+<script src="js/route.js"></script>
+<script src="js/core.js"></script>
+<script src="js/home.js"></script>
+<script src="js/newgame.js"></script>
+<script src="js/store.js"></script>
+<script src="js/board.js"></script>
+<script src="js/play.js"></script>
+<script src="js/stats.js"></script>
+<script src="js/analysis.js"></script>
+<script src="js/settings.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>

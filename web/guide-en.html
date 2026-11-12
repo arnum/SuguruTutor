@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Suguru strategies</title>
+<link rel="icon" href="icons/icon-192.png" type="image/png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho+B1:wght@600;800&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap" rel="stylesheet">
+<script>try{var t=JSON.parse(localStorage.getItem("suguru.settings")||"{}").theme;if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+<style>
+/* Layout: én kolonne af kort, ét pr. strategi. Hvert kort har en tegning, man trykker sig igennem. Samme papir-og-tusch-stil som spillet. */
+:root {
+  --paper: #f3f4ef;
+  --cell: #fbfbf8;
+  --off: #e9eae4;
+  --ink: #17191e;
+  --mute: #6a6f79;
+  --grid: #cfd2c9;
+  --indigo: #2c47a0;
+  --pat: #d9e1f6;
+  --tgt: #f5e9bd;
+  --badbg: #f6d6ce;
+  --bad: #c8402b;
+  --hypo: #a8610b;
+  --stamp: #c8402b;
+  --chip: #e7e9e2;
+  --font-display: "Shippori Mincho B1", "Hiragino Mincho ProN", Georgia, serif;
+  --font-body: "Zen Kaku Gothic New", "Hiragino Sans", system-ui, sans-serif;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #121419; --cell: #191c22; --off: #15171c; --ink: #e9eaee; --mute: #959aa6; --grid: #343843;
+    --indigo: #93a9f2; --pat: #283357; --tgt: #3d3520; --badbg: #4a2620; --bad: #ff7c64; --hypo: #f0a54a;
+    --stamp: #e0563f; --chip: #23262e; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #121419; --cell: #191c22; --off: #15171c; --ink: #e9eaee; --mute: #959aa6; --grid: #343843;
+  --indigo: #93a9f2; --pat: #283357; --tgt: #3d3520; --badbg: #4a2620; --bad: #ff7c64; --hypo: #f0a54a;
+  --stamp: #e0563f; --chip: #23262e; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--paper); color: var(--ink); }
+body { font-family: var(--font-body); font-size: 15px; line-height: 1.55; -webkit-tap-highlight-color: transparent; }
+main { max-width: 520px; margin: 0 auto; padding: 16px 16px 48px; display: flex; flex-direction: column; gap: 22px; }
+
+header { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; align-items: center; }
+.stamp { grid-row: span 2; width: 46px; height: 46px; border: 2.5px solid var(--stamp); color: var(--stamp); border-radius: 6px;
+  display: grid; place-items: center; font-family: var(--font-display); font-weight: 800; font-size: 28px; transform: rotate(-4deg); }
+h1 { margin: 0; font-family: var(--font-display); font-weight: 800; font-size: 30px; line-height: 1.05; text-wrap: balance; }
+.lede { margin: 0; color: var(--mute); font-size: 14px; }
+
+.legend { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 14px; font-size: 13px; padding: 12px 14px; background: var(--cell);
+  border-radius: 12px; box-shadow: inset 0 0 0 1.5px var(--grid); }
+.legend h2 { grid-column: 1 / -1; margin: 0 0 2px; font-size: 13px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--mute); }
+.legend span { display: flex; align-items: center; gap: 8px; }
+.sw { width: 22px; height: 22px; border-radius: 4px; flex: 0 0 auto; display: grid; place-items: center; font-size: 15px; line-height: 1;
+  box-shadow: inset 0 0 0 1.5px var(--grid); background: var(--cell); }
+.sw.given { font-family: var(--font-display); font-weight: 800; }
+.sw.found { color: var(--mute); font-weight: 500; }
+.sw.cand { font-size: 10px; color: var(--mute); }
+.sw.pat { background: var(--pat); }
+.sw.tgt { background: var(--tgt); }
+.sw.badbg { background: var(--badbg); }
+.sw.hypo { color: var(--hypo); font-weight: 700; }
+.sw.strike { color: var(--bad); font-size: 11px; text-decoration: line-through; }
+
+nav.toc { display: flex; flex-wrap: wrap; gap: 6px; }
+nav.toc a { text-decoration: none; color: var(--ink); background: var(--chip); padding: 5px 10px; border-radius: 999px; font-size: 13px; font-weight: 500; }
+nav.toc a b { font-family: var(--font-display); margin-right: 4px; color: var(--indigo); }
+nav.toc a:focus-visible { outline: 2px solid var(--indigo); outline-offset: 2px; }
+
+article { display: flex; flex-direction: column; gap: 10px; scroll-margin-top: 12px; }
+.kicker { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12.5px; color: var(--mute); font-weight: 500; }
+.dots { display: inline-flex; gap: 3px; }
+.dots i { width: 6px; height: 6px; border-radius: 50%; background: var(--grid); }
+.dots i.on { background: var(--indigo); }
+.real { margin-left: auto; font-size: 11.5px; padding: 2px 8px; border-radius: 999px; background: var(--chip); color: var(--ink); }
+article h2 { margin: 0; font-family: var(--font-display); font-weight: 800; font-size: 24px; line-height: 1.15; text-wrap: balance; }
+.rule { margin: 0; font-weight: 500; }
+figure { margin: 0; display: flex; flex-direction: column; gap: 8px; }
+figure svg { width: 100%; height: auto; display: block; cursor: pointer; user-select: none; -webkit-user-select: none; }
+.stepper { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 8px; }
+.stepper button { border: 0; border-radius: 10px; background: var(--cell); color: var(--ink); font: 500 14px var(--font-body); padding: 9px 14px;
+  box-shadow: inset 0 0 0 1.5px var(--grid); cursor: pointer; min-width: 92px; }
+.stepper button.next { background: var(--indigo); color: var(--paper); box-shadow: none; }
+.stepper button:disabled { opacity: 0.4; cursor: default; }
+.stepper button:focus-visible { outline: 2px solid var(--indigo); outline-offset: 2px; }
+.progress { display: flex; justify-content: center; gap: 5px; }
+.progress i { width: 18px; height: 4px; border-radius: 2px; background: var(--grid); }
+.progress i.on { background: var(--indigo); }
+.caption { margin: 0; min-height: 4.65em; font-size: 14.5px; }
+.look { margin: 0; font-size: 13.5px; color: var(--mute); padding-left: 12px; border-left: 3px solid var(--grid); }
+.look b { color: var(--ink); font-weight: 700; }
+hr { border: 0; border-top: 1px solid var(--grid); margin: 0; width: 100%; }
+
+section.practice h2 { margin: 0 0 6px; font-family: var(--font-display); font-weight: 800; font-size: 22px; }
+section.practice ol { margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 6px; }
+section.practice p { margin: 8px 0 0; color: var(--mute); font-size: 13.5px; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="stamp" aria-hidden="true">数</div>
+    <h1>Suguru strategies</h1>
+    <p class="lede">The fourteen techniques the game's difficulty rating uses, from the easiest to the hardest. Tap the drawing or Next to go one step forward.</p>
+  </header>
+
+  <div class="legend" aria-label="How to read the drawings">
+    <h2>How to read the drawings</h2>
+    <span><i class="sw given">3</i>Given number</span>
+    <span><i class="sw found">3</i>Found earlier</span>
+    <span><i class="sw cand">1 2</i>Possible numbers</span>
+    <span><i class="sw strike">4</i>Crossed out</span>
+    <span><i class="sw pat"></i>The pattern</span>
+    <span><i class="sw tgt"></i>Affected</span>
+    <span><i class="sw hypo">2</i>Assumption</span>
+    <span><i class="sw badbg"></i>Contradiction</span>
+  </div>
+
+  <nav class="toc" id="toc" aria-label="Indhold"></nav>
+  <div id="cards" style="display:flex;flex-direction:column;gap:30px"></div>
+
+  <section class="practice">
+    <h2>The order in practice</h2>
+    <ol>
+      <li>Go through the whole grid for naked and hidden singles until nothing more happens.</li>
+      <li>Look for regions of two cells and for 2×2 blocks. That is where neighbour eliminations and triples usually hide.</li>
+      <li>Pencil in the possible numbers and look for pairs that see each other.</li>
+      <li>Find cells with two options and numbers with two places in a region, and see whether they can be chained. Start with one number at a time.</li>
+      <li>Only when nothing else works: assume a number and follow it. Start with just that one number, then all numbers, and finally try both ways.</li>
+    </ol>
+    <p>In the game, a puzzle's difficulty is measured as effort: the heaviest step plus an addition for how many heavy steps there are. The level shown for each technique below is its place from easy to hard, not the difficulty of a puzzle. Examples marked “From a real puzzle” come straight from the generator, and every claim has been checked against the puzzles' solutions.</p>
+  </section>
+</main>
+
+<script>
+const EXAMPLES = [{"id":"eneste-kandidat","level":1,"name":"Naked single","rule":"Cross out the numbers the cell cannot hold. If only one is left, that is the answer.","look":"Cells in small regions, and cells surrounded by many given numbers.","R":3,"C":3,"regions":["..A",".AA","..."],"givens":{"a1":1,"a3":2,"c3":1},"base":{"val":{},"cand":{"c1":"123","b2":"123","c2":"123"}},"frames":[{"text":"The region has three cells, so each cell starts with the options 1, 2 and 3."},{"pattern":["a1","a3"],"target":["b2"],"strike":{"b2":"12"},"text":"b2 touches the 1 in a1 and the 2 in a3, both diagonally. Those two numbers are crossed out."},{"set":{"b2":3},"newv":["b2"],"text":"Only 3 is left, so b2 = 3."},{"pattern":["c3"],"set":{"c2":2,"c1":1},"newv":["c1","c2"],"text":"It spreads: c2 touches the 1 in c3 and can now only be 2. Then c1 = 1."}]},{"id":"eneste-plads","level":1,"name":"Hidden single","rule":"Pick a number the region is missing. If it can only go in one place, it goes there.","look":"The largest numbers in a region (4 and 5). They have the fewest places to go.","R":3,"C":4,"regions":["....","AAAA","...."],"givens":{"b1":4},"base":{"val":{},"cand":{"a2":"1234","b2":"1234","c2":"1234","d2":"1234"}},"frames":[{"text":"The region a2 to d2 must hold the numbers 1 to 4. Where can the 4 go?"},{"pattern":["b1"],"target":["a2","b2","c2"],"strike":{"a2":"4","b2":"4","c2":"4"},"text":"The 4 in b1 touches a2, b2 and c2, also diagonally."},{"cand":{"a2":"123","b2":"123","c2":"123"},"set":{"d2":4},"newv":["d2"],"text":"Only d2 is left, so d2 = 4. d2 still had four options, so a naked single could not have found it."}]},{"id":"nabo-eliminering","level":2,"name":"Neighbour elimination","rule":"If every possible place for a number in a region touches the same cell, that cell cannot hold the number.","look":"Regions of two cells. Their 1 and 2 hit every cell that touches both cells.","R":3,"C":4,"regions":["AAAA",".BB.","CCCC"],"givens":{},"base":{"val":{},"cand":{"a1":"1234","b1":"1234","c1":"1234","d1":"1234","b2":"12","c2":"12","a3":"1234","b3":"1234","c3":"1234","d3":"1234"}},"frames":[{"pattern":["b2","c2"],"text":"b2 and c2 form a region of two cells. It must hold 1 and 2, but we don't know where."},{"pattern":["b2","c2"],"target":["b1","c1","b3","c3"],"strike":{"b1":"12","c1":"12","b3":"12","c3":"12"},"text":"Whatever the order, 1 and 2 land in cells that b1, c1, b3 and c3 all touch. So those four cells cannot be 1 or 2."},{"cand":{"b1":"34","c1":"34","b3":"34","c3":"34"},"target":["a1","d1"],"text":"a1 and d1 touch only one of the cells and keep 1 and 2. So in the top region, 1 and 2 must go in a1 and d1."}]},{"id":"noegent-par","level":3,"name":"Naked pair","rule":"Two cells that see each other and have only the same two options use up those two numbers. Cells that see both lose them.","look":"“See each other” means the same region or touching. The pair may well lie in two different regions.","R":5,"C":5,"regions":["AAAAB","CCCCB","DCEEB","DDDEB","DFFFB"],"givens":{"c1":3,"e1":2,"e3":3,"c4":4,"d4":2},"base":{"val":{"a1":2,"a2":3,"c2":2,"a3":2,"b3":1,"c3":3,"d3":1,"a4":3,"b4":5,"a5":1,"b5":2,"c5":1,"d5":3,"e5":1},"cand":{"b1":"14","d1":"14","b2":"45","d2":"45","e2":"45","e4":"45"}},"real":true,"frames":[{"text":"A real 5×5 puzzle in the middle of solving. Large black numbers are given, grey ones were found along the way, small numbers are the options left."},{"pattern":["d2","e2"],"text":"d2 and e2 touch each other and can both only be 4 or 5. One becomes 4, the other 5, even though they are in different regions."},{"pattern":["d2","e2"],"target":["d1"],"strike":{"d1":"4"},"text":"d1 touches both d2 and e2. If d1 were 4, neither of them could be 4. So d1 cannot be 4."},{"set":{"d1":1},"newv":["d1"],"text":"d1 has only 1 left: d1 = 1."}]},{"id":"skjult-par","level":3,"name":"Hidden pair","rule":"If two numbers in a region can only go in the same two cells, those cells are taken by them. Other options in those cells are crossed out.","look":"Numbers missing from a region that have few places. Look at the numbers, not the cells.","R":3,"C":5,"regions":[".....","AAAAA","....."],"givens":{"d1":4,"d3":5},"base":{"val":{},"cand":{"a2":"12345","b2":"12345","c2":"123","d2":"123","e2":"123"}},"frames":[{"pattern":["d1","d3"],"text":"The region a2 to e2 has five cells. The 4 in d1 and the 5 in d3 touch c2, d2 and e2, so those three can only be 1, 2 or 3."},{"pattern":["a2","b2"],"text":"Where can 4 and 5 go? Only in a2 and b2. Two numbers and two places, so both cells are taken."},{"pattern":["a2","b2"],"target":["a2","b2"],"strike":{"a2":"123","b2":"123"},"text":"So a2 and b2 cannot be 1, 2 or 3, even though those numbers are listed as options."},{"cand":{"a2":"45","b2":"45"},"text":"The pair was hidden because a2 and b2 had five options each. Seen from the other side, c2, d2 and e2 are a naked triple with 1, 2 and 3."}]},{"id":"noegen-trippel","level":4,"name":"Naked triple","rule":"Three cells that all see each other and between them have only three options use up those three numbers.","look":"2×2 blocks. Four cells in a 2×2 block all touch each other and so must hold four different numbers.","R":5,"C":5,"regions":["AAABB","CCCBB","DDCCE","FFFEE","FFEEG"],"givens":{"b1":1,"e2":1,"a4":4,"c4":5,"e4":4},"base":{"val":{"a3":1,"b3":2,"c3":1,"d3":2,"e3":5,"b4":3,"d4":3,"a5":1,"b5":2,"c5":1,"d5":2,"e5":1},"cand":{"a1":"23","c1":"23","d1":"234","e1":"234","a2":"345","b2":"45","c2":"345","d2":"34"}},"real":true,"frames":[{"text":"A real 5×5 puzzle. No simpler technique makes progress here."},{"pattern":["c1","d1","d2"],"text":"c1, d1 and d2 all touch each other. Between them they can only be 2, 3 or 4. Each cell need not have all three; it is enough that they share them."},{"pattern":["c1","d1","d2"],"target":["c2"],"strike":{"c2":"34"},"text":"c2 touches all three and so can be neither 3 nor 4. 2 was already gone."},{"set":{"c2":5},"newv":["c2"],"text":"c2 = 5. The four cells form a 2×2 block: three of them share 2, 3 and 4, so the fourth must be something else."}]},{"id":"skjult-trippel","level":4,"name":"Hidden triple","rule":"If three numbers in a region can only go in the same three cells, those cells are taken by them.","look":"Regions of five cells where the large numbers are squeezed into one end.","R":3,"C":5,"regions":[".....","AAAAA","....."],"givens":{"d1":3,"e1":5,"e3":4},"base":{"val":{},"cand":{"a2":"12345","b2":"12345","c2":"1245","d2":"12","e2":"12"}},"frames":[{"pattern":["d1","e1","e3"],"text":"The 3, 4 and 5 in d1, e1 and e3 touch d2 and e2, so those can only be 1 or 2. c2 touches the 3."},{"pattern":["a2","b2","c2"],"text":"3, 4 and 5 can only go in a2, b2 and c2. Three numbers in three places."},{"pattern":["a2","b2","c2"],"target":["a2","b2","c2"],"strike":{"a2":"12","b2":"12","c2":"12"},"text":"So there is no room for 1 and 2 in those three cells."},{"cand":{"a2":"345","b2":"345","c2":"45"},"pattern":["d2","e2"],"text":"You get the same result from d2 and e2 being a naked pair with 1 and 2. That is why the program almost never uses hidden triples: the pair is found first."}]},{"id":"kaede-et-tal","level":5,"name":"Single-number chain","rule":"Follow one number through regions where it has only two places. If it isn't here, it must be there, and then it cannot be in the cells around it. The chain ends somewhere that could also hold the number.","look":"A number with only two places in several regions close together.","R":5,"C":5,"regions":["AABBC","AABBB","DAEEE","DDDEE","FFFFF"],"givens":{"b1":2,"c1":3,"a2":1,"d2":4,"e2":2,"c5":4,"e5":3},"base":{"val":{"a1":3,"d1":5,"e1":1,"b2":4,"c2":1,"b3":5,"a4":4,"e4":4},"cand":{"a3":"23","c3":"23","d3":"35","e3":"135","b4":"123","c4":"13","d4":"125","a5":"125","b5":"25","d5":"125"}},"real":true,"frames":[{"text":"A real 5×5 puzzle. We follow only the number 1."},{"pattern":["c4","b4"],"hypo":["b4"],"set":{"b4":1},"text":"Assume c4 is not 1. In its region 1 can only go in c4 or b4, so b4 = 1."},{"pattern":["c4","b4","a5","d5"],"hypo":["b4","d5"],"set":{"d5":1},"text":"a5 touches b4 and so cannot be 1. In the bottom region 1 can only go in a5 or d5, so d5 = 1."},{"back":true,"pattern":["c4","d5"],"target":["d4"],"strike":{"d4":"1"},"text":"So 1 is either in c4 or in d5. d4 touches both and therefore cannot be 1."},{"cand":{"d4":"25"},"text":"d4 loses 1. The whole chain was only about the number 1."}]},{"id":"kaede-to-muligheder","level":6,"name":"Bivalue chain","rule":"Cells with only two options that touch each other form a chain: if the first cell is not a, the next is forced, and so on, until the last one becomes a.","look":"Cells with two options where neighbouring cells share one number.","R":5,"C":5,"regions":["ABCCD","ABCCD","BBEED","BEEED","FFFFF"],"givens":{"c1":3,"b2":4,"a3":1,"b5":1,"c5":3,"e5":2},"base":{"val":{"a1":1,"b1":5,"e1":3,"a2":2,"b3":3,"d3":3,"a4":2},"cand":{"d1":"124","c2":"12","d2":"14","e2":"12","c3":"125","e3":"124","b4":"45","c4":"245","d4":"15","e4":"14","a5":"45","d5":"45"}},"real":true,"frames":[{"pattern":["d4","d5","e4"],"text":"d4, d5 and e4 each have only two options, and they touch each other."},{"pattern":["d4"],"hypo":["d4"],"set":{"d4":5},"text":"Assume d4 is not 1. d4 has only 1 and 5, so d4 = 5."},{"pattern":["d4","d5"],"hypo":["d4","d5"],"set":{"d5":4},"text":"d5 touches d4 and cannot be 5. d5 has only 4 and 5, so d5 = 4."},{"pattern":["d4","d5","e4"],"hypo":["d4","d5","e4"],"set":{"e4":1},"text":"e4 touches d5 and cannot be 4. e4 has only 1 and 4, so e4 = 1."},{"back":true,"pattern":["d4","e4"],"target":["e3"],"strike":{"e3":"1"},"text":"So either d4 = 1 or e4 = 1. e3 touches both and therefore cannot be 1."},{"cand":{"e3":"24"},"text":"e3 loses 1."}]},{"id":"kaede","level":7,"name":"Mixed chain","rule":"A chain that alternates between cells with two options and numbers with two places in a region. Either the start or the end is true, so whatever contradicts both can be crossed out.","look":"When neither single-number chains nor bivalue chains work on their own.","R":5,"C":5,"regions":["AABBC","AABCC","ABBDC","EEFDD","EEEDD"],"givens":{"a1":4,"e1":2,"b2":1,"d2":4,"b4":2,"a5":1,"d5":4},"base":{"val":{"d1":1,"a2":2,"e2":3,"b3":4,"e3":1,"c4":1,"b5":4,"e5":1},"cand":{"b1":"35","c1":"235","c2":"235","a3":"35","c3":"35","d3":"25","a4":"35","d4":"235","e4":"235","c5":"35"}},"real":true,"frames":[{"text":"A real 5×5 puzzle. None of the pure chains work here, but a mixed one does."},{"pattern":["c3"],"hypo":["c3"],"set":{"c3":5},"text":"Assume c3 is not 3. c3 has only 3 and 5, so c3 = 5."},{"pattern":["c3","d3"],"hypo":["c3","d3"],"set":{"d3":2},"text":"d3 touches c3 and cannot be 5. d3 has only 2 and 5, so d3 = 2."},{"pattern":["c3","d3","c2","c1"],"hypo":["c3","d3","c1"],"set":{"c1":2},"text":"c2 touches d3 and cannot be 2. In the region 2 can only go in c1 and c2, so c1 = 2."},{"back":true,"pattern":["c3"],"target":["c1"],"strike":{"c1":"3"},"text":"So either c3 = 3 or c1 = 2. If c3 = 3, c1 in the same region cannot be 3. If c1 = 2, it isn't 3 either."},{"cand":{"c1":"25"},"text":"c1 loses 3. The chain used two cells with two options (c3 and d3) and a number with two places (2 in c1 and c2)."}]},{"id":"hvis-saa-et-tal","level":8,"name":"Single-number what-if","rule":"Assume a cell is x and follow only the number x: where can x go in the other regions? If a region has no room left for x, the assumption was wrong.","look":"A number with few places left in several regions close together.","R":5,"C":5,"regions":["ABBCC","AABCC","DABBE","DDDEE","DFFFE"],"givens":{"c1":2,"e1":1},"base":{"val":{"e2":2},"cand":{"a1":"1234","b1":"1345","d1":"34","a2":"1234","b2":"134","c2":"15","d2":"34","a3":"12345","b3":"1234","c3":"1345","d3":"1345","e3":"134","a4":"12345","b4":"1345","c4":"45","d4":"1234","e4":"1234","a5":"12345","b5":"123","c5":"123","d5":"13","e5":"1234"}},"real":true,"frames":[{"pattern":["c4"],"text":"c4 can be 4 or 5. No chain helps here, so we try and follow only the number 4."},{"full":{"val":{"e2":2,"c4":4},"cand":{"a1":"1234","b1":"1345","d1":"34","a2":"1234","b2":"134","c2":"15","d2":"34","a3":"1235","b3":"123","c3":"135","d3":"135","e3":"134","a4":"1235","b4":"135","d4":"123","e4":"1234","a5":"1235","b5":"123","c5":"123","d5":"13","e5":"1234"}},"hypo":["c4"],"text":"Assume c4 = 4."},{"full":{"val":{"b1":4,"e2":2,"c4":4},"cand":{"a1":"123","d1":"34","a2":"123","b2":"13","c2":"15","d2":"34","a3":"1235","b3":"123","c3":"135","d3":"135","e3":"134","a4":"1235","b4":"135","d4":"123","e4":"1234","a5":"1235","b5":"123","c5":"123","d5":"13","e5":"1234"}},"hypo":["c4","b1"],"text":"The region with b1, c1, c2, c3 and d3 is missing 4. c3 and d3 touch c4, and c2 doesn't have 4. So 4 must go in b1."},{"full":{"val":{"b1":4,"e2":2,"c4":4},"cand":{"a1":"123","d1":"34","a2":"123","b2":"13","c2":"15","d2":"34","a3":"1235","b3":"123","c3":"135","d3":"135","e3":"134","a4":"1235","b4":"135","d4":"123","e4":"1234","a5":"1235","b5":"123","c5":"123","d5":"13","e5":"1234"}},"hypo":["c4","b1"],"bad":["a1","a2","b2","b3"],"text":"The region with a1, a2, b2 and b3 also needs a 4. But a1, a2 and b2 touch b1, and b3 touches c4. There is no room for 4. That is a contradiction."},{"back":true,"set":{"c4":5},"newv":["c4"],"text":"The assumption was wrong, so c4 = 5. We only looked at the number 4 all the way."}]},{"id":"hvis-saa-kort","level":9,"name":"What-if, short","rule":"Assume a number and follow the simple consequences for all numbers. If it ends in something impossible, the assumption was wrong.","look":"Cells with two options in a tight cluster of small regions.","R":5,"C":5,"regions":["ABBBC","ADBBC","EDDCC","EEDFC","EEDFF"],"givens":{"b1":5,"e1":2,"a3":3,"a5":1,"d5":3},"base":{"val":{"b2":4,"d2":4,"c3":3,"b4":4,"e4":4},"cand":{"a1":"12","c1":"123","d1":"13","a2":"12","c2":"12","e2":"135","b3":"125","d3":"15","e3":"135","a4":"25","c4":"125","d4":"12","b5":"25","c5":"125","e5":"12"}},"real":true,"frames":[{"pattern":["d3"],"text":"d3 can be 1 or 5. Neither chains nor the single-number what-if help here."},{"full":{"val":{"b2":4,"d2":4,"c3":3,"d3":1,"b4":4,"e4":4},"cand":{"a1":"12","c1":"123","d1":"13","a2":"12","c2":"2","e2":"35","b3":"125","e3":"35","a4":"25","c4":"25","d4":"2","b5":"25","c5":"125","e5":"12"}},"hypo":["d3"],"text":"Assume d3 = 1."},{"full":{"val":{"b2":4,"c2":2,"d2":4,"c3":3,"d3":1,"b4":4,"e4":4},"cand":{"a1":"12","c1":"13","d1":"13","a2":"12","e2":"35","b3":"15","e3":"35","a4":"25","c4":"25","d4":"2","b5":"25","c5":"125","e5":"12"}},"hypo":["d3","c2"],"text":"c2 touches d3 and had 1 or 2. So c2 = 2."},{"full":{"val":{"b2":4,"c2":2,"d2":4,"c3":3,"d3":1,"b4":4,"d4":2,"e4":4},"cand":{"a1":"12","c1":"13","d1":"13","a2":"12","e2":"35","b3":"15","e3":"35","a4":"25","c4":"5","b5":"25","c5":"15","e5":"1"}},"hypo":["d3","c2","d4"],"text":"d4 touches d3 and had 1 or 2. So d4 = 2."},{"full":{"val":{"b2":4,"c2":2,"d2":4,"c3":3,"d3":1,"b4":4,"c4":5,"d4":2,"e4":4},"cand":{"a1":"12","c1":"13","d1":"13","a2":"12","e2":"35","b3":"1","e3":"35","a4":"25","b5":"2","c5":"1","e5":"1"}},"hypo":["d3","c2","d4","c4"],"text":"c4 touches the 1 in d3 and the 2 in d4. So c4 = 5."},{"full":{"val":{"b2":4,"c2":2,"d2":4,"b3":1,"c3":3,"d3":1,"b4":4,"c4":5,"d4":2,"e4":4},"cand":{"a1":"12","c1":"13","d1":"13","a2":"2","e2":"35","e3":"35","a4":"25","b5":"2","c5":"","e5":"1"}},"hypo":["d3","c2","d4","c4","b3"],"text":"b3 touches the 2 in c2 and is in the same region as the 5 in c4. So b3 = 1."},{"full":{"val":{"b2":4,"c2":2,"d2":4,"b3":1,"c3":3,"d3":1,"b4":4,"c4":5,"d4":2,"e4":4},"cand":{"a1":"12","c1":"13","d1":"13","a2":"2","e2":"35","e3":"35","a4":"25","b5":"2","c5":"","e5":"1"}},"cand":{"c5":"125"},"strike":{"c5":"125"},"hypo":["d3","c2","d4","c4","b3"],"bad":["c5"],"text":"c5 is in the same region as b3 (1) and c4 (5) and touches d4 (2). There is no number left. That is a contradiction."},{"back":true,"set":{"d3":5},"newv":["d3"],"text":"The assumption was wrong, so d3 = 5. Here several different numbers had to be followed, not just one."}]},{"id":"begge-veje","level":10,"name":"Both ways","rule":"Take a cell with two options (or a number with two places) and try both ways with simple moves. If both lead to the same thing, it is true.","look":"A cell with two options that affects the same region the same way either way.","R":6,"C":6,"regions":["ABCCCC","ABBCDD","ABEDDD","AFEGGG","AFEHHH","FFEEHH"],"givens":{"f1":3,"b2":2,"e3":5,"f6":2},"base":{"val":{"d2":2,"f2":2,"a4":2,"a5":5},"cand":{"a1":"134","b1":"134","c1":"145","d1":"145","e1":"145","a2":"134","c2":"134","e2":"14","a3":"134","b3":"134","c3":"45","d3":"134","f3":"134","b4":"134","c4":"245","d4":"13","e4":"12","f4":"123","b5":"134","c5":"12345","d5":"45","e5":"45","f5":"13","a6":"1234","b6":"1234","c6":"12345","d6":"123","e6":"13"}},"real":true,"frames":[{"pattern":["e2"],"text":"A real 6×6 puzzle. e2 can only be 1 or 4. We try both ways."},{"pattern":["d1","e1"],"hypo":["e2","c1"],"set":{"e2":1,"c1":1},"text":"Way 1: if e2 = 1, d1 and e1 cannot be 1, because they touch e2. In the top region 1 can then only go in c1."},{"back":true,"pattern":["d1","e1"],"hypo":["e2","c1"],"set":{"e2":4,"c1":4},"text":"Way 2: if e2 = 4, d1 and e1 cannot be 4. Then 4 must go in c1."},{"back":true,"pattern":["e2"],"target":["c1"],"strike":{"c1":"5"},"text":"Either way, c1 becomes 1 or 4. So it cannot be 5."},{"cand":{"c1":"14"},"text":"c1 loses 5. Neither way led to a contradiction. It is comparing the two ways that gives the answer."}]},{"id":"hvis-saa-dyb","level":11,"name":"What-if, deep","rule":"Like the short what-if, but the path to the contradiction needs harder techniques.","look":"When everything else has been tried. Pencil in the assumption so you can roll it back.","R":5,"C":5,"regions":["ABBBB","AACCB","DAACC","DDDCE","DEEEE"],"givens":{"b1":3,"c1":4,"e1":5,"e4":3,"c5":2},"base":{"val":{"d2":3,"b3":3,"a4":2,"a5":3},"cand":{"a1":"1245","d1":"12","a2":"1245","b2":"125","c2":"125","e2":"12","a3":"145","c3":"1245","d3":"1245","e3":"1245","b4":"145","c4":"145","d4":"145","b5":"145","d5":"145","e5":"145"}},"real":true,"frames":[{"pattern":["d1"],"text":"d1 can be 1 or 2."},{"full":{"val":{"d1":1,"d2":3,"b3":3,"a4":2,"a5":3},"cand":{"a1":"1245","a2":"1245","b2":"125","c2":"25","e2":"2","a3":"145","c3":"1245","d3":"1245","e3":"1245","b4":"145","c4":"145","d4":"145","b5":"145","d5":"145","e5":"145"}},"hypo":["d1"],"text":"Assume d1 = 1."},{"full":{"val":{"d1":1,"d2":3,"e2":2,"b3":3,"a4":2,"a5":3},"cand":{"a1":"1245","a2":"1245","b2":"125","c2":"25","a3":"145","c3":"1245","d3":"145","e3":"145","b4":"145","c4":"145","d4":"145","b5":"145","d5":"145","e5":"145"}},"hypo":["d1","e2"],"text":"e2 is in the same region and had 1 or 2. So e2 = 2."},{"full":{"val":{"d1":1,"c2":2,"d2":3,"e2":2,"b3":3,"a4":2,"a5":3},"cand":{"a1":"1245","a2":"1245","b2":"15","a3":"145","c3":"145","d3":"145","e3":"145","b4":"145","c4":"145","d4":"145","b5":"145","d5":"145","e5":"145"}},"hypo":["d1","e2","c2"],"text":"The region c2, d2, d3, e3, d4 is missing a 2. d3 and e3 touch e2, and d4 didn't have 2. Only c2 is left: c2 = 2."},{"full":{"val":{"d1":1,"c2":2,"d2":3,"e2":2,"b3":3,"a4":2,"a5":3},"cand":{"a1":"1245","a2":"1245","b2":"15","a3":"145","c3":"145","d3":"145","e3":"145","b4":"145","c4":"145","d4":"145","b5":"145","d5":"145","e5":"145"}},"strike":{"d4":"145"},"pattern":["c3","d3","c4"],"bad":["d4"],"hypo":["d1","e2","c2"],"text":"c3, d3, c4 and d4 form a 2×2 block, so all four must be different. But all four can only be 1, 4 or 5: three numbers for four cells. That is a contradiction."},{"back":true,"set":{"d1":2},"newv":["d1"],"text":"So d1 is not 1 but 2. The chain needed a triple along the way. That is why it counts as deep."}]}];
+const LEVELS = ["", "Easy", "Medium", "Hard", "Very hard", "Chain: one number", "Chain: two options", "Chain: mixed", "What-if: one number", "What-if: short", "Both ways", "What-if: deep"];
+const NS = "http://www.w3.org/2000/svg";
+const NOTE = { 1: [24, 24], 2: [76, 24], 3: [50, 50], 4: [24, 76], 5: [76, 76] };
+const COLS = "abcdefgh";
+const pos = {};
+
+function idx(name, C) { return COLS.indexOf(name[0]) + (parseInt(name.slice(1), 10) - 1) * C; }
+function el(tag, attrs, parent, text) {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (text !== undefined) e.textContent = text;
+  if (parent) parent.appendChild(e);
+  return e;
+}
+// Tilstand efter ramme k (kumulativ)
+function stateAt(ex, k) {
+  let val = { ...ex.base.val }, cand = { ...ex.base.cand };
+  for (let i = 0; i <= k; i++) {
+    const f = ex.frames[i];
+    if (f.back) { val = { ...ex.base.val }; cand = { ...ex.base.cand }; }
+    if (f.full) { val = { ...f.full.val }; cand = { ...f.full.cand }; }
+    if (f.cand) Object.assign(cand, f.cand);
+    if (f.set) for (const n in f.set) { val[n] = f.set[n]; delete cand[n]; }
+  }
+  return { val, cand };
+}
+
+function draw(svg, ex, k) {
+  const { R, C } = ex, S = 100, M = 30;
+  const f = ex.frames[k];
+  const { val, cand } = stateAt(ex, k);
+  const reg = ex.regions.join("");
+  const set = arr => new Set((arr || []).map(n => idx(n, C)));
+  const pat = set(f.pattern), tgt = set(f.target), hyp = set(f.hypo), bad = set(f.bad), newv = set(f.newv);
+  const strike = {};
+  for (const n in (f.strike || {})) strike[idx(n, C)] = f.strike[n];
+  svg.setAttribute("viewBox", `${-M} ${-M} ${C * S + M + 6} ${R * S + M + 6}`);
+  svg.innerHTML = "";
+  const g = el("g", {}, svg), t = el("g", {}, svg);
+  for (let c = 0; c < C; c++) el("text", { x: c * S + 50, y: -12, "text-anchor": "middle", "font-size": 22, fill: "var(--mute)", "font-family": "Zen Kaku Gothic New, sans-serif" }, t, COLS[c]);
+  for (let r = 0; r < R; r++) el("text", { x: -14, y: r * S + 58, "text-anchor": "middle", "font-size": 22, fill: "var(--mute)", "font-family": "Zen Kaku Gothic New, sans-serif" }, t, r + 1);
+  for (let i = 0; i < R * C; i++) {
+    const x = (i % C) * S, y = Math.floor(i / C) * S;
+    const name = COLS[i % C] + (Math.floor(i / C) + 1);
+    let fill = reg[i] === "." ? "var(--off)" : "var(--cell)";
+    if (pat.has(i)) fill = "var(--pat)";
+    if (tgt.has(i)) fill = "var(--tgt)";
+    if (bad.has(i)) fill = "var(--badbg)";
+    el("rect", { x, y, width: S, height: S, fill }, g);
+    const given = ex.givens[name];
+    const v = given || val[name];
+    const mid = { x: x + 50, y: y + 53, "text-anchor": "middle", "dominant-baseline": "central" };
+    if (given) {
+      el("text", { ...mid, "font-family": "Shippori Mincho B1, Georgia, serif", "font-weight": 800, "font-size": 60, fill: "var(--ink)" }, t, v);
+    } else if (v) {
+      const color = hyp.has(i) ? "var(--hypo)" : newv.has(i) ? "var(--indigo)" : "var(--mute)";
+      el("text", { ...mid, "font-family": "Zen Kaku Gothic New, sans-serif", "font-weight": hyp.has(i) || newv.has(i) ? 700 : 500, "font-size": 54, fill: color }, t, v);
+      if (hyp.has(i)) el("circle", { cx: x + 50, cy: y + 50, r: 38, fill: "none", stroke: "var(--hypo)", "stroke-width": 3, "stroke-dasharray": "5 6" }, t);
+    } else if (cand[name] !== undefined) {
+      for (const d of cand[name]) {
+        const p = NOTE[d], struck = strike[i] && strike[i].includes(d);
+        el("text", { x: x + p[0], y: y + p[1] + 1, "text-anchor": "middle", "dominant-baseline": "central", "font-family": "Zen Kaku Gothic New, sans-serif",
+          "font-weight": struck ? 700 : 500, "font-size": struck ? 26 : 23, fill: struck ? "var(--bad)" : "var(--mute)" }, t, d);
+        if (struck) el("line", { x1: x + p[0] - 13, y1: y + p[1] + 11, x2: x + p[0] + 13, y2: y + p[1] - 11, stroke: "var(--bad)", "stroke-width": 3.5, "stroke-linecap": "round" }, t);
+      }
+      if (!cand[name].length) el("text", { ...mid, "font-size": 40, "font-weight": 700, fill: "var(--bad)" }, t, "∅");
+    }
+  }
+  // Linjer: tynde inden for regioner, tykke mellem regioner. Udsnit ('.') får tynde kanter.
+  let thin = "", thick = "";
+  const same = (a, b) => reg[a] === reg[b];
+  for (let r = 0; r < R; r++) for (let c = 0; c < C; c++) {
+    const i = r * C + c;
+    if (c + 1 < C) { const s = `M${(c + 1) * S} ${r * S}V${(r + 1) * S}`; same(i, i + 1) ? (thin += s) : (thick += s); }
+    if (r + 1 < R) { const s = `M${c * S} ${(r + 1) * S}H${(c + 1) * S}`; same(i, i + C) ? (thin += s) : (thick += s); }
+    const edge = (cond, s) => { if (cond) (reg[i] === "." ? (thin += s) : (thick += s)); };
+    edge(r === 0, `M${c * S} 0H${(c + 1) * S}`);
+    edge(r === R - 1, `M${c * S} ${R * S}H${(c + 1) * S}`);
+    edge(c === 0, `M0 ${r * S}V${(r + 1) * S}`);
+    edge(c === C - 1, `M${C * S} ${r * S}V${(r + 1) * S}`);
+  }
+  el("path", { d: thin, stroke: "var(--grid)", "stroke-width": 2, fill: "none" }, svg);
+  el("path", { d: thick, stroke: "var(--ink)", "stroke-width": 7, "stroke-linecap": "square", fill: "none" }, svg);
+}
+
+function render(ex) {
+  const a = document.getElementById(ex.id);
+  const k = pos[ex.id];
+  draw(a.querySelector("svg"), ex, k);
+  a.querySelector(".caption").textContent = ex.frames[k].text;
+  a.querySelector(".prev").disabled = k === 0;
+  a.querySelector(".next").textContent = k === ex.frames.length - 1 ? "Start again" : "Next";
+  a.querySelectorAll(".progress i").forEach((d, i) => d.classList.toggle("on", i <= k));
+}
+function go(ex, delta) {
+  const n = ex.frames.length;
+  pos[ex.id] = delta > 0 && pos[ex.id] === n - 1 ? 0 : Math.max(0, Math.min(n - 1, pos[ex.id] + delta));
+  render(ex);
+}
+
+function build(saved) {
+  const toc = document.getElementById("toc"), cards = document.getElementById("cards");
+  EXAMPLES.forEach((ex, i) => {
+    pos[ex.id] = saved && saved[ex.id] !== undefined ? Math.min(saved[ex.id], ex.frames.length - 1) : 0;
+    const link = document.createElement("a");
+    link.href = "#" + ex.id;
+    link.innerHTML = `<b>${ex.level}</b>${ex.name}`;
+    toc.appendChild(link);
+    const dots = Array.from({ length: 11 }, (_, j) => `<i class="${j < ex.level ? "on" : ""}"></i>`).join("");
+    const a = document.createElement("article");
+    a.id = ex.id;
+    a.innerHTML = `
+      ${i ? "<hr>" : ""}
+      <div class="kicker"><span class="dots" aria-hidden="true">${dots}</span>Level ${ex.level} · ${LEVELS[ex.level]}${ex.real ? '<span class="real">From a real puzzle</span>' : ""}</div>
+      <h2>${ex.name}</h2>
+      <p class="rule">${ex.rule}</p>
+      <figure>
+        <svg role="img" aria-label="Example of ${ex.name}"></svg>
+        <div class="stepper">
+          <button type="button" class="prev" id="${ex.id}-prev">Previous</button>
+          <div class="progress" aria-hidden="true">${ex.frames.map(() => "<i></i>").join("")}</div>
+          <button type="button" class="next" id="${ex.id}-next">Next</button>
+        </div>
+        <figcaption class="caption" aria-live="polite"></figcaption>
+      </figure>
+      <p class="look"><b>Look for:</b> ${ex.look}</p>`;
+    cards.appendChild(a);
+    a.querySelector(".prev").onclick = () => go(ex, -1);
+    a.querySelector(".next").onclick = () => go(ex, 1);
+    a.querySelector("svg").onclick = () => go(ex, 1);
+    render(ex);
+  });
+}
+
+window.claude?.hot?.snapshot?.(() => ({ pos: { ...pos } }));
+function start(data) { build(data && data.pos); }
+window.claude?.hot?.ready ? window.claude.hot.ready(start) : start(window.claude?.hot?.data ?? {});
+</script>
+</body>
+</html>
