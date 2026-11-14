@@ -456,17 +456,18 @@ function showRating() {
   const items = E.TECH.map((t, i) => {
     const used = r.uses[i] > 0;
     return (
-      `<li class="${used ? "" : "unused"} ${i === hardestIdx ? "hardest" : ""}"><span class="lv">${t.level}</span><span class="name">${t.label}</span>` +
+      `<li class="${used ? "" : "unused"} ${i === hardestIdx ? "hardest" : ""}"><span class="lv">${t.level}</span><span class="name"${i === hardestIdx ? ` data-hardest="${tr("sværeste")}"` : ""}>${t.label}</span>` +
       `<span class="n">${used ? "×" + r.uses[i] : "–"}</span><span class="d">${t.desc}</span></li>`
     );
   }).join("");
   openSheet(
     `<div class="rating"><h2>${tr("Hvorfor {v}?", { v: levelValue(P) })}</h2>` +
+      personalLineHtml(P.grade.value, P.rating.level) +
       profileHtml(P.grade) +
       `<h3>${tr("Opgavekode")}</h3><p>${tr("Koden indeholder selve opgaven. Den kan hentes her i appen og i Java-programmet.")}</p><div class="codebox">${P.code}</div>` +
       `<div class="actions row2"><button class="secondary" type="button" id="rCopy">${tr("Kopiér kode")}</button><button class="secondary" type="button" id="rShare">${tr("Del")}</button></div>` +
       `<h3>${tr("Teknikker")}</h3><p>${tr("De teknikker en løser skal bruge, og hvor mange gange. De bestemmer ikke længere tallet alene.")}</p><ul class="tech">${items}</ul>` +
-      `<div class="actions"><button class="primary big" type="button" id="rClose">Luk</button></div></div>`,
+      `<div class="actions"><button class="primary big" type="button" id="rClose">${tr("Luk")}</button></div></div>`,
     (b) => {
       b.querySelector("#rClose").onclick = closeSheet;
       b.querySelector("#rCopy").onclick = async () => {
@@ -591,6 +592,7 @@ function profileHtml(g) {
     `<p>${tr("Tallet er det tungeste skridt (top) plus et tillæg for, hvor mange tunge skridt der er (mængde). Det måler indsats, ikke hvilken teknik der bruges.")}</p>` +
     effortStrip(g) +
     `<dl class="profile">${rows}<dt><b>${f(g.value)}</b></dt><dd><b>${BAND[g.band]}</b>${g.value >= 9.9 ? " " + tr("(skalaen stopper ved {max})", { max: dec(9.9) }) : ""}</dd></dl>` +
+    estLineHtml(g.lv) +
     `<p>${tr("Vægtene er tilpasset de første 17 vurderede opgaver. Bliv ved med at svare på »hvordan føltes den?«, så kan de justeres igen.")}</p>`
   );
 }
@@ -599,6 +601,8 @@ const FELT = [tr("Meget lettere"), tr("Lettere"), tr("Passer"), tr("Sværere"), 
 function showSolved(rec) {
   if (view !== "game") return;
   const st = streaks();
+  const gNow = games.find((g) => g.id === rec.id),
+    feltNow = gNow && gNow.felt != null ? gNow.felt : null;
   let record = "";
   if (rec.solved && !rec.hints) {
     const prev = games.filter(
@@ -614,11 +618,12 @@ function showSolved(rec) {
       `<p class="sub">${esc(BAND[gBand(rec)])} ${dec(rec.value)} · ${rec.cols}×${rec.rows}${rec.daily ? " · " + tr("Dagens opgave") : ""}${rec.peak != null ? "<br>" + plText(rec) : ""}</p>` +
       `<div class="kpis three"><div class="kpi"><b>${fmt(rec.ms)}</b><span>${tr("Tid")}</span></div><div class="kpi"><b>${rec.hints}</b><span>${rec.hints === 1 ? tr("Hint") : tr("Hints")}</span></div>` +
       `<div class="kpi"><b>${st.current}</b><span>${st.current === 1 ? tr("Dag i træk") : tr("Dage i træk")}</span></div></div>${record}` +
+      (rec.est && rec.solved ? `<p class="sub estcmp">${tr("Dit estimat var {t}.", { t: estFmt(rec.est) })} ${estCompare(rec.ms, rec.est)}</p>` : "") +
       (rec.solved ? "" : `<p class="sub" style="margin-top:10px">${tr("Løsningen blev vist undervejs, så den tæller ikke som løst.")}</p>`) +
       `<button class="routeline" type="button" id="routeLine">${routeLineHtml(rec)}</button>` +
       `<div id="concLine">${concLineHtml(rec)}</div>` +
       `<p class="feltq">${tr("Hvordan føltes den i forhold til {v}?", { v: dec(rec.value) })}</p><div class="seg felt" id="feltSeg">` +
-      FELT.map((t, i) => `<button type="button" data-f="${i - 2}" aria-pressed="false">${t}</button>`).join("") +
+      FELT.map((t, i) => `<button type="button" data-f="${i - 2}" aria-pressed="${feltNow === i - 2}">${t}</button>`).join("") +
       `</div>` +
       `<div class="actions"><button class="primary big" type="button" id="sNew">${tr("Ny opgave")} · ${esc(BAND[ui.level])}</button>` +
       `<div class="actions row2" style="margin:0"><button class="secondary" type="button" id="sStats">${tr("Statistik")}</button><button class="secondary" type="button" id="sHome">${tr("Forside")}</button></div></div></div>`,
@@ -641,7 +646,7 @@ function showSolved(rec) {
         const g = games.find((x) => x.id === rec.id);
         if (g && g.moves) {
           closeSheet();
-          setTimeout(() => showRoute(g), 280);
+          setTimeout(() => showRoute(g, () => showSolved(rec)), 280);
         }
       };
       b.querySelector("#sStats").onclick = () => {

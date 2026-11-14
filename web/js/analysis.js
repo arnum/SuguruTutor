@@ -9,6 +9,44 @@ const ROUTE_CLS = {
   guess: { label: tr("Gæt"), long: tr("Kunne ikke udledes") },
   hint: { label: tr("Hint"), long: tr("Sat med hint") },
 };
+// Spil analyseret før "tænkt frem" fik navngivne tal: kør analysen igen ud fra de gemte træk og tilføj dem.
+// Slettede tal er ikke gemt, men forkerte tal tæller alligevel ikke med i stillingen, så resultatet bliver det samme.
+// Gemte opsummeringer fra før fejl-episoderne: regn dem om ud fra de gemte træk (hurtigt, ingen ny analyse)
+function refreshRouteSummaries() {
+  let changed = false;
+  games.forEach((g) => {
+    if (!g.moves || (g.route && g.route.follow !== undefined)) return;
+    markErrors(g.moves);
+    g.route = routeSummary(g.moves);
+    g.thirds = thirdsOf(g);
+    g.conc = null;
+    changed = true;
+  });
+  if (changed) saveGames();
+}
+function upgradeAheadVia() {
+  const todo = games.filter((g) => g.moves && g.code && g.moves.some((m) => m.cls === "ahead" && !m.via));
+  const next = () => {
+    const g = todo.shift();
+    if (!g) return;
+    let p;
+    try {
+      p = puzzleFromCode(g.code);
+    } catch (e) {
+      g.moves.forEach((m) => m.cls === "ahead" && !m.via && (m.via = []));
+      return next();
+    }
+    const raw = g.moves.map((m) => ({ c: m.c, v: m.v, t: m.t, h: m.cls === "hint" ? 1 : 0 }));
+    runRoute(p, raw, (list) => {
+      g.moves.forEach((m, k) => {
+        if (m.cls === "ahead" && !m.via) m.via = (list[k] && list[k].c === m.c && list[k].via) || [];
+      });
+      saveGames();
+      setTimeout(next, 50);
+    });
+  };
+  setTimeout(next, 1500);
+}
 function runRoute(p, moves, done) {
   try {
     const w = newWorker();
@@ -70,7 +108,11 @@ function routeLineHtml(rec) {
   const rest = [
     r.ahead ? tr("{n} tænkt frem", { n: r.ahead }) : "",
     r.harder ? tr("{n} sværere end nødvendigt", { n: r.harder }) : "",
-    r.wrong ? tr("{n} fejl", { n: r.wrong }) : "",
+    r.wrong
+      ? r.wrong === 1
+        ? r.follow ? tr("1 fejl (+{f} følgefejl)", { f: r.follow }) : tr("1 fejl")
+        : r.follow ? tr("{n} fejl (+{f} følgefejl)", { n: r.wrong, f: r.follow }) : tr("{n} fejl", { n: r.wrong })
+      : "",
     r.guess ? tr("{n} gæt", { n: r.guess }) : "",
   ].filter(Boolean);
   return (
@@ -97,7 +139,7 @@ function timesOf(g) {
   const o = {};
   g.moves.forEach((m) => {
     const L = moveLevel(m);
-    if (L && m.cls !== "hint" && m.cls !== "wrong") (o[L] = o[L] || []).push(Math.round(m.dt / 1000));
+    if (L && judged(m) && m.cls !== "wrong") (o[L] = o[L] || []).push(Math.round(m.dt / 1000));
   });
   return o;
 }
@@ -152,6 +194,15 @@ function routeChart(list, p) {
   });
   path += `H${x(tmax)}`;
   s += `<path d="${path}V${y(1) + 6}H${x(0)}Z" fill="var(--chip)" opacity="0.9"/><path d="${path}" fill="none" stroke="var(--mute)" stroke-width="1" opacity="0.5"/>`;
+  // Perioder hvor en fejl stod på pladen (fra hovedfejlen, til den og dens følgefejl er rettet)
+  markErrors(list);
+  list.forEach((m, i) => {
+    if (m.cls !== "wrong" || m.follow || m.legacy) return; // gamle spil: det vides ikke, hvornår fejlen blev visket ud
+    const ends = list.filter((x, j) => j === i || (x.cls === "wrong" && x.cause === i)).map((x) => (x.fixT === undefined ? tmax : x.fixT));
+    const x0 = x(m.t), x1 = x(Math.max(...ends));
+    s += `<rect x="${x0}" y="${T}" width="${Math.max(2, x1 - x0)}" height="${H - T - B}" fill="var(--bad)" opacity="0.08"/>` +
+      `<line x1="${x0}" x2="${x0}" y1="${T}" y2="${H - B}" stroke="var(--bad)" stroke-width="1" opacity="0.4"/>`;
+  });
   list.forEach((m, i) => {
     const lv = lvOf(m),
       yy = y(lv ? Math.min(lv, top) : top),
@@ -159,15 +210,20 @@ function routeChart(list, p) {
       x1 = x(m.t);
     const nm = "abcdefghij"[m.c % p.cols] + (Math.floor(m.c / p.cols) + 1);
     // Søgetiden som streg frem mod trækket
-    s += `<line x1="${x0}" x2="${x1}" y1="${yy}" y2="${yy}" stroke="${col[m.cls]}" stroke-width="3" stroke-linecap="round" opacity="0.5"/>`;
-    if (m.cls === "easy") s += `<circle cx="${x1}" cy="${yy}" r="4" fill="var(--indigo)" stroke="var(--cell)" stroke-width="2"/>`;
+    const faint = m.amid || (m.cls === "wrong" && m.follow);
+    s += `<line x1="${x0}" x2="${x1}" y1="${yy}" y2="${yy}" stroke="${faint ? "var(--mute)" : col[m.cls]}" stroke-width="3" stroke-linecap="round" opacity="${faint ? 0.25 : 0.5}"/>`;
+    if (m.amid) s += `<circle cx="${x1}" cy="${yy}" r="3" fill="var(--mute)" opacity="0.55"/>`;
+    else if (m.cls === "wrong" && m.follow)
+      s += `<path d="M${x1 - 3} ${yy - 3}l6 6M${x1 + 3} ${yy - 3}l-6 6" stroke="var(--bad)" stroke-width="1.8" stroke-linecap="round" opacity="0.5"/>`;
+    else if (m.cls === "easy") s += `<circle cx="${x1}" cy="${yy}" r="4" fill="var(--indigo)" stroke="var(--cell)" stroke-width="2"/>`;
     else if (m.cls === "ahead") s += `<circle cx="${x1}" cy="${yy}" r="4.5" fill="var(--cell)" stroke="var(--indigo)" stroke-width="2"/>`;
     else if (m.cls === "harder")
       s += `<rect x="${x1 - 5}" y="${yy - 5}" width="10" height="10" rx="2" fill="var(--warn)" stroke="var(--cell)" stroke-width="2" transform="rotate(45 ${x1} ${yy})"/>`;
     else if (m.cls === "hint") s += `<rect x="${x1 - 3.5}" y="${yy - 3.5}" width="7" height="7" rx="1" fill="var(--mute)"/>`;
     else
       s += `<path d="M${x1 - 4.5} ${yy - 4.5}l9 9M${x1 + 4.5} ${yy - 4.5}l-9 9" stroke="var(--bad)" stroke-width="2.4" stroke-linecap="round"/>`;
-    let tip = tr("Træk {k} · {cell} = {v} · fundet efter {tid}: {what}", { k: i + 1, cell: nm, v: m.v, tid: fmt(m.dt), what: ROUTE_CLS[m.cls].long });
+    const what = m.amid ? tr("sat mens en fejl stod på pladen, ikke bedømt") : m.cls === "wrong" && m.follow ? tr("følgefejl") : ROUTE_CLS[m.cls].long;
+    let tip = tr("Træk {k} · {cell} = {v} · fundet efter {tid}: {what}", { k: i + 1, cell: nm, v: m.v, tid: fmt(m.dt), what });
     if (lv && m.cls !== "hint") tip += ` · ${LEVEL_TECH[lv]}`;
     if (m.avail && m.cls !== "easy" && m.cls !== "hint" && m.cls !== "wrong") tip += " · " + tr("letteste: {tech}", { tech: LEVEL_TECH[m.avail] });
     s += `<rect x="${Math.min(x0, x1 - 6)}" y="${yy - 9}" width="${Math.max(12, x1 - x0 + 6)}" height="18" fill="transparent" data-tip="${esc(tip)}"/>`;
@@ -178,29 +234,57 @@ function routeChart(list, p) {
     `<span><i style="box-shadow:inset 0 0 0 2px var(--indigo);border-radius:50%"></i> ${tr("tænkt frem")}</span>` +
     `<span><i style="background:var(--warn);transform:rotate(45deg) scale(.85)"></i> ${tr("sværere")}</span>` +
     `<span><b style="color:var(--bad)">×</b> ${tr("fejl/gæt")}</span><span><i style="background:var(--mute)"></i> ${tr("hint")}</span>` +
-    `<span><svg width="18" height="8" style="vertical-align:middle"><path d="M1 4h16" stroke="var(--indigo)" stroke-width="3" stroke-linecap="round" opacity=".5"/></svg> ${tr("tid du ledte")}</span>` +
+    `<span><i style="background:color-mix(in srgb, var(--bad) 14%, transparent)"></i> ${tr("fejl på pladen")}</span>` +
     `<span><i style="background:var(--chip);box-shadow:inset 0 1px 0 var(--mute)"></i> ${tr("letteste mulige")}</span></div>`;
   return s;
 }
-function showRoute(g) {
+// "Tænkt frem": tallet kunne ikke ses direkte på det letteste niveau, men følger, når andre tal er sat først.
+// Spilleren har typisk fundet de tal i hovedet og fortsat uden at skrive dem ned. Det er ikke en fejl.
+function aheadText(m, nm) {
+  const direct =
+    m.direct < 12
+      ? tr("Direkte krævede det {tech}.", { tech: LEVEL_TECH[m.direct] })
+      : tr("Direkte kunne det slet ikke udledes.");
+  if (m.via && m.via.length) {
+    const via = list2(m.via.map(([c, v]) => nm(c) + " = " + v)) + (m.placed > m.via.length ? " " + tr("m.fl.") : "");
+    return (
+      tr("{cell} = {v} kunne ikke ses direkte med {tech}, men følger, når {via} er sat.", { cell: nm(m.c), v: m.v, tech: LEVEL_TECH[m.ahead], via }) +
+      " " +
+      direct +
+      " " +
+      tr("Du har sandsynligvis fundet {via} i hovedet og fortsat derfra uden at skrive det ned. Det er ikke en fejl, men søgetiden dækker mere end ét tal.", { via })
+    );
+  }
+  return (
+    (m.placed === 1
+      ? tr("{cell} = {v} kunne ses med {tech}, men først når 1 andet tal var sat i hovedet.", { cell: nm(m.c), v: m.v, tech: LEVEL_TECH[m.ahead] })
+      : tr("{cell} = {v} kunne ses med {tech}, men først når {n} andre tal var sat i hovedet.", { cell: nm(m.c), v: m.v, tech: LEVEL_TECH[m.ahead], n: m.placed })) +
+    " " +
+    direct +
+    " " +
+    tr("Det er ikke en fejl, men søgetiden dækker mere end ét tal.")
+  );
+}
+const list2 = (arr) => (arr.length <= 1 ? arr.join("") : arr.slice(0, -1).join(", ") + " " + tr("og") + " " + arr[arr.length - 1]);
+// back: åbnet fra løst-arket. Så fører Luk tilbage dertil, og der er en direkte knap til en ny opgave.
+function showRoute(g, back) {
   const list = g.moves,
     r = g.route || routeSummary(list),
     p = { cols: g.cols };
   const nm = (c) => "abcdefghij"[c % g.cols] + (Math.floor(c / g.cols) + 1);
   const pct = r.n ? Math.round((100 * r.easy) / r.n) : 0;
   const base = baseline(g.id);
-  const lines = [];
-  if (r.ahead)
-    lines.push(
-      (r.ahead === 1 ? tr("<b>1 gang tænkte du frem:</b> tallet kunne ses med de letteste teknikker, men først efter at have sat andre tal i hovedet.") : tr("<b>{n} gange tænkte du frem:</b> tallet kunne ses med de letteste teknikker, men først efter at have sat andre tal i hovedet.", { n: r.ahead })),
-    );
-  if (r.harder)
-    lines.push(
-      (r.harder === 1 ? tr("<b>1 gang tog du et sværere træk,</b> selv om der fandtes et lettere andetsteds ({x} niveau over).", { x: dec(r.excess, 1) }) : tr("<b>{n} gange tog du et sværere træk,</b> selv om der fandtes et lettere andetsteds (i snit {x} niveau over).", { n: r.harder, x: dec(r.excess, 1) })),
-    );
-  if (r.wrong) lines.push((r.wrong === 1 ? tr("<b>1 forkert tal</b> undervejs.") : tr("<b>{n} forkerte tal</b> undervejs.", { n: r.wrong })));
-  if (r.guess) lines.push(tr("<b>{n} tal kunne ikke udledes</b> af stillingen; det ligner gæt, der gik godt.", { n: r.guess }));
-  if (r.hints) lines.push(tr("{n} tal blev sat med hint og tæller ikke med.", { n: r.hints }));
+  // Fejl-episoder: hovedfejl med følgefejl og de tal, der blev sat imens
+  const episodes = list
+    .map((m, i) => Object.assign({ i }, m))
+    .filter((m) => m.cls === "wrong" && !m.follow)
+    .map((m) => {
+      const follow = list.map((x, j) => Object.assign({ i: j }, x)).filter((x) => x.cls === "wrong" && x.follow && x.cause === m.i);
+      const amid = list.filter((x) => x.amid && x.cause === m.i).length;
+      const ends = [m, ...follow].map((x) => x.fixT);
+      const fixed = ends.every((t) => t !== undefined) ? Math.max(...ends) : null;
+      return { m, follow, amid, fixed };
+    });
   const verdict =
     pct >= 90
       ? tr("Du fulgte stort set den letteste rute.")
@@ -237,7 +321,7 @@ function showRoute(g) {
   const gameMed = median(all.map((m) => m.dt / 1000));
   const stuck = list
     .map((m, i) => Object.assign({ i }, m))
-    .filter((m) => m.best && m.cls !== "hint")
+    .filter((m) => m.best && judged(m))
     .filter((m) => {
       const bl = base[m.avail],
         sec = m.dt / 1000;
@@ -256,19 +340,21 @@ function showRoute(g) {
           ? tr("Der var kun {n} tal at finde på det niveau.", { n: m.nAvail })
           : tr("Der var {n} tal at finde på det niveau.", { n: m.nAvail });
     const head = `<b class="k">${tr("Træk {k} · ledte i {tid}", { k: m.i + 1, tid: fmt(m.dt) })}</b><span class="tag ${m.cls}">${ROUTE_CLS[m.cls].label}</span><br>`;
+    if (m.cls === "ahead") return head + aheadText(m, nm) + usual;
     if (m.best.c === m.c && m.best.v === m.v)
       return head + tr("Du fandt {cell} = {v}, som var det letteste træk ({tech}).", { cell: nm(m.c), v: m.v, tech: LEVEL_TECH[m.avail] }) + " " + few + usual;
     if (m.cls === "easy")
       return head + tr("Du fandt {cell} = {v} med {tech}.", { cell: nm(m.c), v: m.v, tech: LEVEL_TECH[lv] }) + " " + few + " " + tr("Fx {cell} = {v}.", { cell: nm(m.best.c), v: m.best.v }) + usual;
     return (
       head +
-      tr("Du endte med {cell} = {v}, som krævede {tech}. Imens fandtes {easy}, fx {bcell} = {bv}.", { cell: nm(m.c), v: m.v, tech: LEVEL_TECH[lv], easy: LEVEL_TECH[m.avail], bcell: nm(m.best.c), bv: m.best.v }) + " " + few + usual
+      tr("Du endte med {cell} = {v}, som krævede {tech}. Imens fandtes {easy}, fx {bcell} = {bv}.", { cell: nm(m.c), v: m.v, tech: LEVEL_TECH[lv], easy: LEVEL_TECH[m.avail], bcell: nm(m.best.c), bv: m.best.v }) + " " + few + usual +
+      (m.cls === "harder" ? mboardSlot(g, m) : "")
     );
   };
 
   const notable = list
     .map((m, i) => Object.assign({ i }, m))
-    .filter((m) => m.cls !== "easy" && m.cls !== "hint")
+    .filter((m) => m.cls !== "easy" && m.cls !== "wrong" && judged(m))
     .sort(
       (a, b) =>
         (b.cls === "harder" ? Math.min(b.direct, b.ahead || 12) - b.avail : b.cls === "ahead" ? 0.5 : 0.8) -
@@ -279,44 +365,260 @@ function showRoute(g) {
     const head = `<b class="k">${tr("Træk {k}", { k: m.i + 1 })} · ${nm(m.c)} = ${m.v} · ${fmt(m.dt)}</b><span class="tag ${m.cls}">${ROUTE_CLS[m.cls].label}</span>`;
     if (m.cls === "harder") {
       const lv = Math.min(m.direct, m.ahead || 12);
-      return head + "<br>" + tr("Krævede {tech}. Det letteste træk lige da var {easy}.", { tech: LEVEL_TECH[lv], easy: LEVEL_TECH[m.avail] });
+      return head + "<br>" + tr("Krævede {tech}. Det letteste træk lige da var {easy}.", { tech: LEVEL_TECH[lv], easy: LEVEL_TECH[m.avail] }) + mboardSlot(g, m);
     }
-    if (m.cls === "ahead")
-      return (
-        head +
-        "<br>" + (m.placed === 1 ? tr("Kunne ses med {tech}, men først efter 1 andet tal i hovedet", { tech: LEVEL_TECH[m.ahead] }) : tr("Kunne ses med {tech}, men først efter {n} andre tal i hovedet", { tech: LEVEL_TECH[m.ahead], n: m.placed })) +
-        (m.direct < 12 ? tr("; direkte krævede det {tech}.", { tech: LEVEL_TECH[m.direct] }) : ".")
-      );
+    if (m.cls === "ahead") return head + "<br>" + aheadText(m, nm);
     if (m.cls === "wrong") return head + "<br>" + tr("Tallet var forkert.");
     return head + "<br>" + tr("Kunne ikke udledes af tallene på pladen på det tidspunkt.");
   };
+  // Det vigtigste, kort og i den rækkefølge det betyder noget
+  const key = [];
+  if (episodes.length) {
+    const nf = episodes.reduce((t, e) => t + e.follow.length, 0),
+      na = episodes.reduce((t, e) => t + e.amid, 0);
+    key.push(
+      (episodes.length === 1 ? tr("<b>1 fejl</b>") : tr("<b>{n} fejl</b>", { n: episodes.length })) +
+        (nf ? " " + (nf === 1 ? tr("førte til 1 følgefejl") : tr("førte til {n} følgefejl", { n: nf })) : "") +
+        "." +
+        (na ? " " + (na === 1 ? tr("1 tal sat imens er ikke bedømt.") : tr("{n} tal sat imens er ikke bedømt.", { n: na })) : ""),
+    );
+  }
+  if (r.harder) key.push(r.harder === 1 ? tr("<b>1 gang</b> et sværere træk end nødvendigt.") : tr("<b>{n} gange</b> et sværere træk end nødvendigt.", { n: r.harder }));
+  if (stuck.length) key.push(tr("<b>Længst søgning:</b> {tid} før træk {k}.", { tid: fmt(stuck[0].dt), k: stuck[0].i + 1 }));
+  if (r.ahead) key.push(r.ahead === 1 ? tr("1 gang tænkte du frem. Det er ikke en fejl.") : tr("{n} gange tænkte du frem. Det er ikke en fejl.", { n: r.ahead }));
+  if (r.guess) key.push(tr("{n} tal kunne ikke udledes og ligner gæt, der gik godt.", { n: r.guess }));
+  if (r.hints) key.push(r.hints === 1 ? tr("1 tal blev sat med hint og tæller ikke med.") : tr("{n} tal blev sat med hint og tæller ikke med.", { n: r.hints }));
+
+  const epText = (e) =>
+    `<b class="k">${tr("Træk {k}", { k: e.m.i + 1 })} · ${nm(e.m.c)} = ${e.m.v}</b><br>` +
+    (e.m.legacy ? "" : e.fixed !== null ? tr("Rettet efter {tid}.", { tid: fmt(e.fixed - e.m.t) }) : tr("Ikke rettet.")) +
+    (e.follow.length ? " " + tr("Følgefejl: {list}.", { list: list2(e.follow.map((x) => nm(x.c) + " = " + x.v)) }) : "") +
+    (e.amid ? " " + (e.amid === 1 ? tr("1 rigtigt tal sat imens er ikke bedømt.") : tr("{n} rigtige tal sat imens er ikke bedømt.", { n: e.amid })) : "");
+  const section = (title, count, body, open) =>
+    `<details class="rdet"${open ? " open" : ""}><summary><span>${title}</span>${count !== "" ? `<small>${count}</small>` : ""}</summary>${body}</details>`;
+  const lapses = concRouteHtml(g, nm);
+  const nLapse = (concGet(g) || { idx: [] }).idx.filter((i) => list[i] && list[i].cls !== "wrong").length;
+
   openSheet(
     `<h2>${tr("Din løsningsrute")}</h2><p class="sub" style="color:var(--mute)">${esc(BAND[gBand(g)])} ${dec(g.value)} · ${g.cols}×${g.rows} · ${new Date(g.end).toLocaleDateString(LOCALE, { day: "numeric", month: "short" })} · ${fmt(g.ms)}</p>` +
       `<div class="rkpi"><b>${pct} %</b><span>${tr("af {n} træk var et af de letteste mulige lige da.", { n: r.n })}<br>${verdict}</span></div>` +
+      (key.length ? `<ul class="keypts">${key.map((t) => `<li>${t}</li>`).join("")}</ul>` : "") +
       routeChart(list, p) +
       `<p class="caveat" style="margin-top:4px!important">${tr("Hver streg er tiden fra forrige tal, til du satte dette. Lange streger er der, hvor du ledte.")}</p>` +
-      (lines.length ? `<ul class="notable">${lines.map((t) => `<li>${t}</li>`).join("")}</ul>` : "") +
+      `<div class="rsecs">` +
+      (episodes.length ? section(tr("Fejl"), episodes.length, `<ul class="notable">${episodes.map((e) => `<li>${epText(e)}</li>`).join("")}</ul>`, true) : "") +
+      (stuck.length ? section(tr("Her ledte du længe"), stuck.length, `<ul class="notable">${stuck.map((m) => `<li>${stuckText(m)}</li>`).join("")}</ul>`) : "") +
+      (notable.length ? section(tr("Træk at kigge på"), notable.length, `<ul class="notable">${notable.map((m) => `<li>${ntext(m)}</li>`).join("")}</ul>`) : "") +
       (tRows
-        ? `<h3 style="margin:14px 0 0;font-size:15px">${tr("Tid pr. teknik")}</h3><table class="data"><tr><th></th><th>${tr("Trækket krævede")}</th><th>${tr("Træk")}</th><th>${tr("Median")}</th><th>${tr("Normalt")}</th></tr>${tRows}</table>` +
-          (Object.keys(base).length ? "" : `<p class="caveat">${tr("»Normalt« udfyldes, når du har løst et par opgaver mere.")}</p>`)
+        ? section(
+            tr("Tid pr. teknik"),
+            "",
+            `<table class="data"><tr><th></th><th>${tr("Trækket krævede")}</th><th>${tr("Træk")}</th><th>${tr("Median")}</th><th>${tr("Normalt")}</th></tr>${tRows}</table>` +
+              (Object.keys(base).length ? "" : `<p class="caveat">${tr("»Normalt« udfyldes, når du har løst et par opgaver mere.")}</p>`),
+          )
         : "") +
-      concRouteHtml(g, nm) +
-      (stuck.length
-        ? `<h3 style="margin:14px 0 0;font-size:15px">${tr("Her ledte du længe")}</h3><ul class="notable">${stuck.map((m) => `<li>${stuckText(m)}</li>`).join("")}</ul>`
-        : "") +
-      (notable.length
-        ? `<h3 style="margin:14px 0 0;font-size:15px">${tr("Træk at kigge på")}</h3><ul class="notable">${notable.map((m) => `<li>${ntext(m)}</li>`).join("")}</ul>`
-        : "") +
-      `<p class="caveat">${tr("Analysen kender kun tallene, du skrev, og hvornår. Tiden er fra forrige tal, så hvis du fandt to tal på én gang, ser det andet hurtigt ud, og tid brugt på blyantsnoter tæller med. Et »sværere« træk kan også være fundet ad en anden vej.")}</p>` +
-      `<div class="actions row2"><button class="secondary" type="button" id="rtAgain">${tr("Spil igen")}</button><button class="primary" type="button" id="rtClose">${tr("Luk")}</button></div>`,
+      (nLapse ? section(tr("Udfald i koncentrationen"), nLapse, lapses) : "") +
+      section(
+        tr("Om analysen"),
+        "",
+        `<p class="caveat">${tr("Analysen kender kun tallene, du skrev, og hvornår. Tiden er fra forrige tal, så hvis du fandt to tal på én gang, ser det andet hurtigt ud, og tid brugt på blyantsnoter tæller med. Et »sværere« træk kan også være fundet ad en anden vej.")}</p>` +
+          `<p class="caveat">${tr("En fejl tæller én gang, selv om den fører til flere forkerte tal. Tal, der bliver sat, mens et forkert tal står på pladen, bedømmes ikke, fordi de er fundet ud fra en forkert stilling.")}</p>`,
+      ) +
+      `</div>` +
+      (back
+        ? `<div class="actions"><button class="primary big" type="button" id="rtNew">${tr("Ny opgave")} · ${esc(BAND[ui.level])}</button>` +
+          `<div class="actions row2" style="margin:0"><button class="secondary" type="button" id="rtAgain">${tr("Spil igen")}</button><button class="secondary" type="button" id="rtClose">${tr("Tilbage")}</button></div></div>`
+        : `<div class="actions row2"><button class="secondary" type="button" id="rtAgain">${tr("Spil igen")}</button><button class="primary" type="button" id="rtClose">${tr("Luk")}</button></div>`),
     (b2) => {
+      bindMboards(b2, g);
       b2.querySelector("#rtClose").onclick = closeSheet;
-      b2.querySelector("#rtAgain").onclick = () => {
+      const leave = (f) => {
+        sheetOnClose = null; // ikke tilbage til løst-arket, når man går videre
         closeSheet();
-        setTimeout(() => replaceGame(() => importCode(g.code, { replay: true })), 280);
+        setTimeout(f, 280);
       };
+      b2.querySelector("#rtAgain").onclick = () => leave(() => replaceGame(() => importCode(g.code, { replay: true })));
+      if (back) b2.querySelector("#rtNew").onclick = () => leave(generateFromUi);
     },
+    back ? () => setTimeout(back, 280) : null,
   );
+}
+// ---------- Pladen ved et sværere træk: hvad du gjorde, og hvad der var lettere lige da
+// Pladen genskabes ud fra opgavekoden og dine rigtige tal før trækket. Begge forklaringer laves af hint-motoren.
+const mboardSlot = (g, m) => (g.code ? `<div class="mboard" data-mi="${m.i}"><span class="mbwait">${tr("Tegner pladen …")}</span></div>` : "");
+const ROUTE_PUZ = {};
+function routePuzzle(g) {
+  if (ROUTE_PUZ[g.id]) return ROUTE_PUZ[g.id];
+  const d = decodePuzzle(g.code),
+    G2 = E.makeGeometry(d.rows, d.cols),
+    u = E.createSolver(G2, d.region).uniqueSolution(d.givens);
+  if (!u.solution) return null;
+  const size = {};
+  d.region.forEach((r) => (size[r] = (size[r] || 0) + 1));
+  return (ROUTE_PUZ[g.id] = { d, G: G2, sol: Array.from(u.solution), tu: createTutor(G2, d.region), maxR: Math.max(...Object.values(size)) });
+}
+// Tallene på pladen lige før træk i: givne tal og dine rigtige tal indtil da
+function boardBefore(P2, list, i) {
+  const k = P2.d.givens.slice();
+  for (let j = 0; j < i; j++) {
+    const x = list[j];
+    if (x.v === P2.sol[x.c] && !k[x.c]) k[x.c] = x.v;
+  }
+  return k;
+}
+// Den del af forklaringen, der viser det afgørende: skridtet med den sværeste teknik, eller selve tallet ved enkle træk
+function keyView(h) {
+  const steps = h.views.filter((v) => !v.nudge && !v.final);
+  if (!steps.length) return h.views[h.views.length - 1];
+  const hard = steps.filter((v) => v.tech === h.hardest);
+  const kv = (hard.length ? hard[hard.length - 1] : steps[steps.length - 1]) || steps[0];
+  // Ved hvis-så er antagelsen (med de antagne tal på pladen) mere sigende end konklusionen alene
+  const prev = h.views[h.views.indexOf(kv) - 1];
+  if (prev && prev.hypo && prev.tech === kv.tech && !kv.hypo) return Object.assign({}, prev, { text: prev.text + " " + kv.text });
+  return kv;
+}
+function miniBoard(P2, known, hv, mark, head = {}) {
+  const { rows, cols, region } = P2.d,
+    S = 100,
+    giv = P2.d.givens,
+    pos = P2.maxR >= 6 ? NOTE_POS6 : NOTE_POS5;
+  const pat = new Set(hv ? hv.pattern || [] : []),
+    tgt = new Set(hv ? hv.target || [] : []),
+    bad = new Set(hv && hv.bad ? hv.bad : []),
+    hypo = (hv && hv.hypo) || {},
+    cand = (hv && hv.cand) || {},
+    strike = (hv && hv.strike) || {};
+  let s = `<svg viewBox="-30 -30 ${cols * S + 36} ${rows * S + 36}" role="img" aria-label="${esc(tr("Pladen før trækket"))}">`;
+  for (let c = 0; c < cols; c++) s += `<text x="${c * S + 50}" y="-10" font-size="22" text-anchor="middle" fill="var(--mute)">${"abcdefghij"[c]}</text>`;
+  for (let r = 0; r < rows; r++) s += `<text x="-16" y="${r * S + 58}" font-size="22" text-anchor="middle" fill="var(--mute)">${r + 1}</text>`;
+  for (let i = 0; i < rows * cols; i++) {
+    const x = (i % cols) * S,
+      y = Math.floor(i / cols) * S;
+    let fill = giv[i] ? "var(--given)" : "var(--cell)";
+    if (pat.has(i)) fill = "var(--pat)";
+    if (tgt.has(i)) fill = "var(--tgt)";
+    if (bad.has(i)) fill = "var(--badbg)";
+    s += `<rect x="${x}" y="${y}" width="${S}" height="${S}" fill="${fill}" stroke="var(--grid)" stroke-width="2"/>`;
+    const v = known[i];
+    if (v)
+      s += giv[i]
+        ? `<text x="${x + 50}" y="${y + 72}" font-size="62" font-weight="800" text-anchor="middle" fill="var(--ink)" font-family="Shippori Mincho B1, Georgia, serif">${v}</text>`
+        : `<text x="${x + 50}" y="${y + 70}" font-size="54" text-anchor="middle" fill="var(--indigo)">${v}</text>`;
+    else if (head[i] !== undefined) {
+      s += `<circle cx="${x + 50}" cy="${y + 50}" r="34" fill="none" stroke="var(--warn)" stroke-width="3" stroke-dasharray="5 6"/>`;
+      s += `<text x="${x + 50}" y="${y + 67}" font-size="46" font-weight="700" text-anchor="middle" fill="var(--warn)">${head[i]}</text>`;
+    } else if (mark && mark.c === i) {
+      s += `<circle cx="${x + 50}" cy="${y + 50}" r="40" fill="none" stroke="${mark.col}" stroke-width="6"/>`;
+      s += `<text x="${x + 50}" y="${y + 70}" font-size="56" font-weight="800" text-anchor="middle" fill="${mark.col}">${mark.v}</text>`;
+    } else if (hypo[i] !== undefined) {
+      s += `<circle cx="${x + 50}" cy="${y + 50}" r="36" fill="none" stroke="var(--hypo)" stroke-width="3" stroke-dasharray="5 6"/>`;
+      s += `<text x="${x + 50}" y="${y + 68}" font-size="48" font-weight="700" text-anchor="middle" fill="var(--hypo)">${hypo[i]}</text>`;
+    } else if (cand[i] !== undefined) {
+      for (let dg = 1; dg <= 6; dg++) {
+        if (!(cand[i] & (1 << dg)) || !pos[dg]) continue;
+        const [px, py] = pos[dg],
+          st = (strike[i] || 0) & (1 << dg);
+        s += `<text x="${x + px}" y="${y + py + 9}" font-size="25" text-anchor="middle" fill="${st ? "var(--bad)" : "var(--mute)"}" font-weight="${st ? 700 : 500}">${dg}</text>`;
+        if (st) s += `<line x1="${x + px - 11}" y1="${y + py + 11}" x2="${x + px + 11}" y2="${y + py - 9}" stroke="var(--bad)" stroke-width="3" stroke-linecap="round"/>`;
+      }
+    }
+  }
+  // Regionsgrænser
+  let path = "";
+  for (let r = 0; r < rows; r++)
+    for (let c = 0; c < cols; c++) {
+      const i = r * cols + c;
+      if (c < cols - 1 && region[i] !== region[i + 1]) path += `M${(c + 1) * S} ${r * S}v${S}`;
+      if (r < rows - 1 && region[i] !== region[i + cols]) path += `M${c * S} ${(r + 1) * S}h${S}`;
+    }
+  s += `<path d="${path}" stroke="var(--ink)" stroke-width="6" stroke-linecap="square" fill="none"/>`;
+  s += `<rect x="0" y="0" width="${cols * S}" height="${rows * S}" fill="none" stroke="var(--ink)" stroke-width="7"/></svg>`;
+  return s;
+}
+function mboardHtml(g, i) {
+  const P2 = routePuzzle(g);
+  if (!P2) return "";
+  const list = g.moves,
+    m = list[i],
+    known = boardBefore(P2, list, i);
+  const nm = (c) => "abcdefghij"[c % P2.d.cols] + (Math.floor(c / P2.d.cols) + 1);
+  // Kunne trækket findes lettere ved at sætte andre tal i hovedet først (tænkt frem)? Så vises den vej.
+  // Kunne trækket findes lettere ved at sætte andre tal i hovedet først (tænkt frem)? Så vises den vej,
+  // og det sværeste skridt på vejen er det, der tegnes.
+  const r = P2.tu.routeMove(known, m.c, m.v),
+    head = {};
+  let mine,
+    extra = "",
+    lvl = null;
+  if (r && r.ahead && r.ahead.level < r.direct) {
+    const kk = known.slice();
+    let best = null;
+    for (const [c, v] of r.ahead.via) {
+      const h = P2.tu.explainMove(kk, c, v);
+      if (h && (!best || h.hardestLevel > best.h.hardestLevel)) best = { h, c, v };
+      kk[c] = v;
+      head[c] = v;
+    }
+    const fin = P2.tu.explainMove(kk, m.c, m.v);
+    const vs = r.ahead.via.map(([c, v]) => nm(c) + " = " + v),
+      viaTxt = list2(vs.slice(0, 4)) + (vs.length > 4 ? " " + tr("m.fl.") : "");
+    lvl = r.ahead.level;
+    if (best && fin && best.h.hardestLevel > fin.hardestLevel) {
+      mine = best.h;
+      extra =
+        "<br>" +
+        tr("først {via} i hovedet ({tech}), derefter {cell} ({tech2})", {
+          via: viaTxt,
+          tech: LEVEL_TECH[best.h.hardestLevel],
+          cell: nm(m.c),
+          tech2: LEVEL_TECH[fin.hardestLevel],
+        });
+    } else {
+      mine = fin;
+      extra = "<br>" + tr("efter {via} i hovedet", { via: viaTxt });
+    }
+  } else mine = P2.tu.explainMove(known, m.c, m.v);
+  const easy = P2.tu.easiest(known);
+  const panel = (h, col, title, c, v, hd, extra, L) => {
+    const kv = h ? keyView(h) : null;
+    L = L || (h ? h.hardestLevel : 0);
+    return (
+      `<figure class="mbcol"><figcaption><b style="color:${col}">${title}</b><br>${nm(c)} = ${v}${L ? " · " + esc(LEVEL_TECH[L]) : ""}${extra || ""}</figcaption>` +
+      miniBoard(P2, known, kv, { c, v, col }, hd) +
+      (kv && kv.text ? `<p class="mbtext">${esc(kv.text)}</p>` : "") +
+      `</figure>`
+    );
+  };
+  return (
+    `<div class="mbpair">` +
+    panel(mine, "var(--warn)", tr("Det du gjorde"), m.c, m.v, head, extra, lvl) +
+    (easy ? panel(easy, "var(--indigo)", tr("Det letteste lige da"), easy.cell, easy.v, {}) : "") +
+    `</div>` +
+    (m.nAvail > 1 ? `<p class="mbnote">${tr("Der var {n} tal at finde på det letteste niveau. Her vises ét af dem.", { n: m.nAvail })}</p>` : "")
+  );
+}
+// Pladerne tegnes først, når afsnittet foldes ud, og ét ad gangen, så arket åbner hurtigt
+function bindMboards(root, g) {
+  const fill = (det) => {
+    const slots = [...det.querySelectorAll(".mboard:not([data-done])")];
+    const next = () => {
+      const el = slots.shift();
+      if (!el) return;
+      el.dataset.done = 1;
+      try {
+        el.innerHTML = mboardHtml(g, +el.dataset.mi) || "";
+      } catch (e) {
+        el.innerHTML = "";
+      }
+      setTimeout(next, 0);
+    };
+    setTimeout(next, 30);
+  };
+  root.querySelectorAll("details.rdet").forEach((det) => {
+    if (!det.querySelector(".mboard")) return;
+    det.addEventListener("toggle", () => det.open && fill(det));
+    if (det.open) fill(det);
+  });
 }
 // ---------- Koncentration i det enkelte spil
 // Et "udfald" er et sted, hvor der ikke burde være noget at lede efter:
@@ -325,14 +627,15 @@ function showRoute(g) {
 // Udfald pr. 100 træk sammenlignes med, hvad der er normalt for dig.
 function concOf(g, base) {
   if (!g.moves) return g.conc || null;
-  const mv = g.moves.filter((m) => m.cls !== "hint");
+  markErrors(g.moves);
+  const mv = g.moves.filter(judged);
   if (mv.length < 8) return null;
   const easyT = mv.filter((m) => m.avail === 1 && m.cls === "easy").map((m) => m.dt / 1000);
   const norm = base[1] ? base[1].med : easyT.length ? median(easyT) : 8;
   const thr = Math.max(20, 3 * norm);
   const slips = [];
   g.moves.forEach((m, i) => {
-    if (m.cls === "hint") return;
+    if (!judged(m)) return;
     if (m.cls === "wrong") slips.push({ i, kind: "err" });
     else if (m.avail === 1 && (m.nAvail || 0) >= 3 && m.dt / 1000 >= thr) slips.push({ i, kind: "slow" });
   });
@@ -401,10 +704,12 @@ function concLineHtml(g) {
 }
 function concRouteHtml(g, nm) {
   const c = concGet(g);
-  if (!c || !c.idx.length) return "";
+  // Kun de langsomme lette tal; fejlene står i deres eget afsnit
+  const idx = c ? c.idx.filter((i) => g.moves[i] && g.moves[i].cls !== "wrong") : [];
+  if (!idx.length) return "";
   return (
-    `<h3 style="margin:14px 0 0;font-size:15px">${tr("Udfald i koncentrationen")}</h3><ul class="notable">` +
-    c.idx
+    `<ul class="notable">` +
+    idx
       .slice(0, 6)
       .map((i) => {
         const m = g.moves[i];
@@ -484,7 +789,7 @@ function thirdsOf(g) {
     tot = Math.max(1, g.ms);
   g.moves.forEach((m) => {
     const k = Math.min(2, Math.floor((3 * m.t) / tot));
-    if (m.cls === "wrong") o.err[k]++;
+    if (m.cls === "wrong" && !m.follow) o.err[k]++;
     if (m.cls === "hint") o.hint[k]++;
   });
   return o;
@@ -730,16 +1035,14 @@ function ratingPanel() {
 }
 
 // ---------- Fokusområde
-// Forventet søgetid pr. niveau i forhold til niveau 1, ud fra appens egne vægte for teknikkernes sværhed (kvadratroden dæmper).
-// Det er en model, ikke målt på andre spillere.
-const LEVEL_WEIGHT = [0, 1, 4, 9, 16.5, 20, 22, 24, 26, 30, 40, 60];
-const EXPECT = LEVEL_WEIGHT.map((w) => Math.sqrt(w));
+// Forventet tid pr. teknik kommer fra din personlige tidskurve (calib.js). Fokusområdet viser, hvilke teknikker der ligger
+// over eller under kurven: det er dine relative svagheder og styrker, ikke en sammenligning med andre spillere.
 const LEVEL_GUIDE_TECH = [0, 0, 2, 3, 5, 7, 8, 9, 10, 11, 12, 13];
 function spotOf(g) {
   if (g.route && g.route.spot) return g.route.spot;
   const o = {};
   (g.moves || []).forEach((m) => {
-    if (m.avail && m.cls !== "wrong" && m.cls !== "hint") {
+    if (m.avail && m.cls !== "wrong" && judged(m)) {
       const e = (o[m.avail] = o[m.avail] || [0, 0]);
       e[0]++;
       if (m.cls === "easy") e[1]++;
@@ -776,34 +1079,38 @@ function focusData() {
     });
   });
   const base = T[1] && T[1].length >= 5 ? median(T[1]) : null;
+  const cal = fitCalib(calibRows(src));
   const out = [];
   for (let L = 1; L <= 11; L++) {
-    const nT = (T[L] || []).length,
+    const cl = cal.lvl[L],
+      nT = cl ? cl.n : 0,
       sp = S[L],
       h = H[L] || 0;
     if (nT < 3 && !(sp && sp[0] >= 4) && h < 2) continue;
-    const med = nT ? median(T[L]) : null;
-    const speed = L > 1 && base && nT >= 3 ? (base * EXPECT[L]) / EXPECT[1] / Math.max(1, med) : null; // >1: hurtigere end forventet
+    // Typisk tid, når trækket er det eneste på pladen: din egen for teknikken og den, kurven giver
+    const med = nT ? calTime(cal, L, 1, true) : null,
+      expected = calTime(cal, L, 1, false);
+    const speed = L > 1 && base && nT >= 5 ? Math.exp(-cl.r) : null; // >1: hurtigere end din kurve
     const spot = sp && sp[0] >= 4 ? sp[1] / sp[0] : null; // andel af gangene du tog det letteste, når L var det letteste
     const hintShare = h / Math.max(1, h + nT);
     let score = 0;
     if (speed != null) score += Math.log2(speed);
     if (spot != null) score += 2 * (spot - 0.8);
     score -= 2 * hintShare;
-    out.push({ L, nT, med, speed, spot, spotN: sp ? sp[0] : 0, hints: h, hintShare, score, expected: base ? base * EXPECT[L] : null });
+    out.push({ L, nT, med, speed, spot, spotN: sp ? sp[0] : 0, hints: h, hintShare, score, expected });
   }
-  return { rows: out, base, games: src.length, filtered };
+  return { rows: out, base, games: src.length, filtered, cal };
 }
 function focusReasons(f, weak) {
   const r = [];
   if (f.speed != null) {
     if (weak && f.speed < 0.8)
       r.push(
-        tr("Du bruger {x} gange så lang tid som forventet (median {med}, forventet {exp}).", { x: dec(1 / f.speed), med: fmtS(f.med), exp: fmtS(f.expected) }),
+        tr("Du bruger {x} gange så lang tid, som din egen kurve forventer: typisk {med}, hvor kurven siger {exp}, når den er det eneste træk.", { x: dec(1 / f.speed), med: fmtS(f.med), exp: fmtS(f.expected) }),
       );
     if (!weak && f.speed > 1.2)
       r.push(
-        tr("Du er {x} gange hurtigere end forventet (median {med}, forventet {exp}).", { x: dec(f.speed, 1), med: fmtS(f.med), exp: fmtS(f.expected) }),
+        tr("Du er {x} gange hurtigere, end din egen kurve forventer: typisk {med}, hvor kurven siger {exp}.", { x: dec(f.speed, 1), med: fmtS(f.med), exp: fmtS(f.expected) }),
       );
   }
   if (f.spot != null) {
@@ -855,9 +1162,9 @@ function focusPanel() {
       H = sp.length * rowH + 22;
     const lim = Math.max(1, ...sp.map((f) => Math.abs(Math.log2(f.speed))));
     chart =
-      `<svg class="trend" viewBox="0 0 ${W} ${H}" role="img" aria-label="${tr("Din fart pr. teknik i forhold til forventet")}">` +
+      `<svg class="trend" viewBox="0 0 ${W} ${H}" role="img" aria-label="${tr("Din fart pr. teknik i forhold til din kurve")}">` +
       `<line x1="${mid}" x2="${mid}" y1="4" y2="${H - 18}" stroke="var(--mute)" stroke-width="1.5"/>` +
-      `<text x="${mid}" y="${H - 4}" font-size="10" text-anchor="middle" fill="var(--mute)">${tr("forventet")}</text>` +
+      `<text x="${mid}" y="${H - 4}" font-size="10" text-anchor="middle" fill="var(--mute)">${tr("din kurve")}</text>` +
       `<text x="${L0 + 2}" y="${H - 4}" font-size="10" fill="var(--mute)">${tr("langsommere")}</text><text x="${W - 2}" y="${H - 4}" font-size="10" text-anchor="end" fill="var(--mute)">${tr("hurtigere")}</text>`;
     sp.forEach((f, i) => {
       const v = Math.log2(f.speed),
@@ -867,17 +1174,21 @@ function focusPanel() {
       chart +=
         `<text x="0" y="${y + 13}" font-size="11.5" fill="var(--ink)">${f.L} · ${esc(LEVEL_TECH[f.L].length > 16 ? LEVEL_TECH[f.L].slice(0, 15) + "…" : LEVEL_TECH[f.L])}</text>` +
         `<rect x="${x}" y="${y + 3}" width="${w}" height="12" rx="4" fill="${v >= 0 ? "var(--indigo)" : "var(--warn)"}"` +
-        ` data-tip="${esc(LEVEL_TECH[f.L])}: ${tr("median {med}, forventet {exp} ({n} træk)", { med: fmtS(f.med), exp: fmtS(f.expected), n: f.nT })}${f.spot != null ? ", " + tr("fandt den som letteste {pct} %", { pct: Math.round(100 * f.spot) }) : ""}"/>` +
-        `<rect x="${L0}" y="${y}" width="${W - L0}" height="${rowH}" fill="transparent" data-tip="${esc(LEVEL_TECH[f.L])}: ${tr("median {med}, forventet {exp} ({n} træk)", { med: fmtS(f.med), exp: fmtS(f.expected), n: f.nT })}"/>`;
+        ` data-tip="${esc(LEVEL_TECH[f.L])}: ${tr("typisk {med}, din kurve {exp} ({n} træk)", { med: fmtS(f.med), exp: fmtS(f.expected), n: f.nT })}${f.spot != null ? ", " + tr("fandt den som letteste {pct} %", { pct: Math.round(100 * f.spot) }) : ""}"/>` +
+        `<rect x="${L0}" y="${y}" width="${W - L0}" height="${rowH}" fill="transparent" data-tip="${esc(LEVEL_TECH[f.L])}: ${tr("typisk {med}, din kurve {exp} ({n} træk)", { med: fmtS(f.med), exp: fmtS(f.expected), n: f.nT })}"/>`;
     });
     chart += `</svg>`;
   }
   return (
     `<div class="panelcard focus"><h3>${tr("Fokusområde")}</h3><p>${tr("Ud fra dine seneste {n} spil. Din grundfart er {tid} pr. lette træk.", { n: fd.games, tid: fmtS(fd.base) })}${fd.filtered ? " " + tr("Spil sent i en lang session eller om natten er udeladt, så træthed ikke ligner en svag teknik.") : ""}</p>` +
-    (weak ? card(weak, true) : `<p>${tr("Ingen tydelig svaghed lige nu. Alle teknikker ligger tæt på det forventede.")}</p>`) +
+    `<p class="curve">${tr("Din kurve, når trækket er det eneste på pladen:")} ${rows
+      .filter((f) => f.nT >= 3)
+      .map((f) => `${esc(LEVEL_TECH[f.L])} <b>${fmtS(f.expected)}</b>`)
+      .join(" · ")}.</p>` +
+    (weak ? card(weak, true) : `<p>${tr("Ingen tydelig svaghed lige nu. Alle teknikker ligger tæt på din kurve.")}</p>`) +
     (strong ? card(strong, false) : "") +
-    (chart ? `<h4 style="margin:12px 0 4px;font-size:13px">${tr("Fart pr. teknik i forhold til forventet")}</h4>${chart}` : "") +
-    `<p class="caveat">${tr("»Forventet« er en model: din tid på de letteste træk ganget med hvor meget sværere appen vurderer teknikken. Den er ikke målt på andre spillere.")} ` +
+    (chart ? `<h4 style="margin:12px 0 4px;font-size:13px">${tr("Fart pr. teknik i forhold til din kurve")}</h4>${chart}` : "") +
+    `<p class="caveat">${tr("»Din kurve« er tilpasset dine egne træk: én jævn kurve for alle teknikker, hvor sværere teknikker tager længere tid, og flere mulige steder gør det hurtigere. Svagheder og styrker er de teknikker, der ligger over eller under kurven. Den siger ikke, om du er hurtig eller langsom i forhold til andre.")} ` +
     `${tr("Fokusområdet vægter tre ting: fart, om du finder teknikken når den er det letteste træk, og hvor mange hints du har brugt til den.")}</p></div>`
   );
 }
@@ -935,13 +1246,28 @@ function timePanel() {
         );
       })
       .join("") +
-    `<p class="caveat" style="margin:8px 0 0!important">${tr("↓ betyder hurtigere. Tallet efter navnet er antal træk.")}</p></div>`
+    `<p class="caveat" style="margin:8px 0 0!important">${tr("↓ betyder hurtigere. Tallet efter navnet er antal træk.")}</p>` +
+    estStatsHtml() +
+    `</div>`
+  );
+}
+function estStatsHtml() {
+  const s = estStats();
+  if (!s) return "";
+  const word =
+    s.med >= 1.15
+      ? tr("Du er typisk langsommere end estimatet, fx når du laver fejl eller er træt.")
+      : s.med <= 0.87
+        ? tr("Du er typisk hurtigere end estimatet, så du bliver bedre.")
+        : tr("Estimatet rammer typisk rigtigt.");
+  return (
+    `<p class="estline">${tr("Mod dit tidsestimat: dine seneste {n} løste opgaver tog typisk {x} gange estimatet (halvdelen mellem {a} og {b}).", { n: s.n, x: dec(s.med), a: dec(s.lo), b: dec(s.hi) })} ${word}</p>`
   );
 }
 function gameSheet(g) {
   openSheet(
     `<h2>${esc(BAND[gBand(g)])} ${dec(g.value)} · ${g.cols}×${g.rows}</h2>` +
-      `<p style="color:var(--mute)">${new Date(g.end).toLocaleString(LOCALE, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })} · ${g.solved ? tr("løst på {tid}", { tid: fmt(g.ms) }) : tr("ikke løst")}</p>` +
+      `<p style="color:var(--mute)">${new Date(g.end).toLocaleString(LOCALE, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })} · ${g.solved ? tr("løst på {tid}", { tid: fmt(g.ms) }) : tr("ikke løst")}${g.solved && g.lv ? " · " + tr("estimat {t}", { t: estFmt(g.est || estimateSec(myCal(), g.lv)) }) : ""}</p>` +
       `<div class="menu">` +
       menuItem(
         "gRoute",

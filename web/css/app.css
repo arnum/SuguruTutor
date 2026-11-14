@@ -1269,6 +1269,61 @@ table.data tr.grp td {
   border-top: 0;
 }
 
+.keypts {
+  margin: 4px 0 12px;
+  padding-left: 18px;
+  font-size: 14px;
+  line-height: 1.45;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.rsecs {
+  margin-top: 10px;
+  border-bottom: 1px solid var(--grid);
+}
+.rdet {
+  border-top: 1px solid var(--grid);
+}
+.rdet > summary {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 2px;
+  font-weight: 700;
+  font-size: 15px;
+}
+.rdet > summary::-webkit-details-marker {
+  display: none;
+}
+.rdet > summary small {
+  font-weight: 700;
+  font-size: 12px;
+  color: var(--mute);
+  background: var(--chip);
+  border-radius: 999px;
+  padding: 1px 8px;
+}
+.rdet > summary::after {
+  content: "›";
+  margin-left: auto;
+  color: var(--mute);
+  font-size: 20px;
+  line-height: 1;
+  transition: transform 0.15s;
+}
+.rdet[open] > summary::after {
+  transform: rotate(90deg);
+}
+.rdet > ul.notable,
+.rdet > table,
+.rdet > p {
+  margin-top: 0 !important;
+  margin-bottom: 12px;
+}
+
 /* Statistik */
 .kpis {
   display: grid;
@@ -1652,7 +1707,7 @@ textarea.io {
   color: var(--indigo);
 }
 .tech li.hardest .name::after {
-  content: "  sværeste";
+  content: "  " attr(data-hardest);
   font-size: 11px;
   font-weight: 700;
   color: var(--indigo);
@@ -1765,4 +1820,70 @@ textarea.io {
 .toast.on {
   opacity: 1;
   transform: translate(-50%, 0);
+}
+
+/* Personlig tidskurve og tidsestimat */
+.estline {
+  font-size: 13px;
+  line-height: 1.45;
+  margin: 10px 0 0;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--chip);
+}
+.solved .estcmp {
+  margin-top: 8px;
+}
+.focus .curve {
+  font-size: 12.5px;
+  color: var(--mute);
+  margin: 4px 0 8px;
+}
+.focus .curve b {
+  color: var(--ink);
+}
+
+/* Ruteanalyse: pladen ved et sværere træk */
+.mboard {
+  margin-top: 8px;
+}
+.mbwait {
+  font-size: 12px;
+  color: var(--mute);
+}
+.mbpair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.mbcol {
+  margin: 0;
+  min-width: 0;
+}
+.mbcol figcaption {
+  font-size: 12px;
+  line-height: 1.35;
+  margin-bottom: 4px;
+}
+.mbcol svg {
+  width: 100%;
+  height: auto;
+  display: block;
+  font-family: "Zen Kaku Gothic New", system-ui, sans-serif;
+}
+.mbtext {
+  font-size: 11.5px;
+  line-height: 1.4;
+  color: var(--mute);
+  margin: 4px 0 0;
+}
+.mbnote {
+  font-size: 11.5px;
+  color: var(--mute);
+  margin: 6px 0 0;
+}
+.pill .pval {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--warn);
 }

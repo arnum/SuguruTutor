@@ -22,6 +22,7 @@ web/
   js/grade.js           sværhedsgrad: indsats pr. skridt, top og mængde
   js/code.js            opgavekoder (SU1-…)
   js/route.js           ruteanalyse af spillerens træk
+  js/calib.js           personlig tidskurve pr. teknik og tidsestimat pr. opgave
   js/worker.js          kører generering og analyse i baggrunden
   js/core.js            konstanter, lagring, navigation, ark, tema
   js/home.js            forsiden og dagens opgave

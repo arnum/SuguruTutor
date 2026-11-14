@@ -1,7 +1,7 @@
 // Service worker: gør appen tilgængelig offline.
 // Egne filer hentes fra nettet først (højst 3 sekunder), så en ny version slår igennem med det samme; uden net bruges den gemte kopi.
 // Der er derfor ikke noget versionsnummer, der skal rettes, når filerne opdateres.
-const CACHE = "suguru-v2";
+const CACHE = "suguru-v5";
 const FONTS = "suguru-fonts";
 const SHELL = [
   "./",
@@ -17,6 +17,7 @@ const SHELL = [
   "./js/grade.js",
   "./js/code.js",
   "./js/route.js",
+  "./js/calib.js",
   "./js/core.js",
   "./js/home.js",
   "./js/newgame.js",

@@ -1423,17 +1423,19 @@ function createTutor(G, region) {
   // placed = det mindste antal andre tal, der skal sættes (grådigt beskåret, hvert tal stadig begrundet).
   function closureWith(S0, cell, v, L, allowed) {
     const S = clone(S0),
-      order = [];
+      order = [],
+      vals = [];
     let depth = 0;
     for (let g = 0; g < 400; g++) {
       if (S.broken || !(S.cand[cell] & (1 << v))) return null;
-      if (singleHolds(S, cell, v)) return { order, depth };
+      if (singleHolds(S, cell, v)) return { order, vals, depth };
       const sg = singles(S).filter((x) => x.cell !== cell && (!allowed || allowed.has(x.cell)));
       if (sg.length) {
         for (const x of sg)
           if (!S.val[x.cell] && S.cand[x.cell] & (1 << x.v)) {
             place(S, x.cell, x.v);
             order.push(x.cell);
+            vals.push(x.v);
           }
         depth++;
         continue;
@@ -1457,9 +1459,49 @@ function createTutor(G, region) {
           best = r2;
         }
       }
-      return { level: L, depth: best.depth, placed: best.order.length };
+      // via: de tal, der skal sættes i hovedet først, som [felt, tal]
+      return { level: L, depth: best.depth, placed: best.order.length, via: best.order.map((c, i) => [c, best.vals[i]]) };
     }
     return null;
+  }
+  // Forklaring af netop (cell, v): de skridt, der skal til, med de letteste teknikker først, beskåret til det nødvendige.
+  // Bruges i ruteanalysen til at vise, hvad spilleren faktisk gjorde.
+  function explainMove(known, cell, v) {
+    const S0 = fromKnown(known);
+    if (S0.broken || S0.val[cell] || !(S0.cand[cell] & (1 << v))) return null;
+    const k0 = singleHolds(S0, cell, v);
+    if (k0) return build(S0, { steps: [], kind: k0, after: S0 }, cell, v);
+    const S = clone(S0),
+      steps = [];
+    for (let g = 0; g < 300; g++) {
+      if (S.broken || !(S.cand[cell] & (1 << v))) return null;
+      if (singleHolds(S, cell, v)) break;
+      // Som directLevel: brug alle anvendelser på det laveste niveau, der flytter noget, samlet
+      let done = false;
+      for (let L = 2; L <= 11 && !done; L++)
+        for (const a of levelApps(S, L)) {
+          const before = S.cand.join();
+          apply(S, a);
+          if (S.broken) return null;
+          if (S.cand.join() !== before) {
+            steps.push(a);
+            done = true;
+          }
+        }
+      if (!done) return null;
+    }
+    let kept = steps.slice(),
+      res = replay(S0, kept, cell, v);
+    for (let i = kept.length - 1; i >= 0 && res; i--) {
+      const t = kept.slice(0, i).concat(kept.slice(i + 1)),
+        r2 = replay(S0, t, cell, v);
+      if (r2) {
+        kept = t;
+        res = r2;
+      }
+    }
+    if (!res) res = { steps: steps.map((a) => ({ app: a, before: null })), kind: singleHolds(S, cell, v) || "naked", after: S };
+    return build(S0, res, cell, v);
   }
   function routeMove(known, cell, v) {
     const S0 = fromKnown(known);
@@ -1477,6 +1519,7 @@ function createTutor(G, region) {
     singles,
     fromKnown,
     routeMove,
+    explainMove,
     chainsAt: (cand, val, mode) => chainApps(st(cand, val), false, mode || "all"),
     bothAt: (cand, val) => bothWaysApps(st(cand, val), false),
   };

@@ -125,6 +125,7 @@ function gradeFromSteps(steps) {
     peak: Math.round(Math.min(9.9, peak) * 10) / 10,
     load,
     series: ef.map((x, i) => (steps[i].L < 2 ? 0 : Math.round(x.e * 10) / 10)),
+    lv: steps.map((s) => s.L * 100 + Math.min(99, s.opts || 1)), // til det personlige tidsestimat
   };
 }
 const NUANCES = [

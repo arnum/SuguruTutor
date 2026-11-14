@@ -27,7 +27,7 @@ window.claude?.hot?.snapshot?.(() => (P ? { current: { puzzle: P, entries, notes
 
 // Gamle spil regnes om til den nyeste skala ud fra opgavekoden, lidt ad gangen, så statistikken ikke blander skalaer
 function regradeOld() {
-  const todo = games.filter((g) => g.fit !== 2 && g.code && !g.noRegrade).slice(-200);
+  const todo = games.filter((g) => (g.fit !== 2 || !g.lv) && g.code && !g.noRegrade).slice(-200);
   if (!todo.length) return;
   let i = 0;
   const step = () => {
@@ -53,6 +53,7 @@ function regradeOld() {
           g.nHard = gr.nHard;
           g.scale = 2;
           g.fit = 2;
+          g.lv = gr.lv;
         } else g.noRegrade = 1;
       } catch (e) {
         g.noRegrade = 1;
@@ -71,6 +72,8 @@ function start(hot) {
   translateDom(document.body);
   applyTheme();
   regradeOld();
+  refreshRouteSummaries();
+  upgradeAheadVia();
   const cur = store.get("current", null) || (hot && hot.current) || null;
   if (cur && cur.puzzle) {
     try {

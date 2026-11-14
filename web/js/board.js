@@ -289,12 +289,16 @@ function renderPad() {
   $("noteBtn").setAttribute("aria-pressed", noteMode);
   ["noteBtn", "eraseBtn", "undoBtn", "hintBtn"].forEach((id) => ($(id).disabled = solved));
 }
+function pillPersonal() {
+  const pg = P.grade && personalGrade(P.grade.value, P.rating.level);
+  return pg && Math.abs(pg.value - P.grade.value) >= 0.2 ? ` <span class="pval">${tr("for dig ≈{v}", { v: dec(pg.value) })}</span>` : "";
+}
 function renderStatus() {
   if (!P) return;
   const lv = pBand(P);
   const dots = Array.from({ length: 9 }, (_, i) => `<i class="${i < lv ? "on" : ""}"></i>`).join("");
   $("levelPill").innerHTML =
-    `${esc(BAND[lv])} <span class="val">${levelValue(P)}</span><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>`;
+    `${esc(BAND[lv])} <span class="val">${levelValue(P)}</span>${pillPersonal()}<svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>`;
   $("gameSub").textContent =
     P.cols +
     "×" +
