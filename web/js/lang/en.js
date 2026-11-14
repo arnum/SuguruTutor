@@ -758,6 +758,12 @@ const LANG_EN = {
   "Der var {n} tal at finde på det letteste niveau. Her vises ét af dem.": "There were {n} numbers to find at the easiest level. One of them is shown here.",
   "efter {via} i hovedet": "after {via} in your head",
   "først {via} i hovedet ({tech}), derefter {cell} ({tech2})": "first {via} in your head ({tech}), then {cell} ({tech2})",
+  "Det du fandt": "What you found",
+  "Lette tal lige da": "Easy numbers then",
+  "{n} andre at vælge imellem": "{n} others to choose from",
+  "Alle de tal, der kunne ses direkte: det eneste tal i et felt eller den eneste plads til et tal i en region.": "All the numbers that could be seen directly: the only number in a cell, or the only place for a number in a region.",
+  "Det var det eneste.": "That was the only one.",
+  "Ét andet at vælge": "One other to choose",
   // ---------- personal
   "for dig ≈{v}": "for you ≈{v}",
   "Efter 10 løste opgaver uden hints kan appen sige, hvordan en opgave sandsynligvis føles for dig ({n} indtil nu).": "After 10 puzzles solved without hints, the app can tell how a puzzle will probably feel for you ({n} so far).",

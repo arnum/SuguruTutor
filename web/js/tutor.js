@@ -1466,6 +1466,12 @@ function createTutor(G, region) {
   }
   // Forklaring af netop (cell, v): de skridt, der skal til, med de letteste teknikker først, beskåret til det nødvendige.
   // Bruges i ruteanalysen til at vise, hvad spilleren faktisk gjorde.
+  // Alle tal, der kan ses direkte (enkelt kandidat / eneste plads) i stillingen: [[cell, v], ...]
+  function easyList(known) {
+    const S0 = fromKnown(known);
+    if (S0.broken) return [];
+    return singles(S0).map((x) => [x.cell, x.v]);
+  }
   function explainMove(known, cell, v) {
     const S0 = fromKnown(known);
     if (S0.broken || S0.val[cell] || !(S0.cand[cell] & (1 << v))) return null;
@@ -1520,6 +1526,7 @@ function createTutor(G, region) {
     fromKnown,
     routeMove,
     explainMove,
+    easyList,
     chainsAt: (cand, val, mode) => chainApps(st(cand, val), false, mode || "all"),
     bothAt: (cand, val) => bothWaysApps(st(cand, val), false),
   };

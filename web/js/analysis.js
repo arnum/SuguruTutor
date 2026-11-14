@@ -340,11 +340,11 @@ function showRoute(g, back) {
           ? tr("Der var kun {n} tal at finde på det niveau.", { n: m.nAvail })
           : tr("Der var {n} tal at finde på det niveau.", { n: m.nAvail });
     const head = `<b class="k">${tr("Træk {k} · ledte i {tid}", { k: m.i + 1, tid: fmt(m.dt) })}</b><span class="tag ${m.cls}">${ROUTE_CLS[m.cls].label}</span><br>`;
-    if (m.cls === "ahead") return head + aheadText(m, nm) + usual;
+    if (m.cls === "ahead") return head + aheadText(m, nm) + usual + mboardSlot(g, m);
     if (m.best.c === m.c && m.best.v === m.v)
-      return head + tr("Du fandt {cell} = {v}, som var det letteste træk ({tech}).", { cell: nm(m.c), v: m.v, tech: LEVEL_TECH[m.avail] }) + " " + few + usual;
+      return head + tr("Du fandt {cell} = {v}, som var det letteste træk ({tech}).", { cell: nm(m.c), v: m.v, tech: LEVEL_TECH[m.avail] }) + " " + few + usual + mboardSlot(g, m, "easy");
     if (m.cls === "easy")
-      return head + tr("Du fandt {cell} = {v} med {tech}.", { cell: nm(m.c), v: m.v, tech: LEVEL_TECH[lv] }) + " " + few + " " + tr("Fx {cell} = {v}.", { cell: nm(m.best.c), v: m.best.v }) + usual;
+      return head + tr("Du fandt {cell} = {v} med {tech}.", { cell: nm(m.c), v: m.v, tech: LEVEL_TECH[lv] }) + " " + few + " " + tr("Fx {cell} = {v}.", { cell: nm(m.best.c), v: m.best.v }) + usual + mboardSlot(g, m, "easy");
     return (
       head +
       tr("Du endte med {cell} = {v}, som krævede {tech}. Imens fandtes {easy}, fx {bcell} = {bv}.", { cell: nm(m.c), v: m.v, tech: LEVEL_TECH[lv], easy: LEVEL_TECH[m.avail], bcell: nm(m.best.c), bv: m.best.v }) + " " + few + usual +
@@ -367,7 +367,7 @@ function showRoute(g, back) {
       const lv = Math.min(m.direct, m.ahead || 12);
       return head + "<br>" + tr("Krævede {tech}. Det letteste træk lige da var {easy}.", { tech: LEVEL_TECH[lv], easy: LEVEL_TECH[m.avail] }) + mboardSlot(g, m);
     }
-    if (m.cls === "ahead") return head + "<br>" + aheadText(m, nm);
+    if (m.cls === "ahead") return head + "<br>" + aheadText(m, nm) + mboardSlot(g, m);
     if (m.cls === "wrong") return head + "<br>" + tr("Tallet var forkert.");
     return head + "<br>" + tr("Kunne ikke udledes af tallene på pladen på det tidspunkt.");
   };
@@ -445,7 +445,8 @@ function showRoute(g, back) {
 }
 // ---------- Pladen ved et sværere træk: hvad du gjorde, og hvad der var lettere lige da
 // Pladen genskabes ud fra opgavekoden og dine rigtige tal før trækket. Begge forklaringer laves af hint-motoren.
-const mboardSlot = (g, m) => (g.code ? `<div class="mboard" data-mi="${m.i}"><span class="mbwait">${tr("Tegner pladen …")}</span></div>` : "");
+// mode "cmp": dit træk mod det letteste træk lige da. mode "easy": dit træk og alle de lette tal, der kunne tages.
+const mboardSlot = (g, m, mode = "cmp") => (g.code ? `<div class="mboard" data-mi="${m.i}" data-mode="${mode}"><span class="mbwait">${tr("Tegner pladen …")}</span></div>` : "");
 const ROUTE_PUZ = {};
 function routePuzzle(g) {
   if (ROUTE_PUZ[g.id]) return ROUTE_PUZ[g.id];
@@ -478,6 +479,7 @@ function keyView(h) {
   return kv;
 }
 function miniBoard(P2, known, hv, mark, head = {}) {
+  const marks = Array.isArray(mark) ? mark : mark ? [mark] : [];
   const { rows, cols, region } = P2.d,
     S = 100,
     giv = P2.d.givens,
@@ -507,9 +509,10 @@ function miniBoard(P2, known, hv, mark, head = {}) {
     else if (head[i] !== undefined) {
       s += `<circle cx="${x + 50}" cy="${y + 50}" r="34" fill="none" stroke="var(--warn)" stroke-width="3" stroke-dasharray="5 6"/>`;
       s += `<text x="${x + 50}" y="${y + 67}" font-size="46" font-weight="700" text-anchor="middle" fill="var(--warn)">${head[i]}</text>`;
-    } else if (mark && mark.c === i) {
-      s += `<circle cx="${x + 50}" cy="${y + 50}" r="40" fill="none" stroke="${mark.col}" stroke-width="6"/>`;
-      s += `<text x="${x + 50}" y="${y + 70}" font-size="56" font-weight="800" text-anchor="middle" fill="${mark.col}">${mark.v}</text>`;
+    } else if (marks.some((k) => k.c === i)) {
+      const mk = marks.find((k) => k.c === i);
+      s += `<circle cx="${x + 50}" cy="${y + 50}" r="40" fill="none" stroke="${mk.col}" stroke-width="6"/>`;
+      s += `<text x="${x + 50}" y="${y + 70}" font-size="56" font-weight="800" text-anchor="middle" fill="${mk.col}">${mk.v}</text>`;
     } else if (hypo[i] !== undefined) {
       s += `<circle cx="${x + 50}" cy="${y + 50}" r="36" fill="none" stroke="var(--hypo)" stroke-width="3" stroke-dasharray="5 6"/>`;
       s += `<text x="${x + 50}" y="${y + 68}" font-size="48" font-weight="700" text-anchor="middle" fill="var(--hypo)">${hypo[i]}</text>`;
@@ -535,13 +538,36 @@ function miniBoard(P2, known, hv, mark, head = {}) {
   s += `<rect x="0" y="0" width="${cols * S}" height="${rows * S}" fill="none" stroke="var(--ink)" stroke-width="7"/></svg>`;
   return s;
 }
-function mboardHtml(g, i) {
+function mboardHtml(g, i, mode) {
   const P2 = routePuzzle(g);
   if (!P2) return "";
   const list = g.moves,
     m = list[i],
     known = boardBefore(P2, list, i);
   const nm = (c) => "abcdefghij"[c % P2.d.cols] + (Math.floor(c / P2.d.cols) + 1);
+  if (mode === "easy") {
+    // Et let tal, der trak ud: hvad du fandt, og hvor mange andre lette tal der stod klar
+    const mine = P2.tu.explainMove(known, m.c, m.v),
+      kv = mine ? keyView(mine) : null,
+      all = P2.tu.easyList(known);
+    const left =
+      `<figure class="mbcol"><figcaption><b style="color:var(--warn)">${tr("Det du fandt")}</b><br>${nm(m.c)} = ${m.v}${mine ? " · " + esc(LEVEL_TECH[mine.hardestLevel]) : ""}</figcaption>` +
+      miniBoard(P2, known, kv, { c: m.c, v: m.v, col: "var(--warn)" }) +
+      (kv && kv.text ? `<p class="mbtext">${esc(kv.text)}</p>` : "") +
+      `</figure>`;
+    const others = all.filter(([c]) => c !== m.c);
+    const right = others.length
+      ? `<figure class="mbcol"><figcaption><b style="color:var(--indigo)">${tr("Lette tal lige da")}</b><br>${others.length === 1 ? tr("Ét andet at vælge") : tr("{n} andre at vælge imellem", { n: others.length })}</figcaption>` +
+        miniBoard(
+          P2,
+          known,
+          null,
+          others.map(([c, v]) => ({ c, v, col: "var(--indigo)" })).concat([{ c: m.c, v: m.v, col: "var(--warn)" }]),
+        ) +
+        `<p class="mbtext">${tr("Alle de tal, der kunne ses direkte: det eneste tal i et felt eller den eneste plads til et tal i en region.")}</p></figure>`
+      : `<figure class="mbcol"><figcaption><b style="color:var(--indigo)">${tr("Lette tal lige da")}</b><br>${tr("Det var det eneste.")}</figcaption></figure>`;
+    return `<div class="mbpair">${left}${right}</div>`;
+  }
   // Kunne trækket findes lettere ved at sætte andre tal i hovedet først (tænkt frem)? Så vises den vej.
   // Kunne trækket findes lettere ved at sætte andre tal i hovedet først (tænkt frem)? Så vises den vej,
   // og det sværeste skridt på vejen er det, der tegnes.
@@ -606,7 +632,7 @@ function bindMboards(root, g) {
       if (!el) return;
       el.dataset.done = 1;
       try {
-        el.innerHTML = mboardHtml(g, +el.dataset.mi) || "";
+        el.innerHTML = mboardHtml(g, +el.dataset.mi, el.dataset.mode) || "";
       } catch (e) {
         el.innerHTML = "";
       }
@@ -717,7 +743,8 @@ function concRouteHtml(g, nm) {
           `<li><b class="k">${tr("Træk {k}", { k: i + 1 })} · ${nm(m.c)} = ${m.v} · ${tr("{tid} inde", { tid: fmt(m.t) })}</b><br>` +
           (m.cls === "wrong"
             ? tr("Forkert tal.")
-            : tr("Ledte i {tid}, selv om {n} lette tal var mulige. Normalt tager et let tal dig {s} sek.", { tid: fmt(m.dt), n: m.nAvail, s: c.norm })) +
+            : tr("Ledte i {tid}, selv om {n} lette tal var mulige. Normalt tager et let tal dig {s} sek.", { tid: fmt(m.dt), n: m.nAvail, s: c.norm }) +
+              mboardSlot(g, { i }, "easy")) +
           `</li>`
         );
       })

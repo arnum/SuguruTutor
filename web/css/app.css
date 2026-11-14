@@ -89,6 +89,22 @@ body {
   -webkit-tap-highlight-color: transparent;
   padding: env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left);
   overscroll-behavior-y: none;
+  /* Som en app: ingen tekstmarkering eller "kopiér"-menu ved langt tryk */
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+input,
+textarea,
+[contenteditable] {
+  -webkit-user-select: text;
+  user-select: text;
+  -webkit-touch-callout: default;
+}
+/* Mens et ark er åbent, står siden bagved stille */
+html.sheet-open,
+html.sheet-open body {
+  overflow: hidden;
 }
 button {
   font: inherit;
@@ -951,6 +967,7 @@ svg#grid {
 .sheet .backdrop {
   position: absolute;
   inset: 0;
+  touch-action: none;
   background: rgba(10, 12, 16, 0.42);
   opacity: 0;
   transition: opacity 0.2s;
@@ -965,6 +982,8 @@ svg#grid {
   max-height: 88vh;
   max-height: 88dvh;
   overflow: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
   background: var(--paper);
   border-radius: 22px 22px 0 0;
   padding: 8px 18px calc(20px + env(safe-area-inset-bottom));

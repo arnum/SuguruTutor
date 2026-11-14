@@ -251,6 +251,7 @@ function openSheet(html, bind, onClose) {
   $("sheetBody").innerHTML = html;
   $("sheet").hidden = false;
   sheetOnClose = onClose || null;
+  document.documentElement.classList.add("sheet-open");
   requestAnimationFrame(() => requestAnimationFrame(() => $("sheet").classList.add("open")));
   if (bind) bind($("sheetBody"));
 }
@@ -262,6 +263,7 @@ function closeSheet() {
     if (t === sheetToken) {
       s.hidden = true;
       $("sheetBody").innerHTML = "";
+      document.documentElement.classList.remove("sheet-open");
     }
   }, 260);
   const f = sheetOnClose;
@@ -269,6 +271,42 @@ function closeSheet() {
   if (f) f();
 }
 $("sheetBackdrop").onclick = closeSheet;
+// iOS lader et stræk på arket "falde igennem" til siden bagved, når arket ikke selv kan rulle i den retning.
+// Så længe et ark er åbent, får et stræk kun lov at rulle noget inde i arket, der faktisk kan rulle.
+let touchY0 = 0,
+  touchX0 = 0;
+document.addEventListener(
+  "touchstart",
+  (e) => {
+    touchY0 = e.touches[0].clientY;
+    touchX0 = e.touches[0].clientX;
+  },
+  { passive: true },
+);
+document.addEventListener(
+  "touchmove",
+  (e) => {
+    if ($("sheet").hidden || e.touches.length > 1) return;
+    const dy = e.touches[0].clientY - touchY0,
+      dx = e.touches[0].clientX - touchX0,
+      vertical = Math.abs(dy) >= Math.abs(dx);
+    const panel = $("sheet").querySelector(".panel");
+    for (let el = e.target; el && el !== document.body; el = el.parentElement) {
+      if (!panel.contains(el)) break;
+      const cs = getComputedStyle(el);
+      if (vertical) {
+        if (/(auto|scroll)/.test(cs.overflowY) && el.scrollHeight > el.clientHeight + 1) {
+          const atTop = el.scrollTop <= 0,
+            atEnd = el.scrollTop + el.clientHeight >= el.scrollHeight - 1;
+          if ((dy > 0 && !atTop) || (dy < 0 && !atEnd)) return; // kan rulle videre i den retning
+        }
+      } else if (/(auto|scroll)/.test(cs.overflowX) && el.scrollWidth > el.clientWidth + 1) return;
+      if (el === panel) break;
+    }
+    e.preventDefault();
+  },
+  { passive: false },
+);
 function confirmSheet(o) {
   openSheet(
     `<h2>${esc(o.title)}</h2><p>${o.text}</p><div class="actions"><button class="primary big" id="cOk" type="button">${esc(o.ok)}</button>` +
