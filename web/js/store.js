@@ -7,7 +7,7 @@ function loadPuzzle(p, saved, opts = {}) {
   hint = null;
   if (!p.maxRegion) p.maxRegion = 5;
   NOTE_POS = p.maxRegion >= 6 ? NOTE_POS6 : NOTE_POS5;
-  if (!p.grade || !p.grade.hard || p.grade.load === undefined || p.grade.fit !== 2 || !p.grade.lv) {
+  if (!p.grade || !p.grade.hard || p.grade.load === undefined || p.grade.fit !== 3 || !p.grade.lv) {
     const st = solveProfile(tutor, p.givens);
     p.grade = st ? gradeFromSteps(st, p.rating.level, p.maxRegion) : null;
   }
@@ -69,7 +69,7 @@ function recordGame(won) {
     level: pBand(P),
     tech: P.rating.level,
     scale: 2,
-    fit: 2,
+    fit: 3,
     peak: P.grade ? P.grade.peak : null,
     load: P.grade ? P.grade.load : null,
     nHard: P.grade ? P.grade.nHard : null,
@@ -82,6 +82,7 @@ function recordGame(won) {
     solved: won && !meta.revealed,
     code: P.code,
     daily: meta.daily,
+    replay: meta.replay || undefined,
     lv: P.grade ? P.grade.lv : null,
     pv: (P.grade && (personalGrade(P.grade.value, P.rating.level) || {}).value) || null,
     est: P.grade ? Math.round(estimateSec(myCal(), P.grade.lv) || 0) || null : null,

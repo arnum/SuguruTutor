@@ -48,6 +48,8 @@ function renderStats() {
     <div class="kpi"><b>${won.length ? Math.round((100 * clean) / won.length) : 0} %</b><span>${tr("Uden hints")}</span><small>${tr("{a} af {b} løste", { a: clean, b: won.length })}</small></div>
     <div class="kpi"><b>${totalTxt}</b><span>${tr("Tid i alt")}</span><small>${won.length ? tr("snit {tid} pr. opgave", { tid: fmt(won.reduce((a, g) => a + g.ms, 0) / won.length) }) : ""}</small></div>
   </div>`;
+  html += progressLine();
+  html += TAB("fremgang") + progressPanel();
   html += TAB("teknik") + focusPanel() + TAB("overblik");
   // Pr. niveau
   const per = [];
@@ -119,6 +121,7 @@ function renderStats() {
   for (let i = 1; i < parts.length; i += 2) chunks[parts[i]] = (chunks[parts[i]] || "") + parts[i + 1];
   const tabs = [
     ["overblik", tr("Overblik")],
+    ["fremgang", tr("Fremgang")],
     ["teknik", tr("Teknik")],
     ["form", tr("Form")],
     ["opgaver", tr("Opgaver")],
@@ -149,6 +152,14 @@ function renderStats() {
       }
     };
   bindFocus(body);
+  const tp = $("toProgress");
+  if (tp)
+    tp.onclick = () => {
+      ui.statsTab = "fremgang";
+      saveUi();
+      renderStats();
+      window.scrollTo(0, 0);
+    };
   bindGameRows(body);
   // Tryk på en dag i aktivitetskortet: vis dagens spil
   body.querySelectorAll(".heat rect[data-day]").forEach((r) => (r.onclick = () => daySheet(r.dataset.day)));

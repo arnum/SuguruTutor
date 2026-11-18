@@ -20,7 +20,8 @@ public final class SuguruGrade {
     public static final String[] LEVEL_TECH = {"", "eneste kandidat/plads", "nabo-eliminering", "par", "tripler", "kæde med ét tal",
         "kæde med to-mulighedsfelter", "blandet kæde", "hvis-så med ét tal", "kort hvis-så", "begge veje", "dyb hvis-så", "gæt"};
     /** Grundpris for at genkende hver af de 14 teknikker. */
-    static final double[] RECOG = {0, 0, 0.6, 1.0, 1.7, 1.9, 2.6, 1.9, 2.2, 2.5, 2.8, 3.1, 3.5, 4.4};
+    // Par (3, 4) og tripler (5, 6) hævet 18. nov. 2026 efter 93 løste opgaver, samme som web/js/grade.js
+    static final double[] RECOG = {0, 0, 0.6, 2.2, 2.9, 3.0, 3.7, 1.9, 2.2, 2.5, 2.8, 3.1, 3.5, 4.4};
 
     public static final class Step {
         final int L, T, mem, len, opts; final double progress; final double[] vis;

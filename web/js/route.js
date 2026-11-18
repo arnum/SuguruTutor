@@ -29,6 +29,8 @@ function analyzeRoute(SE, p, moves, onProgress) {
     }
     if (m.v && !m.u) {
       const rec = { c: m.c, v: m.v, t: m.t, dt };
+      // Pladen præcis som den stod lige før trækket (dine tal, også forkerte; 0 = tomt). Bruges til at tegne den.
+      rec.b = ent.map((x) => x || 0).join("");
       if (chk) {
         rec.chk = chk.n;
         rec.chkT = chk.t;

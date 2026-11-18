@@ -26,9 +26,11 @@ function solveProfile(tutor, givens) {
 // Opgavens tal er det tungeste skridt plus et lille tillæg for mange tunge skridt og for at de kommer tidligt.
 // Konstanterne er tilpasset 17 opgaver med målt løsningstid og oplevet sværhed (nov. 2026): teknikken vejer tungt,
 // hukommelse og omgivelser mindre end først antaget. Sammenhæng med log(tid): 0,89.
+// Justeret 18. nov. 2026 ud fra 93 løste opgaver: par og tripler tog ca. 1,5 gange så lang tid som deres grad sagde
+// (og blev oplevet sværere), så deres genkendelse er hævet (par +1,2, tripler +1,1). Sammenhæng med log(tid): 0,75 -> 0,80.
 function gradeFromSteps(steps) {
   // (konstanter og hjælpefunktion ligger inde i funktionen, så den kan sendes til baggrunds-workeren)
-  const RECOG = [0, 0, 0.6, 1.0, 1.7, 1.9, 2.6, 1.9, 2.2, 2.5, 2.8, 3.1, 3.5, 4.4];
+  const RECOG = [0, 0, 0.6, 2.2, 2.9, 3.0, 3.7, 1.9, 2.2, 2.5, 2.8, 3.1, 3.5, 4.4];
   function stepEffort(s) {
     // Genkendelse = mønstrets grundpris + hvor godt netop dette tilfælde skjuler sig
     const base = 1.0 * (RECOG[s.T] || 0),
@@ -117,7 +119,7 @@ function gradeFromSteps(steps) {
       lenT: top.lenT,
       spot: top.spot,
     },
-    fit: 2,
+    fit: 3,
     nHard,
     W,
     loadT,

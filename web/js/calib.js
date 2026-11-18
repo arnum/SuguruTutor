@@ -142,7 +142,8 @@ function estStats(k = 12) {
 // ---------- Personlig grad: hvordan en opgave sandsynligvis føles for dig
 // Ud fra dine løste opgaver uden hints: hvor lang tid pr. tomt felt hver grad plejer at tage dig, og hvor meget opgaver med
 // samme sværeste teknik har ligget over eller under deres grad. Afvigelsen dæmpes, når der er få opgaver af den slags.
-// Testet på 46 rigtige opgaver (nov. 2026): den personlige grad fulgte tiden bedre end den almindelige (0,80 mod 0,72).
+// Testet på 46 rigtige opgaver (nov. 2026): 0,80 mod 0,72. Fremadrettet test på 40 nye opgaver gav ingen gevinst, så
+// afvigelsen dæmpes nu kraftigt (n + 12) og kræver mindst 5 opgaver med samme sværeste teknik.
 let PGM = null;
 function personalModel() {
   const key = games.length + ":" + (games.length ? games[games.length - 1].id : "");
@@ -171,7 +172,8 @@ function personalModel() {
         e.n++;
         e.sum += (y[i] - a) / b - g.value; // hvor mange grader opgaven føltes over eller under sin grad (målt i tid)
       });
-      for (const k in grp) grp[k].adj = grp[k].sum / (grp[k].n + 4);
+      // Forsigtig: en teknik skal have vist samme mønster i mange opgaver, før den flytter graden meget
+      for (const k in grp) grp[k].adj = grp[k].sum / (grp[k].n + 12);
       m = { a, b, n, grp, step: Math.exp(b) };
     }
   }
@@ -182,7 +184,7 @@ function personalGrade(value, tech) {
   const m = personalModel();
   if (!m || !tech) return null;
   const e = m.grp[Math.min(tech, 6)];
-  if (!e || e.n < 3) return null;
+  if (!e || e.n < 5) return null;
   return { value: Math.max(1, Math.min(9.9, Math.round((value + e.adj) * 10) / 10)), adj: e.adj, n: e.n };
 }
 function personalLineHtml(value, tech) {

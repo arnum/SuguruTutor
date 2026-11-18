@@ -146,10 +146,13 @@ function errWhy(g, m, nm) {
   const known = boardBefore(P2, g.moves, m.i),
     reg = P2.d.region,
     cells = reg.map((r, i) => i).filter((i) => reg[i] === reg[m.c]);
-  const touch = P2.G.king[m.c].find((x) => known[x] === m.v);
+  if (known.unsure.length) return tr("Tjek de otte naboer, før du sætter et tal: samme tal må ikke røre hinanden, heller ikke på skrå.");
+  const vis = known.slice();
+  known.wrong.forEach(([c, v]) => (vis[c] = v)); // også forkerte tal, der stod på pladen
+  const touch = P2.G.king[m.c].find((x) => vis[x] === m.v);
   if (touch !== undefined)
     return tr("Det rørte {nb} = {v}.", { nb: nm(touch), v: m.v }) + " " + tr("Tjek de otte naboer, før du sætter et tal: samme tal må ikke røre hinanden, heller ikke på skrå.");
-  const dup = cells.find((x) => x !== m.c && known[x] === m.v);
+  const dup = cells.find((x) => x !== m.c && vis[x] === m.v);
   if (dup !== undefined)
     return tr("Regionen havde allerede {v} i {nb}.", { v: m.v, nb: nm(dup) }) + " " + tr("Se, hvilke tal regionen mangler, før du sætter et.");
   if (m.v > cells.length) return tr("Regionen har kun {n} felter, så {v} kan ikke stå der.", { n: cells.length, v: m.v });

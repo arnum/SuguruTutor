@@ -493,14 +493,36 @@ function routePuzzle(g) {
   d.region.forEach((r) => (size[r] = (size[r] || 0) + 1));
   return (ROUTE_PUZ[g.id] = { d, G: G2, sol: Array.from(u.solution), tu: createTutor(G2, d.region), maxR: Math.max(...Object.values(size)) });
 }
-// Tallene på pladen lige før træk i: givne tal og dine rigtige tal indtil da
+// Pladen lige før træk i. Nyere spil gemmer den præcist (b). Ældre spil genskabes ud fra de placerede tal; viskelæder,
+// fortryd og "start forfra" er ikke gemt der, så et tal, der senere sættes igen i samme felt, kan have været væk
+// imellem. De felter er usikre (unsure), og så tegnes pladen ikke.
+// Resultat: rigtige tal (til hint-motoren) med .wrong = [[felt, tal]] for forkerte tal på pladen og .unsure = [felter].
 function boardBefore(P2, list, i) {
-  const k = P2.d.givens.slice();
-  for (let j = 0; j < i; j++) {
-    const x = list[j];
-    if (x.v === P2.sol[x.c] && !k[x.c]) k[x.c] = x.v;
+  const k = P2.d.givens.slice(),
+    wrong = [],
+    unsure = [];
+  const b = list[i].b;
+  if (b && b.length === k.length) {
+    for (let c = 0; c < k.length; c++) {
+      const v = +b[c];
+      if (!v || k[c]) continue;
+      if (v === P2.sol[c]) k[c] = v;
+      else wrong.push([c, v]);
+    }
+  } else {
+    for (let j = 0; j < i; j++) {
+      const x = list[j];
+      if (x.v === P2.sol[x.c] && !k[x.c]) k[x.c] = x.v;
+    }
+    (list[i].er || []).forEach((c) => (k[c] = P2.d.givens[c] || 0)); // visket ud igen
+    if (!P2.d.givens[list[i].c]) k[list[i].c] = 0; // feltet, der udfyldes nu, var tomt (eller havde et forkert tal)
+    for (let j = i; j < list.length; j++) {
+      const x = list[j];
+      if (x.v === P2.sol[x.c] && k[x.c] && !P2.d.givens[x.c] && !(list[i].er || []).includes(x.c) && unsure.indexOf(x.c) < 0 && j !== i) unsure.push(x.c);
+    }
   }
-  (list[i].er || []).forEach((c) => (k[c] = P2.d.givens[c] || 0)); // visket ud igen
+  k.wrong = wrong;
+  k.unsure = unsure;
   return k;
 }
 // Den del af forklaringen, der viser det afgørende: skridtet med den sværeste teknik, eller selve tallet ved enkle træk
@@ -515,6 +537,8 @@ function keyView(h) {
   return kv;
 }
 function miniBoard(P2, known, hv, mark, head = {}) {
+  const wrongAt = {};
+  (known.wrong || []).forEach(([c, v]) => (wrongAt[c] = v));
   const marks = Array.isArray(mark) ? mark : mark ? [mark] : [];
   const { rows, cols, region } = P2.d,
     S = 100,
@@ -542,6 +566,8 @@ function miniBoard(P2, known, hv, mark, head = {}) {
       s += giv[i]
         ? `<text x="${x + 50}" y="${y + 72}" font-size="62" font-weight="800" text-anchor="middle" fill="var(--ink)" font-family="Shippori Mincho B1, Georgia, serif">${v}</text>`
         : `<text x="${x + 50}" y="${y + 70}" font-size="54" text-anchor="middle" fill="var(--indigo)">${v}</text>`;
+    else if (wrongAt[i] !== undefined && !(mark && (Array.isArray(mark) ? mark : [mark]).some((k) => k.c === i)))
+      s += `<text x="${x + 50}" y="${y + 70}" font-size="54" text-anchor="middle" fill="var(--bad)">${wrongAt[i]}</text>`;
     else if (head[i] !== undefined) {
       s += `<circle cx="${x + 50}" cy="${y + 50}" r="34" fill="none" stroke="var(--warn)" stroke-width="3" stroke-dasharray="5 6"/>`;
       s += `<text x="${x + 50}" y="${y + 67}" font-size="46" font-weight="700" text-anchor="middle" fill="var(--warn)">${head[i]}</text>`;
@@ -581,6 +607,8 @@ function mboardHtml(g, i, mode) {
     m = list[i],
     known = boardBefore(P2, list, i);
   const nm = (c) => "abcdefghij"[c % P2.d.cols] + (Math.floor(c / P2.d.cols) + 1);
+  if (known.unsure.length)
+    return `<p class="mbnote">${tr("Pladen kan ikke tegnes sikkert her. Spillet er fra før appen gemte hele pladen, og nogle tal blev visket ud eller fortrudt undervejs ({cells}), så det vides ikke, om de stod der.", { cells: list2(known.unsure.slice(0, 4).map(nm)) + (known.unsure.length > 4 ? " " + tr("m.fl.") : "") })}</p>`;
   if (mode === "err") {
     // En fejl: det du satte, og hvad der skulle stå (med forklaring, hvis det kunne ses uden at gætte)
     const right = P2.sol[m.c],
