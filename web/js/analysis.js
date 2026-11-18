@@ -15,7 +15,7 @@ const ROUTE_CLS = {
 function refreshRouteSummaries() {
   let changed = false;
   games.forEach((g) => {
-    if (!g.moves || (g.route && g.route.follow !== undefined)) return;
+    if (!g.moves || (g.route && g.route.slips !== undefined)) return;
     markErrors(g.moves);
     g.route = routeSummary(g.moves);
     g.thirds = thirdsOf(g);
@@ -98,6 +98,11 @@ function startRoute(rec) {
     saveGames();
     const el2 = document.getElementById("routeLine");
     if (el2) el2.innerHTML = routeLineHtml(g);
+    const tk = document.getElementById("takeaway");
+    if (tk) {
+      tk.innerHTML = takeawayHtml(g);
+      bindTakeaway(tk, g);
+    }
   });
 }
 function routeLineHtml(rec) {
@@ -197,11 +202,18 @@ function routeChart(list, p) {
   // Perioder hvor en fejl stod på pladen (fra hovedfejlen, til den og dens følgefejl er rettet)
   markErrors(list);
   list.forEach((m, i) => {
-    if (m.cls !== "wrong" || m.follow || m.legacy) return; // gamle spil: det vides ikke, hvornår fejlen blev visket ud
+    if (m.cls !== "wrong" || m.follow || m.slip || m.legacy) return; // gamle spil: det vides ikke, hvornår fejlen blev visket ud
     const ends = list.filter((x, j) => j === i || (x.cls === "wrong" && x.cause === i)).map((x) => (x.fixT === undefined ? tmax : x.fixT));
     const x0 = x(m.t), x1 = x(Math.max(...ends));
     s += `<rect x="${x0}" y="${T}" width="${Math.max(2, x1 - x0)}" height="${H - T - B}" fill="var(--bad)" opacity="0.08"/>` +
       `<line x1="${x0}" x2="${x0}" y1="${T}" y2="${H - B}" stroke="var(--bad)" stroke-width="1" opacity="0.4"/>`;
+  });
+  list.forEach((m) => {
+    if (!m.chk) return;
+    const xc = x(m.chkT);
+    s +=
+      `<path d="M${xc - 5} ${H - B + 9}l5 -7l5 7z" fill="var(--mute)"/>` +
+      `<rect x="${xc - 7}" y="${H - B}" width="14" height="12" fill="transparent" data-tip="${esc(tr("«Tjek fejl» brugt her (tæller som hint)"))}"/>`;
   });
   list.forEach((m, i) => {
     const lv = lvOf(m),
@@ -210,10 +222,10 @@ function routeChart(list, p) {
       x1 = x(m.t);
     const nm = "abcdefghij"[m.c % p.cols] + (Math.floor(m.c / p.cols) + 1);
     // Søgetiden som streg frem mod trækket
-    const faint = m.amid || (m.cls === "wrong" && m.follow);
+    const faint = m.amid || m.unsure || m.slip || (m.cls === "wrong" && m.follow);
     s += `<line x1="${x0}" x2="${x1}" y1="${yy}" y2="${yy}" stroke="${faint ? "var(--mute)" : col[m.cls]}" stroke-width="3" stroke-linecap="round" opacity="${faint ? 0.25 : 0.5}"/>`;
-    if (m.amid) s += `<circle cx="${x1}" cy="${yy}" r="3" fill="var(--mute)" opacity="0.55"/>`;
-    else if (m.cls === "wrong" && m.follow)
+    if (m.amid || m.unsure) s += `<circle cx="${x1}" cy="${yy}" r="3" fill="var(--mute)" opacity="0.55"/>`;
+    else if (m.cls === "wrong" && (m.follow || m.slip))
       s += `<path d="M${x1 - 3} ${yy - 3}l6 6M${x1 + 3} ${yy - 3}l-6 6" stroke="var(--bad)" stroke-width="1.8" stroke-linecap="round" opacity="0.5"/>`;
     else if (m.cls === "easy") s += `<circle cx="${x1}" cy="${yy}" r="4" fill="var(--indigo)" stroke="var(--cell)" stroke-width="2"/>`;
     else if (m.cls === "ahead") s += `<circle cx="${x1}" cy="${yy}" r="4.5" fill="var(--cell)" stroke="var(--indigo)" stroke-width="2"/>`;
@@ -222,7 +234,13 @@ function routeChart(list, p) {
     else if (m.cls === "hint") s += `<rect x="${x1 - 3.5}" y="${yy - 3.5}" width="7" height="7" rx="1" fill="var(--mute)"/>`;
     else
       s += `<path d="M${x1 - 4.5} ${yy - 4.5}l9 9M${x1 + 4.5} ${yy - 4.5}l-9 9" stroke="var(--bad)" stroke-width="2.4" stroke-linecap="round"/>`;
-    const what = m.amid ? tr("sat mens en fejl stod på pladen, ikke bedømt") : m.cls === "wrong" && m.follow ? tr("følgefejl") : ROUTE_CLS[m.cls].long;
+    const what = m.amid
+      ? tr("sat mens en fejl stod på pladen, ikke bedømt")
+      : m.unsure
+        ? tr("sat efter en fejl, ikke bedømt")
+        : m.slip
+          ? tr("fejltryk, rettet med det samme")
+          : m.cls === "wrong" && m.follow ? tr("følgefejl") : ROUTE_CLS[m.cls].long;
     let tip = tr("Træk {k} · {cell} = {v} · fundet efter {tid}: {what}", { k: i + 1, cell: nm, v: m.v, tid: fmt(m.dt), what });
     if (lv && m.cls !== "hint") tip += ` · ${LEVEL_TECH[lv]}`;
     if (m.avail && m.cls !== "easy" && m.cls !== "hint" && m.cls !== "wrong") tip += " · " + tr("letteste: {tech}", { tech: LEVEL_TECH[m.avail] });
@@ -277,7 +295,7 @@ function showRoute(g, back) {
   // Fejl-episoder: hovedfejl med følgefejl og de tal, der blev sat imens
   const episodes = list
     .map((m, i) => Object.assign({ i }, m))
-    .filter((m) => m.cls === "wrong" && !m.follow)
+    .filter((m) => m.cls === "wrong" && !m.follow && !m.slip)
     .map((m) => {
       const follow = list.map((x, j) => Object.assign({ i: j }, x)).filter((x) => x.cls === "wrong" && x.follow && x.cause === m.i);
       const amid = list.filter((x) => x.amid && x.cause === m.i).length;
@@ -383,6 +401,22 @@ function showRoute(g, back) {
         (na ? " " + (na === 1 ? tr("1 tal sat imens er ikke bedømt.") : tr("{n} tal sat imens er ikke bedømt.", { n: na })) : ""),
     );
   }
+  const nc = list.reduce((a, m) => a + (m.chk || 0), 0);
+  if (nc) key.push(nc === 1 ? tr("Du fik vist fejl 1 gang. Det tæller som et hint.") : tr("Du fik vist fejl {n} gange. Det tæller som hints.", { n: nc }));
+  const ns = list.filter((m) => m.slip).length;
+  if (ns)
+    key.push(
+      ns === 1
+        ? tr("1 fejltryk, rettet med det samme, tæller ikke som fejl.")
+        : tr("{n} fejltryk, rettet med det samme, tæller ikke som fejl.", { n: ns }),
+    );
+  const nu = list.filter((m) => m.unsure).length;
+  if (nu)
+    key.push(
+      (nu === 1 ? tr("1 træk efter en fejl er ikke bedømt.") : tr("{n} træk efter en fejl er ikke bedømt.", { n: nu })) +
+        " " +
+        tr("Spillet er fra en ældre version, der ikke gemte viskelæder, så det vides ikke, hvordan pladen så ud."),
+    );
   if (r.harder) key.push(r.harder === 1 ? tr("<b>1 gang</b> et sværere træk end nødvendigt.") : tr("<b>{n} gange</b> et sværere træk end nødvendigt.", { n: r.harder }));
   if (stuck.length) key.push(tr("<b>Længst søgning:</b> {tid} før træk {k}.", { tid: fmt(stuck[0].dt), k: stuck[0].i + 1 }));
   if (r.ahead) key.push(r.ahead === 1 ? tr("1 gang tænkte du frem. Det er ikke en fejl.") : tr("{n} gange tænkte du frem. Det er ikke en fejl.", { n: r.ahead }));
@@ -392,6 +426,7 @@ function showRoute(g, back) {
   const epText = (e) =>
     `<b class="k">${tr("Træk {k}", { k: e.m.i + 1 })} · ${nm(e.m.c)} = ${e.m.v}</b><br>` +
     (e.m.legacy ? "" : e.fixed !== null ? tr("Rettet efter {tid}.", { tid: fmt(e.fixed - e.m.t) }) : tr("Ikke rettet.")) +
+    (e.m.shown ? " " + tr("Fundet med «Tjek fejl».") : "") +
     (e.follow.length ? " " + tr("Følgefejl: {list}.", { list: list2(e.follow.map((x) => nm(x.c) + " = " + x.v)) }) : "") +
     (e.amid ? " " + (e.amid === 1 ? tr("1 rigtigt tal sat imens er ikke bedømt.") : tr("{n} rigtige tal sat imens er ikke bedømt.", { n: e.amid })) : "");
   const section = (title, count, body, open) =>
@@ -465,6 +500,7 @@ function boardBefore(P2, list, i) {
     const x = list[j];
     if (x.v === P2.sol[x.c] && !k[x.c]) k[x.c] = x.v;
   }
+  (list[i].er || []).forEach((c) => (k[c] = P2.d.givens[c] || 0)); // visket ud igen
   return k;
 }
 // Den del af forklaringen, der viser det afgørende: skridtet med den sværeste teknik, eller selve tallet ved enkle træk
@@ -545,6 +581,25 @@ function mboardHtml(g, i, mode) {
     m = list[i],
     known = boardBefore(P2, list, i);
   const nm = (c) => "abcdefghij"[c % P2.d.cols] + (Math.floor(c / P2.d.cols) + 1);
+  if (mode === "err") {
+    // En fejl: det du satte, og hvad der skulle stå (med forklaring, hvis det kunne ses uden at gætte)
+    const right = P2.sol[m.c],
+      h = P2.tu.explainMove(known, m.c, right),
+      alt = h ? null : P2.tu.easiest(known);
+    const hh = h || alt,
+      kv = hh ? keyView(hh) : null;
+    const left =
+      `<figure class="mbcol"><figcaption><b style="color:var(--bad)">${tr("Det du satte")}</b><br>${nm(m.c)} = ${m.v}</figcaption>` +
+      miniBoard(P2, known, null, { c: m.c, v: m.v, col: "var(--bad)" }) +
+      `</figure>`;
+    const rightCol = hh
+      ? `<figure class="mbcol"><figcaption><b style="color:var(--indigo)">${h ? tr("Det rigtige") : tr("Det letteste lige da")}</b><br>${nm(hh.cell)} = ${hh.v} · ${esc(LEVEL_TECH[hh.hardestLevel])}</figcaption>` +
+        miniBoard(P2, known, kv, { c: hh.cell, v: hh.v, col: "var(--indigo)" }) +
+        (kv && kv.text ? `<p class="mbtext">${esc(kv.text)}</p>` : "") +
+        `</figure>`
+      : "";
+    return `<div class="mbpair">${left}${rightCol}</div>`;
+  }
   if (mode === "easy") {
     // Et let tal, der trak ud: hvad du fandt, og hvor mange andre lette tal der stod klar
     const mine = P2.tu.explainMove(known, m.c, m.v),

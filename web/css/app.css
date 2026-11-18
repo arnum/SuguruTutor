@@ -1906,3 +1906,60 @@ textarea.io {
   font-weight: 600;
   color: var(--warn);
 }
+
+/* Statistikkens faner bliver stående under topbjælken */
+#statTabs {
+  position: sticky;
+  top: calc(48px + env(safe-area-inset-top, 0px));
+  z-index: 4;
+  box-shadow: 0 0 0 6px var(--paper);
+}
+
+/* Det vigtigste fra spillet (efter løsning) */
+.takeaway {
+  text-align: left;
+  margin: 12px 0 0;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--chip);
+}
+.takeaway h3 {
+  margin: 0 0 6px;
+  font-size: 14px;
+}
+.takeaway p {
+  margin: 6px 0 0;
+  font-size: 13.5px;
+  line-height: 1.45;
+}
+.takeaway p b {
+  display: inline-block;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  margin-right: 4px;
+}
+.takeaway .tkgood b {
+  color: var(--indigo);
+}
+.takeaway .tklearn b {
+  color: var(--warn);
+}
+.tkboard {
+  margin-top: 8px;
+}
+.tkboard summary {
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--indigo);
+  font-weight: 600;
+}
+/* Indstilling med valg under teksten (fx fejl under spillet) */
+.set.stack {
+  grid-template-columns: 1fr;
+}
+.set.stack > .seg {
+  grid-column: 1;
+  grid-row: auto;
+  margin-top: 8px;
+}

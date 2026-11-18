@@ -21,7 +21,16 @@ function renderSettings() {
     `</div></div>${sw("timer", tr("Vis ur"), tr("Tiden måles stadig til statistikken."))}</div>` +
     `<h3 class="sec">${tr("Hjælp under spillet")}</h3><div class="group">${sw("same", tr("Fremhæv ens tal"), tr("Alle felter med det valgte tal farves."))}` +
     `${sw("peers", tr("Fremhæv naboer og region"), tr("Felter, der ikke må have samme tal."))}` +
-    `${sw("confirm", tr("Spørg før et tal overskrives"), tr("Et andet tal skal trykkes to gange."))}</div>` +
+    `${sw("confirm", tr("Spørg før et tal overskrives"), tr("Et andet tal skal trykkes to gange."))}` +
+    `${sw("anyDigit", tr("Tillad alle tal i alle felter"), tr("Også tal, der er større end regionen. De tæller som regelbrud."))}` +
+    `<div class="set stack"><span>${tr("Fejl under spillet")}</span><small>${tr("Regelbrud er ens tal, der rører hinanden, to ens tal i en region eller et tal større end regionen. Tal, der kun er forkerte i forhold til løsningen, vises aldrig af sig selv. «Tjek fejl» viser altid alle fejl.")}</small><div class="seg" id="errSeg">` +
+    [
+      ["live", tr("Vis regelbrud med det samme")],
+      ["end", tr("Skjul til pladen er fuld")],
+    ]
+      .map(([k, name]) => `<button type="button" data-e="${k}" aria-pressed="${(settings.liveErrors === false ? "end" : "live") === k}">${name}</button>`)
+      .join("") +
+    `</div></div></div>` +
     `<h3 class="sec">${tr("Data")}</h3><div class="menu">` +
     menuItem("dExport", '<path d="M12 3v12M8 11l4 4 4-4M5 21h14"/>', tr("Eksportér statistik"), tr("{n} spil", { n: games.length })) +
     menuItem("dImport", '<path d="M12 21V9M8 13l4-4 4 4M5 3h14"/>', tr("Importér statistik")) +
@@ -49,7 +58,21 @@ function renderSettings() {
         (b.onclick = () => {
           settings[b.dataset.key] = !settings[b.dataset.key];
           saveSettings();
+          if (b.dataset.key === "anyDigit" && P) renderPad();
           b.setAttribute("aria-checked", settings[b.dataset.key]);
+        }),
+    );
+  $("errSeg")
+    .querySelectorAll("button")
+    .forEach(
+      (b) =>
+        (b.onclick = () => {
+          settings.liveErrors = b.dataset.e === "live";
+          saveSettings();
+          $("errSeg")
+            .querySelectorAll("button")
+            .forEach((x) => x.setAttribute("aria-pressed", x === b));
+          if (P) renderGrid();
         }),
     );
   $("themeSeg")

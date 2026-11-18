@@ -76,7 +76,7 @@ function renderStats() {
       .join("") +
     `</div>`;
   // Aktivitet
-  html += `<div class="panelcard"><h3>${tr("Aktivitet")}</h3><p>${tr("Løste opgaver pr. dag de sidste 12 uger.")}</p>${heatmap(won)}</div>`;
+  html += `<div class="panelcard"><h3>${tr("Aktivitet")}</h3><p>${tr("Løste opgaver pr. dag de sidste 12 uger. Tryk på en dag for at se dens spil.")}</p>${heatmap(won)}</div>`;
   // Udvikling
   html += TAB("opgaver") + ratingPanel();
   const last = won.slice(-30);
@@ -111,25 +111,7 @@ function renderStats() {
   const recent = games.slice(-15).reverse();
   html +=
     `<div class="panelcard"><h3>${tr("Seneste spil")}</h3><p>${tr("Tryk for at se ruten eller spille samme opgave igen.")}</p><div class="games">` +
-    recent
-      .map((g) => {
-        const d = new Date(g.end);
-        const when =
-          d.toLocaleDateString(LOCALE, { day: "numeric", month: "short" }) +
-          " " +
-          tr("kl. {tid}", { tid: d.toLocaleTimeString(LOCALE, { hour: "2-digit", minute: "2-digit" }) });
-        const tags = [
-          g.daily ? tr("Dagens") : "",
-          g.hints ? (g.hints === 1 ? tr("1 hint") : tr("{n} hints", { n: g.hints })) : "",
-          !g.solved ? (g.revealed ? tr("Løsning vist") : tr("Opgivet")) : "",
-        ].filter(Boolean);
-        return (
-          `<button class="game ${g.solved ? "" : "lost"}" type="button" data-code="${esc(g.code)}" data-id="${esc(g.id)}"><span class="v">${dec(g.value)}</span>` +
-          `<span><span class="t">${esc(BAND[gBand(g)])} · ${g.cols}×${g.rows}</span><br><span class="s">${when}${tags.length ? " · " + tags.join(" · ") : ""}${g.peak != null ? "<br>" + plText(g) : ""}</span></span>` +
-          `<span class="b">${g.solved ? fmt(g.ms) : Math.round((100 * (g.filled || 0)) / Math.max(1, g.empty || 1)) + " %"}</span></button>`
-        );
-      })
-      .join("") +
+    recent.map(gameRow).join("") +
     `</div></div>`;
   // Fordel afsnittene på faner
   const parts = ("\u0001overblik\u0001" + html).split("\u0001"),
@@ -167,20 +149,9 @@ function renderStats() {
       }
     };
   bindFocus(body);
-  body.querySelectorAll(".game").forEach(
-    (b) =>
-      (b.onclick = () => {
-        const g = games.find((x) => x.id === b.dataset.id);
-        if (g && g.moves) gameSheet(g);
-        else
-          confirmSheet({
-            title: tr("Spil igen?"),
-            text: tr("Samme opgave fra start. Den tæller som et nyt spil."),
-            ok: tr("Spil igen"),
-            onOk: () => replaceGame(() => importCode(b.dataset.code, { replay: true })),
-          });
-      }),
-  );
+  bindGameRows(body);
+  // Tryk på en dag i aktivitetskortet: vis dagens spil
+  body.querySelectorAll(".heat rect[data-day]").forEach((r) => (r.onclick = () => daySheet(r.dataset.day)));
   const tt = $("trendTable");
   if (tt)
     tt.onclick = () => {
@@ -204,6 +175,66 @@ function renderStats() {
           .join("") +
         `</table>`;
     };
+}
+// Én linje i en spilliste (seneste spil og dagens spil)
+function gameRow(g) {
+  const d = new Date(g.end);
+  const when =
+    d.toLocaleDateString(LOCALE, { day: "numeric", month: "short" }) + " " + tr("kl. {tid}", { tid: d.toLocaleTimeString(LOCALE, { hour: "2-digit", minute: "2-digit" }) });
+  const tags = [
+    g.daily ? tr("Dagens") : "",
+    g.hints ? (g.hints === 1 ? tr("1 hint") : tr("{n} hints", { n: g.hints })) : "",
+    !g.solved ? (g.revealed ? tr("Løsning vist") : tr("Opgivet")) : "",
+  ].filter(Boolean);
+  return (
+    `<button class="game ${g.solved ? "" : "lost"}" type="button" data-code="${esc(g.code)}" data-id="${esc(g.id)}"><span class="v">${dec(g.value)}</span>` +
+    `<span><span class="t">${esc(BAND[gBand(g)])} · ${g.cols}×${g.rows}</span><br><span class="s">${when}${tags.length ? " · " + tags.join(" · ") : ""}${g.peak != null ? "<br>" + plText(g) : ""}</span></span>` +
+    `<span class="b">${g.solved ? fmt(g.ms) : Math.round((100 * (g.filled || 0)) / Math.max(1, g.empty || 1)) + " %"}</span></button>`
+  );
+}
+function bindGameRows(root, before) {
+  root.querySelectorAll(".game").forEach(
+    (b) =>
+      (b.onclick = () => {
+        const g = games.find((x) => x.id === b.dataset.id);
+        const open = () => {
+          if (g && g.moves) gameSheet(g);
+          else
+            confirmSheet({
+              title: tr("Spil igen?"),
+              text: tr("Samme opgave fra start. Den tæller som et nyt spil."),
+              ok: tr("Spil igen"),
+              onOk: () => replaceGame(() => importCode(b.dataset.code, { replay: true })),
+            });
+        };
+        if (before) before(open);
+        else open();
+      }),
+  );
+}
+function daySheet(day) {
+  hideTip();
+  const list = games.filter((g) => g.day === day).reverse();
+  const d = new Date(day + "T12:00:00");
+  const title = d.toLocaleDateString(LOCALE, { weekday: "long", day: "numeric", month: "long" });
+  const won = list.filter((g) => g.solved);
+  const sub = list.length
+    ? (won.length === 1 ? tr("1 løst") : tr("{n} løst", { n: won.length })) +
+      (list.length > won.length ? " · " + tr("{n} ikke løst", { n: list.length - won.length }) : "") +
+      (won.length ? " · " + tr("i alt {tid}", { tid: fmt(won.reduce((a, g) => a + g.ms, 0)) }) : "")
+    : tr("Ingen spil denne dag.");
+  openSheet(
+    `<h2>${esc(title[0].toUpperCase() + title.slice(1))}</h2><p class="sub">${sub}</p>` +
+      (list.length ? `<div class="games">${list.map(gameRow).join("")}</div>` : "") +
+      `<div class="actions"><button class="primary" type="button" id="dayClose">${tr("Luk")}</button></div>`,
+    (b) => {
+      b.querySelector("#dayClose").onclick = closeSheet;
+      bindGameRows(b, (open) => {
+        closeSheet();
+        setTimeout(open, 280);
+      });
+    },
+  );
 }
 function heatmap(won) {
   const count = {};
@@ -246,7 +277,7 @@ function heatmap(won) {
       const label =
         d.toLocaleDateString(LOCALE, { weekday: "short", day: "numeric", month: "short" }) + ": " + (n ? tr("{n} løst", { n }) : tr("ingen"));
       s +=
-        `<rect x="${L + w * (C + Gp)}" y="${T + r * (C + Gp)}" width="${C}" height="${C}" rx="4" fill="${fills[Math.min(3, n)]}" data-tip="${esc(label)}"` +
+        `<rect x="${L + w * (C + Gp)}" y="${T + r * (C + Gp)}" width="${C}" height="${C}" rx="4" fill="${fills[Math.min(3, n)]}" data-tip="${esc(label)}" data-day="${k}" style="cursor:pointer"` +
         (k === dayKey(today) ? ` stroke="var(--ink)" stroke-width="1.5"` : "") +
         `/>`;
     }

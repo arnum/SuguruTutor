@@ -9,11 +9,13 @@ function el(name, attrs, parent) {
   if (parent) parent.appendChild(e);
   return e;
 }
+const boardFull = () => P.givens.every((g, i) => g || entries[i]);
 function conflicts() {
   const bad = new Set();
   for (let i = 0; i < G.n; i++) {
     const v = value(i);
     if (!v) continue;
+    if (v > regionSize[i]) bad.add(i); // større end regionen (kun muligt med "Tillad alle tal")
     for (const j of peerSets[i])
       if (value(j) === v) {
         bad.add(i);
@@ -50,7 +52,8 @@ function renderGrid() {
   );
   for (let c = 0; c < cols; c++) el("text", { x: c * S + 50, y: -14 }, labels).textContent = "abcdefghij"[c];
   for (let r = 0; r < rows; r++) el("text", { x: -18, y: r * S + 58 }, labels).textContent = r + 1;
-  const bad = conflicts();
+  // Regelbrud vises med det samme (standard), eller først når pladen er fuld eller efter "Tjek fejl"
+  const bad = settings.liveErrors !== false || checked || boardFull() ? conflicts() : new Set();
   const selVal = selected >= 0 ? value(selected) : 0;
   const cells = el("g", {}, svg),
     texts = el("g", { "pointer-events": "none" }, svg);
@@ -259,7 +262,7 @@ function renderPad() {
   pad.innerHTML = "";
   pad.style.setProperty("--padn", top);
   pad.classList.toggle("notes", noteMode);
-  const max = selected >= 0 ? regionSize[selected] : top,
+  const max = selected >= 0 ? digitMax(selected) : top,
     locked = selected < 0 || !!P.givens[selected] || solved;
   for (let d = 1; d <= top; d++) {
     const b = document.createElement("button");

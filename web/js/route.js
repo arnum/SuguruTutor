@@ -8,9 +8,18 @@ function analyzeRoute(SE, p, moves, onProgress) {
     out = [],
     pre = [];
   const onBoard = new Map(); // forkerte tal, der står på pladen lige nu: felt -> indeks i out
+  const shown = new Array(G.n).fill(0); // rigtige tal, som de gemte træk viser (uden viskelæder)
   let lastT = 0;
   const total = moves.filter((m) => m.v && !m.u).length;
+  let chk = null; // "Tjek fejl"/fejl vist af hint-knappen siden sidste tal
   moves.forEach((m) => {
+    if (m.chk) {
+      // Fejlene, der stod på pladen, blev vist: marker dem, og husk tjekket til næste tal
+      onBoard.forEach((idx) => (out[idx].shown = 1));
+      chk = chk || { n: 0, t: m.t };
+      chk.n++;
+      return;
+    }
     const dt = Math.max(0, m.t - lastT);
     lastT = m.t;
     // Ændres et felt med et forkert tal (overskrevet, visket ud eller fortrudt), er fejlen rettet
@@ -20,6 +29,15 @@ function analyzeRoute(SE, p, moves, onProgress) {
     }
     if (m.v && !m.u) {
       const rec = { c: m.c, v: m.v, t: m.t, dt };
+      if (chk) {
+        rec.chk = chk.n;
+        rec.chkT = chk.t;
+        chk = null;
+      }
+      // Rigtige tal, der er visket ud igen: de gemte træk viser dem, men de stod ikke på pladen
+      const er = [];
+      for (let i = 0; i < G.n; i++) if (shown[i] && ent[i] !== shown[i] && i !== m.c) er.push(i);
+      if (er.length) rec.er = er;
       tagError(rec, onBoard, out);
       if (m.h) rec.cls = "hint";
       else if (m.v !== p.solution[m.c]) rec.cls = "wrong";
@@ -44,6 +62,7 @@ function analyzeRoute(SE, p, moves, onProgress) {
       }
       settleError(rec);
       if (rec.cls === "wrong") onBoard.set(m.c, out.length);
+      else shown[m.c] = m.v;
       out.push(rec);
       if (onProgress) onProgress(out.length, total);
     }
@@ -77,16 +96,53 @@ function settleError(rec) {
   else if (rec.cls !== "hint") rec.amid = 1;
   else delete rec.cause;
 }
-// Ældre analyser uden episoder: genskab dem forsigtigt ud fra de gemte træk. Slettede tal er ikke gemt, så det
-// vides ikke, hvor længe et forkert tal stod. Derfor: et forkert tal højst 5 træk efter et andet forkert tal, der
-// endnu ikke er overskrevet, regnes som følgefejl; rigtige tal bedømmes som før (ingen "amid").
+// Ældre analyser uden episoder: genskab dem ud fra de gemte træk. Viskelæder er ikke gemt, så det vides ikke, hvornår
+// et forkert tal forsvandt; højst til feltet fik et nyt tal. Derfor:
+// - et forkert tal højst 5 træk efter et andet forkert tal, der endnu ikke er overskrevet, regnes som følgefejl;
+// - rigtige tal sat i det tidsrum bedømmes ikke (unsure), for pladen kan have set anderledes ud, end analysen antager.
 function markErrors(list) {
-  if (!list.some((m) => m.cls === "wrong") || list.some((m) => m.fixT !== undefined || m.follow || m.amid || m.legacy)) return list;
+  markEpisodes(list);
+  markSlips(list);
+  return list;
+}
+// Fejltryk: et forkert tal, der blev rettet inden for få sekunder, før noget andet tal blev sat, og uden følgefejl.
+// Det er typisk et tryk på den forkerte knap eller det forkerte felt, ikke en tankefejl. Det tæller ikke som fejl,
+// og søgetiden lægges over på det næste tal (det var det, du ledte efter).
+const SLIP_MS = 6000;
+function markSlips(list) {
+  list.forEach((m, i) => {
+    if (m.cls !== "wrong" || m.follow || m.slip !== undefined) return;
+    if (m.shown) return void (m.slip = 0); // fundet med "Tjek fejl", ikke et fejltryk
+    const next = list[i + 1];
+    const quick = m.fixT !== undefined && m.fixT - m.t <= SLIP_MS && (!next || next.t >= m.fixT);
+    const alone = !list.some((x) => x.cause === i);
+    m.slip = quick && alone && next ? 1 : 0;
+    if (m.slip && !next.slipDt) {
+      next.slipDt = m.dt;
+      next.dt += m.dt;
+    }
+  });
+}
+function markEpisodes(list) {
+  if (!list.some((m) => m.cls === "wrong")) return list;
+  if (list.some((m) => !m.legacy && (m.fixT !== undefined || m.follow || m.amid))) return list; // rigtige episoder
+  if (list.some((m) => m.legacy === 2)) return list;
+  list.forEach((m) => {
+    delete m.fixT;
+    delete m.follow;
+    delete m.cause;
+    delete m.unsure;
+  });
   const onBoard = new Map();
   list.forEach((rec, i) => {
     if (onBoard.has(rec.c)) {
       list[onBoard.get(rec.c)].fixT = rec.t;
       onBoard.delete(rec.c);
+    }
+    if (onBoard.size && rec.cls !== "wrong" && rec.cls !== "hint") {
+      const first = list[Math.min(...onBoard.values())];
+      rec.unsure = 1;
+      rec.cause = first.follow ? first.cause : list.indexOf(first);
     }
     if (rec.cls === "wrong") {
       const recent = [...onBoard.values()].filter((j) => i - j <= 5);
@@ -97,12 +153,12 @@ function markErrors(list) {
       }
       onBoard.set(rec.c, i);
     }
-    rec.legacy = 1;
+    rec.legacy = 2;
   });
   return list;
 }
 // Træk, der indgår i bedømmelsen af ruten: ikke hints, ikke følgefejl og ikke træk sat på en forkert plade
-const judged = (m) => m.cls !== "hint" && !m.amid && !(m.cls === "wrong" && m.follow);
+const judged = (m) => m.cls !== "hint" && !m.amid && !m.unsure && !m.slip && !(m.cls === "wrong" && m.follow);
 // Hvilket niveau trækket reelt krævede (det, tiden tilskrives)
 function moveLevel(m) {
   return m.cls === "easy"
@@ -131,6 +187,9 @@ function routeSummary(list) {
     hints: list.filter((m) => m.cls === "hint").length,
     follow: list.filter((m) => m.cls === "wrong" && m.follow).length,
     amid: list.filter((m) => m.amid).length,
+    unsure: list.filter((m) => m.unsure).length,
+    slips: list.filter((m) => m.slip).length,
+    checks: list.reduce((a, m) => a + (m.chk || 0), 0),
     excess: harder.length ? harder.reduce((s, m) => s + (Math.min(m.direct, m.ahead || 12) - m.avail), 0) / harder.length : 0,
     tEasy: avgT(a.filter((m) => m.cls === "easy")),
     tOther: avgT(a.filter((m) => m.cls === "harder" || m.cls === "ahead")),

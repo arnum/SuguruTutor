@@ -5,7 +5,7 @@ function pushUndo() {
   if (undoStack.length > 300) undoStack.shift();
 }
 function input(d) {
-  if (selected < 0 || P.givens[selected] || solved || d > regionSize[selected]) return;
+  if (selected < 0 || P.givens[selected] || solved || d > digitMax(selected)) return;
   const cur = entries[selected];
   if (noteMode) {
     if (cur) {
@@ -100,6 +100,7 @@ function afterChange() {
     return;
   }
   if (!done && $("msg").classList.contains("good")) setMsg("", "");
+  if (!done && boardFull()) setMsg(tr("Pladen er fuld, men noget er forkert. «Tjek fejl» viser hvad (tæller som hint)."), "bad");
   renderGrid();
   renderPad();
   renderStatus();
@@ -194,6 +195,8 @@ $("hintBtn").onclick = () => {
   if (wrongIdx >= 0) {
     selected = wrongIdx;
     checked = true;
+    logCheck(entries.filter((v, i) => v && v !== P.solution[i]).length);
+    saveCurrent();
     setMsg(tr("Ret først {cell}: tallet passer ikke med løsningen.", { cell: cellName(wrongIdx) }), "bad");
     renderGrid();
     renderPad();
@@ -330,7 +333,7 @@ const IC = {
 function showMenu() {
   openSheet(
     `<div class="menu">` +
-      menuItem("mCheck", IC.check, tr("Tjek fejl"), meta.checks ? tr("brugt {n}×", { n: meta.checks }) : "") +
+      menuItem("mCheck", IC.check, tr("Tjek fejl"), (meta.checks ? tr("brugt {n}×", { n: meta.checks }) + " · " : "") + tr("tæller som hint")) +
       menuItem("mReveal", IC.eye, reveal ? tr("Skjul løsning") : tr("Vis løsning"), reveal ? "" : tr("tæller som opgivet")) +
       menuItem("mRestart", IC.restart, tr("Start forfra")) +
       `</div><div class="menu">` +
@@ -391,11 +394,20 @@ function showMenu() {
     },
   );
 }
+// Største tal, der kan skrives i feltet: regionens størrelse, eller pladens største region med "Tillad alle tal"
+const digitMax = (i) => (settings.anyDigit ? P.maxRegion || 5 : regionSize[i]);
+// At få fejl vist tæller som et hint og skrives i loggen, så ruteanalysen ved, at fejlene blev fundet på den måde
+function logCheck(wrong) {
+  meta.checks++;
+  meta.hints++;
+  meta.moves.push({ chk: 1, n: wrong, t: elapsed() });
+  renderStatus();
+}
 function checkErrors() {
   if (solved) return;
   checked = true;
-  meta.checks++;
   const wrong = entries.filter((v, i) => v && v !== P.solution[i]).length;
+  logCheck(wrong);
   setMsg(
     wrong ? (wrong === 1 ? tr("1 fejl er markeret.") : tr("{n} fejl er markeret.", { n: wrong })) : tr("Ingen fejl indtil videre."),
     wrong ? "bad" : "good",
@@ -620,6 +632,7 @@ function showSolved(rec) {
       `<div class="kpi"><b>${st.current}</b><span>${st.current === 1 ? tr("Dag i træk") : tr("Dage i træk")}</span></div></div>${record}` +
       (rec.est && rec.solved ? `<p class="sub estcmp">${tr("Dit estimat var {t}.", { t: estFmt(rec.est) })} ${estCompare(rec.ms, rec.est)}</p>` : "") +
       (rec.solved ? "" : `<p class="sub" style="margin-top:10px">${tr("Løsningen blev vist undervejs, så den tæller ikke som løst.")}</p>`) +
+      `<div id="takeaway">${gNow && gNow.moves && !gNow.routePending ? takeawayHtml(gNow) : ""}</div>` +
       `<button class="routeline" type="button" id="routeLine">${routeLineHtml(rec)}</button>` +
       `<div id="concLine">${concLineHtml(rec)}</div>` +
       `<p class="feltq">${tr("Hvordan føltes den i forhold til {v}?", { v: dec(rec.value) })}</p><div class="seg felt" id="feltSeg">` +
@@ -628,6 +641,7 @@ function showSolved(rec) {
       `<div class="actions"><button class="primary big" type="button" id="sNew">${tr("Ny opgave")} · ${esc(BAND[ui.level])}</button>` +
       `<div class="actions row2" style="margin:0"><button class="secondary" type="button" id="sStats">${tr("Statistik")}</button><button class="secondary" type="button" id="sHome">${tr("Forside")}</button></div></div></div>`,
     (b) => {
+      if (gNow && gNow.moves) bindTakeaway(b, gNow);
       b.querySelector("#sNew").onclick = () => {
         closeSheet();
         generateFromUi();
