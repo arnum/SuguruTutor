@@ -13,7 +13,7 @@ function solveProfile(tutor, givens) {
   while (known.some((v) => !v)) {
     const h = tutor.easiest(known);
     if (!h) return null;
-    steps.push({ L: h.hardestLevel, T: h.hardest, vis: h.vis, mem: h.mem, len: h.len, opts: h.opts, progress: placed / empty0 });
+    steps.push({ L: h.hardestLevel, T: h.hardest, vis: h.vis, mem: h.mem, len: h.len, inner: h.inner || [], multi: h.multi || 0, opts: h.opts, progress: placed / empty0 });
     known[h.cell] = h.v;
     placed++;
   }
@@ -28,9 +28,20 @@ function solveProfile(tutor, givens) {
 // hukommelse og omgivelser mindre end først antaget. Sammenhæng med log(tid): 0,89.
 // Justeret 18. nov. 2026 ud fra 93 løste opgaver: par og tripler tog ca. 1,5 gange så lang tid som deres grad sagde
 // (og blev oplevet sværere), så deres genkendelse er hævet (par +1,2, tripler +1,1). Sammenhæng med log(tid): 0,75 -> 0,80.
-function gradeFromSteps(steps) {
+// pen = false: graden uden blyant (20. nov. 2026). Teknikker, der kræver at man husker muligheder, koster mere:
+// tripler og skjulte par mere end nøgne par, kæder over to-mulighedsfelter mere end kæder med ét tal, og hvis-så med
+// alle tal meget mere end at følge ét tal. Hukommelse vejer mere, og strygninger, der efterlader felter med flere
+// muligheder, skal huskes. Enkle tal og nabo-eliminering er uændret, så lette opgaver får samme grad.
+// Tallene er et kvalificeret skøn; de tilpasses, når der er spil nok med og uden blyant (spillet gemmer, om der blev brugt blyant).
+function gradeFromSteps(steps, pen = true) {
   // (konstanter og hjælpefunktion ligger inde i funktionen, så den kan sendes til baggrunds-workeren)
-  const RECOG = [0, 0, 0.6, 2.2, 2.9, 3.0, 3.7, 1.9, 2.2, 2.5, 2.8, 3.1, 3.5, 4.4];
+  // Hvis-så (11) og hvis-så med teknikker (13) har samme grundtal; forskellen ligger nu i INNER nedenfor.
+  const RECOG = [0, 0, 0.6, 2.2, 2.9, 3.0, 3.7, 1.9, 2.2, 2.5, 2.8, 3.1, 3.5, 3.1];
+  // Teknikker inde i et hvis-så / begge veje vejer med: 0,6 x genkendelsen af den sværeste af dem (19. nov. 2026).
+  // Et hvis-så med kun enkle tal og nabo-eliminering er langt lettere end et, der kræver par, tripler eller kæder
+  // undervejs. Typisk værdi svarer til det gamle faste tillæg for et dybt hvis-så (4,4).
+  const INNER = 0.6;
+  const NOPEN = [0, 0, 0, 0.3, 0.5, 1.0, 1.2, 0.4, 1.0, 1.2, 0.3, 1.5, 1.5, 1.5];
   function stepEffort(s) {
     // Genkendelse = mønstrets grundpris + hvor godt netop dette tilfælde skjuler sig
     const base = 1.0 * (RECOG[s.T] || 0),
@@ -44,10 +55,14 @@ function gradeFromSteps(steps) {
       workT = 0.35 * Math.max(-0.25, Math.min(0.5, 0.12 * (v.work - 4)));
     }
     const R = base + shapeT + openT + workT;
-    const memT = 0.3 * Math.log2(1 + (s.mem || 0));
+    const memT = (pen || s.T < 3 ? 0.3 : 0.5) * Math.log2(1 + (s.mem || 0));
     const lenT = 0.35 * Math.log2(1 + Math.max(0, (s.len || 1) - 1));
     const spot = s.opts <= 1 ? 0.5 : s.opts === 2 ? 0.3 : s.opts === 3 ? 0.15 : 0;
-    return { e: 1 + R + memT + lenT + spot, R, base, shapeT, openT, workT, memT, lenT, spot };
+    const innerT = s.inner && s.inner.length ? INNER * Math.max(...s.inner.map((t) => RECOG[t])) : 0;
+    const nopenT = pen ? 0 : NOPEN[s.T] || 0,
+      // (kæder med ét tal stryger kun ét tal, som nabo-eliminering, så de tæller ikke her)
+      multiT = pen || !((s.T >= 3 && s.T <= 6) || s.T === 8 || s.T === 9 || s.T === 12) ? 0 : Math.min(1, 0.25 * (s.multi || 0));
+    return { e: 1 + R + memT + lenT + spot + innerT + nopenT + multiT, R, base, shapeT, openT, workT, memT, lenT, spot, innerT, nopenT, multiT };
   }
   const clamp = (x) => Math.max(0, Math.min(1, x));
   const N = steps.length,
@@ -89,7 +104,14 @@ function gradeFromSteps(steps) {
   const load = tech === 1 ? 0 : Math.max(1, Math.min(10, Math.round(10 * (1 - Math.exp(-(W + Math.max(0, top.e - 1.5)) / 12)))));
   value = Math.max(1, Math.min(9.9, Math.round(value * 10) / 10));
   const band = Math.floor(value);
+  // Graden uden blyant (samme skridt, anden pris)
+  let np = null;
+  if (pen) {
+    const n = gradeFromSteps(steps, false);
+    np = { value: n.value, band: n.band, peak: n.peak, load: n.load, T: n.hard.T, memT: n.hard.memT, nopenT: n.hard.nopenT, multiT: n.hard.multiT, multi: n.hard.multi };
+  }
   return {
+    np,
     value,
     level: band,
     band,
@@ -118,8 +140,13 @@ function gradeFromSteps(steps) {
       memT: top.memT,
       lenT: top.lenT,
       spot: top.spot,
+      innerT: top.innerT,
+      inner: hs.inner || [],
+      multi: hs.multi || 0,
+      nopenT: top.nopenT,
+      multiT: top.multiT,
     },
-    fit: 3,
+    fit: 5,
     nHard,
     W,
     loadT,
@@ -153,8 +180,10 @@ function generateGraded(SE, d, onProgress) {
     p.grade = steps ? gradeFromSteps(steps) : null;
     p.target = d.level;
     tries++;
-    const band = p.grade ? p.grade.band : p.rating.level,
-      dec = p.grade ? p.grade.decimal : 0;
+    // d.np: spilleren spiller uden blyant, så båndet gælder graden uden blyant
+    const gv = p.grade ? (d.np && p.grade.np ? p.grade.np.value : p.grade.value) : null;
+    const band = p.grade ? Math.floor(gv) : p.rating.level,
+      dec = p.grade ? Math.round((gv - Math.floor(gv)) * 10) : 0;
     const key =
       (d.must ? Math.abs(p.rating.level - d.must) * 100 : 0) +
       Math.abs(band - d.level) * 10 +

@@ -15,7 +15,7 @@ const ROUTE_CLS = {
 function refreshRouteSummaries() {
   let changed = false;
   games.forEach((g) => {
-    if (!g.moves || (g.route && g.route.slips !== undefined)) return;
+    if (!g.moves || (g.route && g.route.ctx !== undefined)) return;
     markErrors(g.moves);
     g.route = routeSummary(g.moves);
     g.thirds = thirdsOf(g);
@@ -89,12 +89,8 @@ function startRoute(rec) {
     if (cl) cl.innerHTML = concLineHtml(g);
     rec.route = g.route;
     rec.moves = g.moves;
-    // Gem detaljerne for de seneste 40 spil; ældre beholder kun opsummeringen
-    let keep = 0;
-    for (let i = games.length - 1; i >= 0; i--)
-      if (games[i].moves) {
-        if (++keep > 40) delete games[i].moves;
-      }
+    // Gem detaljerne for de seneste spil (standard 40); ældre beholder kun opsummeringen
+    trimMoves(Math.max(1, settings.keepMoves ?? 40));
     saveGames();
     const el2 = document.getElementById("routeLine");
     if (el2) el2.innerHTML = routeLineHtml(g);
@@ -132,6 +128,47 @@ function median(arr) {
   const a = arr.slice().sort((x, y) => x - y),
     k = a.length >> 1;
   return a.length % 2 ? a[k] : (a[k - 1] + a[k]) / 2;
+}
+// Fjern trækkene (den fulde ruteanalyse) for alle andre end de `keep` nyeste spil med træk. Før det sikres, at spillet
+// har alle opsummeringer, statistikken bruger: rute-opsummering med tider og sammenhæng, koncentration, tempo og
+// fejl/hints pr. tredjedel. Bagefter kan ruteanalysen ikke åbnes for de spil, men alle tal i statistikken er de samme.
+// Returnerer antal spil, der blev ryddet.
+function trimMoves(keep) {
+  let seen = 0,
+    n = 0;
+  for (let i = games.length - 1; i >= 0; i--) {
+    const g = games[i];
+    if (!g.moves) continue;
+    if (++seen <= keep) continue;
+    markErrors(g.moves);
+    if (!g.route || g.route.ctx === undefined) g.route = routeSummary(g.moves);
+    if (g.thirds == null) g.thirds = thirdsOf(g);
+    if (g.pace == null) g.pace = paceOf(g, baseline(null));
+    if (g.conc == null) g.conc = concOf(g, baseline(g.id));
+    delete g.moves;
+    n++;
+  }
+  return n;
+}
+// Lagerplads: hvor meget fylder de gemte data, og hvor meget er rute-detaljer (træk)?
+function storageInfo() {
+  let total = 0;
+  const keys = {};
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (!k || !k.startsWith("suguru.")) continue;
+      const len = k.length + (localStorage.getItem(k) || "").length;
+      keys[k.slice(7)] = len;
+      total += len;
+    }
+  } catch (e) {}
+  const withMoves = games.filter((g) => g.moves);
+  const movesLen = withMoves.reduce((s, g) => s + JSON.stringify(g.moves).length, 0);
+  // Hvad koster de nyeste k spils træk? (til "frigør ca.")
+  const perGame = withMoves.map((g) => JSON.stringify(g.moves).length).reverse(); // nyeste først
+  const keepCost = (k) => perGame.slice(0, k).reduce((s, x) => s + x, 0);
+  return { total, keys, history: keys.history || 0, moves: movesLen, nMoves: withMoves.length, keepCost };
 }
 function fmtS(sec) {
   sec = Math.round(sec);
@@ -435,7 +472,7 @@ function showRoute(g, back) {
   const nLapse = (concGet(g) || { idx: [] }).idx.filter((i) => list[i] && list[i].cls !== "wrong").length;
 
   openSheet(
-    `<h2>${tr("Din løsningsrute")}</h2><p class="sub" style="color:var(--mute)">${esc(BAND[gBand(g)])} ${dec(g.value)} · ${g.cols}×${g.rows} · ${new Date(g.end).toLocaleDateString(LOCALE, { day: "numeric", month: "short" })} · ${fmt(g.ms)}</p>` +
+    `<h2>${tr("Din løsningsrute")}</h2><p class="sub" style="color:var(--mute)">${esc(BAND[gBand(g)])} ${dec(gradeFor(g))} · ${g.cols}×${g.rows} · ${new Date(g.end).toLocaleDateString(LOCALE, { day: "numeric", month: "short" })} · ${fmt(g.ms)}</p>` +
       `<div class="rkpi"><b>${pct} %</b><span>${tr("af {n} træk var et af de letteste mulige lige da.", { n: r.n })}<br>${verdict}</span></div>` +
       (key.length ? `<ul class="keypts">${key.map((t) => `<li>${t}</li>`).join("")}</ul>` : "") +
       routeChart(list, p) +
@@ -463,9 +500,11 @@ function showRoute(g, back) {
       (back
         ? `<div class="actions"><button class="primary big" type="button" id="rtNew">${tr("Ny opgave")} · ${esc(BAND[ui.level])}</button>` +
           `<div class="actions row2" style="margin:0"><button class="secondary" type="button" id="rtAgain">${tr("Spil igen")}</button><button class="secondary" type="button" id="rtClose">${tr("Tilbage")}</button></div></div>`
-        : `<div class="actions row2"><button class="secondary" type="button" id="rtAgain">${tr("Spil igen")}</button><button class="primary" type="button" id="rtClose">${tr("Luk")}</button></div>`),
+        : `<div class="actions row2"><button class="secondary" type="button" id="rtAgain">${tr("Spil igen")}</button><button class="primary" type="button" id="rtClose">${tr("Luk")}</button></div>`) +
+      noteLink("route"),
     (b2) => {
       bindMboards(b2, g);
+      bindNoteLinks(b2, g, () => showRoute(g, back));
       b2.querySelector("#rtClose").onclick = closeSheet;
       const leave = (f) => {
         sheetOnClose = null; // ikke tilbage til løst-arket, når man går videre
@@ -761,16 +800,36 @@ function concOf(g, base) {
     late: slips.filter((x) => g.moves[x.i].t > 0.5 * g.ms).length,
   };
 }
+// Koncentrationen regnes kun ud én gang pr. spil, så længe historikken er uændret (ellers bliver statistikken langsom
+// med mange spil: hver udregning skal bruge din normale tid ud fra alle andre spil)
+let CONC_KEY = "",
+  CONC_MEMO = new Map();
+const histKey = () => games.length + ":" + (games.length ? games[games.length - 1].id : "") + ":" + (games.length ? games[games.length - 1].route?.n : "");
 function concGet(g) {
-  return g.conc || (g.moves ? concOf(g, baseline(g.id)) : null);
+  if (g.conc) return g.conc;
+  if (!g.moves) return null;
+  const k = histKey();
+  if (k !== CONC_KEY) {
+    CONC_KEY = k;
+    CONC_MEMO = new Map();
+  }
+  if (!CONC_MEMO.has(g.id)) {
+    const c = concOf(g, baseline(g.id));
+    if (c) g.conc = c; // gemmes med spillet (som ved analysen), så det ikke skal regnes igen
+    CONC_MEMO.set(g.id, c);
+  }
+  return CONC_MEMO.get(g.id);
 }
 // Dit normale niveau: median af udfald pr. 100 træk i tidligere spil
+let RATES_KEY = "",
+  RATES = [];
 function concUsual(excludeId) {
-  const r = games
-    .filter((g) => g.id !== excludeId)
-    .map(concGet)
-    .filter(Boolean)
-    .map((c) => c.rate);
+  const k = histKey();
+  if (k !== RATES_KEY) {
+    RATES_KEY = k;
+    RATES = games.map((g) => [g.id, concGet(g)]).filter((x) => x[1]).map(([id, c]) => [id, c.rate]);
+  }
+  const r = RATES.filter((x) => x[0] !== excludeId).map((x) => x[1]);
   return r.length >= 3 ? median(r) : null;
 }
 // 0 = fint, 1 = dyk, 2 = mistet fokus
@@ -867,7 +926,7 @@ function concPanel() {
     const d = new Date(x.g.end).toLocaleDateString(LOCALE, { day: "numeric", month: "short" });
     s +=
       `<rect x="${xx}" y="${H - B - h}" width="${bw}" height="${h}" rx="3" fill="${st === 2 ? "var(--bad)" : st === 1 ? "var(--warn)" : "var(--indigo)"}"/>` +
-      `<rect x="${xx - 2}" y="6" width="${bw + 4}" height="${H - B - 6}" fill="transparent" data-tip="${esc(d + " · " + BAND[gBand(x.g)] + " " + dec(x.g.value) + ": " + tr("{a} langsomme lette tal, {b} fejl på {n} træk", { a: x.c.slow, b: x.c.err, n: x.c.n }) + (st === 2 ? " · " + tr("mistet fokus") : st === 1 ? " · " + tr("dyk") : ""))}"/>`;
+      `<rect x="${xx - 2}" y="6" width="${bw + 4}" height="${H - B - 6}" fill="transparent" data-tip="${esc(d + " · " + BAND[gBand(x.g)] + " " + dec(gradeFor(x.g)) + ": " + tr("{a} langsomme lette tal, {b} fejl på {n} træk", { a: x.c.slow, b: x.c.err, n: x.c.n }) + (st === 2 ? " · " + tr("mistet fokus") : st === 1 ? " · " + tr("dyk") : ""))}"/>`;
   });
   s +=
     `</svg><div class="legendrow" style="justify-content:flex-start;gap:4px 12px;flex-wrap:wrap"><span><i style="background:var(--indigo)"></i> ${tr("normalt")}</span><span><i style="background:var(--warn)"></i> ${tr("dyk")}</span>` +
@@ -1046,7 +1105,11 @@ function feltExport() {
   );
 }
 function ratingPanel() {
-  const pts = games.filter((g) => g.solved && g.empty).map((g) => ({ g, x: +g.value, y: g.ms / 1000 / g.empty }));
+  // De seneste 400 løste opgaver: nok til et sikkert billede, og grafen bliver ikke tung med tusindvis af spil
+  const pts = games
+    .filter((g) => g.solved && g.empty)
+    .slice(-400)
+    .map((g) => ({ g, x: gradeFor(g), y: g.ms / 1000 / g.empty }));
   let out = `<div class="panelcard"><h3>${tr("Passer bedømmelsen?")}</h3>`;
   if (pts.length < 5)
     return (
@@ -1376,7 +1439,10 @@ function estStatsHtml() {
 }
 function gameSheet(g) {
   openSheet(
-    `<h2>${esc(BAND[gBand(g)])} ${dec(g.value)} · ${g.cols}×${g.rows}</h2>` +
+    `<h2>${esc(BAND[gBand(g)])} ${dec(gradeFor(g))} · ${g.cols}×${g.rows}</h2>` +
+      (g.np != null && Math.abs(g.np - g.value) >= 0.1
+        ? `<p class="sub">${penUsed(g) === false ? tr("Spillet uden blyant. Med blyant: {v}.", { v: dec(g.value) }) : tr("Uden blyant: {v}.", { v: dec(g.np) })}</p>`
+        : "") +
       `<p style="color:var(--mute)">${new Date(g.end).toLocaleString(LOCALE, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })} · ${g.solved ? tr("løst på {tid}", { tid: fmt(g.ms) }) : tr("ikke løst")}${g.solved && g.lv ? " · " + tr("estimat {t}", { t: estFmt(g.est || estimateSec(myCal(), g.lv)) }) : ""}</p>` +
       `<div class="menu">` +
       menuItem(
@@ -1386,8 +1452,11 @@ function gameSheet(g) {
         g.route && g.route.n ? Math.round((100 * g.route.easy) / g.route.n) + " % " + tr("letteste") : "",
       ) +
       menuItem("gAgain", IC.restart, tr("Spil samme opgave igen")) +
-      `</div>`,
+      `</div>` +
+      (g.dbg && g.dbg.length ? `<p class="sub">${g.dbg.length === 1 ? tr("1 debug-note") : tr("{n} debug-noter", { n: g.dbg.length })}</p>` : "") +
+      noteLink("other"),
     (b) => {
+      bindNoteLinks(b, g, () => gameSheet(g));
       b.querySelector("#gRoute").onclick = () => {
         closeSheet();
         setTimeout(() => showRoute(g), 280);
@@ -1422,7 +1491,7 @@ function routePanel() {
       h = Math.max(2, ((H - B - 6) * v) / 100),
       xx = L + 4 + i * ((W - L - 4) / last.length);
     const d = new Date(g.end).toLocaleDateString(LOCALE, { day: "numeric", month: "short" });
-    bars += `<path d="M${xx} ${H - B}v${-(h - 4)}a4 4 0 0 1 4 -4h${bw - 8}a4 4 0 0 1 4 4v${h - 4}z" fill="var(--indigo)" data-tip="${esc(d + " · " + BAND[gBand(g)] + " " + dec(g.value) + ": " + tr("{pct} % letteste træk", { pct: Math.round(v) }))}"/>`;
+    bars += `<path d="M${xx} ${H - B}v${-(h - 4)}a4 4 0 0 1 4 -4h${bw - 8}a4 4 0 0 1 4 4v${h - 4}z" fill="var(--indigo)" data-tip="${esc(d + " · " + BAND[gBand(g)] + " " + dec(gradeFor(g)) + ": " + tr("{pct} % letteste træk", { pct: Math.round(v) }))}"/>`;
   });
   bars += `</svg>`;
   const rows = [

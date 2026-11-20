@@ -198,6 +198,7 @@ function generateFromUi() {
     nuance: nu.id,
     kind: ui.kind,
     maxRegion: ui.maxRegion,
+    np: noPen(), // ram båndet for graden uden blyant
   };
   generate(
     req,
@@ -212,9 +213,9 @@ function generateFromUi() {
       if (ui.must && p.rating.level !== ui.must)
         setMsg(tr("Fandt ikke en opgave med {tech} i tide. Denne kræver {got}.", { tech: LEVEL_TECH[ui.must], got: LEVEL_TECH[p.rating.level] }), "bad");
       else if (pBand(p) !== p.target)
-        setMsg(tr("Fandt ikke grad {g} i tide. Viser nærmeste: {v}.", { g: p.target, v: dec(p.grade.value) }), "bad");
-      else if (n2 && p.grade && (p.grade.decimal < n2.lo || p.grade.decimal > n2.hi))
-        setMsg(tr("Fandt ikke en opgave med nuancen {n} i tide. Viser {v}.", { n: n2.label.toLowerCase(), v: dec(p.grade.value) }), "bad");
+        setMsg(tr("Fandt ikke grad {g} i tide. Viser nærmeste: {v}.", { g: p.target, v: levelValue(p) }), "bad");
+      else if (n2 && p.grade && (Math.round((shownGrade(p) % 1) * 10) < n2.lo || Math.round((shownGrade(p) % 1) * 10) > n2.hi))
+        setMsg(tr("Fandt ikke en opgave med nuancen {n} i tide. Viser {v}.", { n: n2.label.toLowerCase(), v: levelValue(p) }), "bad");
     },
   );
 }

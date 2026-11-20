@@ -27,9 +27,11 @@ window.claude?.hot?.snapshot?.(() => (P ? { current: { puzzle: P, entries, notes
 
 // Gamle spil regnes om til den nyeste skala ud fra opgavekoden, lidt ad gangen, så statistikken ikke blander skalaer
 function regradeOld() {
-  const todo = games.filter((g) => (g.fit !== 3 || !g.lv) && g.code && !g.noRegrade).slice(-200);
+  // Alle på én gang i baggrunden (40 ms ad gangen); nyeste først, og der gemmes undervejs for hver 500 spil
+  const todo = games.filter((g) => (g.fit !== 5 || (!g.lv && !g.arc)) && g.code && !g.noRegrade).reverse();
   if (!todo.length) return;
-  let i = 0;
+  let i = 0,
+    lastSave = 0;
   const step = () => {
     const t0 = Date.now();
     while (i < todo.length && Date.now() - t0 < 40) {
@@ -52,16 +54,24 @@ function regradeOld() {
           g.load = gr.load;
           g.nHard = gr.nHard;
           g.scale = 2;
-          g.fit = 3;
+          g.fit = 5;
+          g.np = gr.np ? gr.np.value : g.value;
+          g.npk = gr.np ? gr.np.peak : g.peak;
+          g.npl = gr.np ? gr.np.load : g.load;
           g.lv = gr.lv;
         } else g.noRegrade = 1;
       } catch (e) {
         g.noRegrade = 1;
       }
     }
-    if (i < todo.length) setTimeout(step, 30);
-    else {
-      saveGames();
+    if (i < todo.length) {
+      if (i - lastSave >= 500) {
+        lastSave = i;
+        saveGames(todo.slice(0, i).some((g) => g.arc));
+      }
+      setTimeout(step, 30);
+    } else {
+      saveGames(todo.some((g) => g.arc)); // ældre spil i arkivet er ændret
       if (view === "home") renderHome();
       if (view === "stats") renderStats();
     }

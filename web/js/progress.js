@@ -10,7 +10,7 @@ const PROG_MIN = 12; // så mange rene løsninger, før der siges noget
 function progressData(list = games) {
   const sg = list.filter((g) => g.solved && !g.hints && !g.replay && g.empty > 0 && g.ms > 0 && g.value);
   if (sg.length < PROG_MIN) return { few: sg.length };
-  const x = sg.map((g) => +g.value),
+  const x = sg.map(gradeFor),
     y = sg.map((g) => Math.log(g.ms / 1000 / g.empty));
   const n = x.length,
     mx = x.reduce((a, b) => a + b) / n,
@@ -60,61 +60,126 @@ function progressData(list = games) {
     steps: diff / b,
     from: sg[0].end,
     fromRecent: sg[n - k].end,
-    tech: progressTech(list),
-    acc: progressAcc(list),
-    top: progressTop(sg),
   };
 }
 
-// Tid pr. teknik: første halvdel af spillene med ruteanalyse mod anden halvdel
-function progressTech(list) {
-  const rg = list.filter((g) => g.route && g.route.times);
-  if (rg.length < 8) return [];
-  const half = Math.floor(rg.length / 2),
-    A = {},
-    B = {};
-  rg.forEach((g, i) => {
-    const t = g.route.times,
-      tgt = i < half ? A : B;
-    for (const L in t) (tgt[L] = tgt[L] || []).push(...t[L]);
-  });
-  const out = [];
-  for (let L = 1; L <= 11; L++) {
-    if (!A[L] || !B[L] || A[L].length < 6 || B[L].length < 6) continue;
-    const m1 = Math.max(0.5, median(A[L])),
-      m2 = Math.max(0.5, median(B[L]));
-    // Få træk eller små ændringer siges der ikke noget om
-    const sure = A[L].length >= 15 && B[L].length >= 15;
-    out.push({ L, m1, m2, n1: A[L].length, n2: B[L].length, ratio: m2 / m1, sure });
-  }
-  return out;
-}
-// Fejl, hints og den letteste rute: første mod seneste spil
-function progressAcc(list) {
-  const rg = list.filter((g) => g.route && g.route.n >= 8);
-  if (rg.length < 8) return null;
-  const k = Math.min(20, Math.floor(rg.length / 2));
-  const part = (arr) => {
-    const moves = arr.reduce((s, g) => s + g.route.n, 0);
-    return {
-      err: (100 * arr.reduce((s, g) => s + (g.route.wrong || 0), 0)) / moves,
-      easy: (100 * arr.reduce((s, g) => s + (g.route.easy || 0) + (g.route.ahead || 0), 0)) / moves,
-      hints: arr.filter((g) => g.hints).length / arr.length,
-    };
-  };
-  return { k, a: part(rg.slice(0, k)), b: part(rg.slice(-k)) };
-}
-// Den sværeste opgave, du har løst uden hints, uge for uge
-function progressTop(sg) {
+// Uge for uge: spil, fart i forhold til graden, fejl, hints og den sværeste løste opgave
+function progressWeeks(list, pd) {
+  const rOf = {};
+  if (pd && pd.games) pd.games.forEach((g, i) => (rOf[g.id] = pd.r[i]));
   const wk = {};
-  sg.forEach((g) => {
+  list.forEach((g) => {
     const d = new Date(g.end),
       mon = new Date(d);
     mon.setDate(d.getDate() - ((d.getDay() + 6) % 7));
-    const key = dayKey(mon);
-    wk[key] = Math.max(wk[key] || 0, +g.value);
+    const k = dayKey(mon),
+      w = (wk[k] = wk[k] || { k, n: 0, won: 0, hints: 0, r: [], moves: 0, err: 0, top: 0 });
+    w.n++;
+    if (g.solved) w.won++;
+    if (g.hints) w.hints++;
+    if (rOf[g.id] !== undefined) w.r.push(rOf[g.id]);
+    if (g.route && g.route.n) {
+      w.moves += g.route.n;
+      w.err += g.route.wrong || 0;
+    }
+    if (g.solved && !g.hints) w.top = Math.max(w.top, gradeFor(g));
   });
-  return Object.entries(wk).sort((p, q) => (p[0] < q[0] ? -1 : 1));
+  return Object.values(wk)
+    .sort((p, q) => (p.k < q.k ? 1 : -1))
+    .map((w) => ({
+      ...w,
+      speed: w.r.length >= 2 ? Math.round(100 * Math.exp(-median(w.r))) : null,
+      errRate: w.moves >= 20 ? (100 * w.err) / w.moves : null,
+    }));
+}
+
+// Teknikfart i sammenhæng: hvert træk måles mod din normale tid for netop den teknik, når der var lige så mange steder
+// at finde den (din personlige tidskurve, calib.js). Et par, der var det eneste træk på pladen, sammenlignes altså med
+// andre par, der var det eneste træk. Indeks 100 = dit normale; over 100 = hurtigere. Enkle tal og teknikker holdes
+// adskilt, fordi enkle tal ellers ville fylde næsten alt.
+function progressMoves(list) {
+  const cal = myCal();
+  const mv = [];
+  list.forEach((g) => {
+    if (!g.route || !g.route.ctx) return;
+    g.route.ctx.forEach(([L, ds, n]) => mv.push({ L, end: g.end, res: Math.log(Math.max(0.5, ds / 10)) - Math.log(calTime(cal, L, n, true)) }));
+  });
+  const part = (arr, B) => {
+    if (arr.length < 3 * B) return null;
+    const mid = median(arr.map((m) => m.res)); // dit normale = 100
+    const blocks = [];
+    for (let i = 0; i + B <= arr.length; i += B) {
+      const bl = arr.slice(i, i + B);
+      blocks.push({ v: Math.round(100 * Math.exp(-(median(bl.map((m) => m.res)) - mid))), from: bl[0].end, to: bl[B - 1].end });
+    }
+    const k = Math.min(Math.floor(arr.length / 3), 4 * B);
+    const first = arr.slice(0, k).map((m) => m.res),
+      last = arr.slice(-k).map((m) => m.res);
+    const d = median(first) - median(last);
+    let seed = 99,
+      hits = 0;
+    const rnd = () => ((seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648);
+    const pool = first.concat(last);
+    for (let t = 0; t < 300; t++) {
+      const p = pool.slice();
+      for (let i = p.length - 1; i > 0; i--) {
+        const j = Math.floor(rnd() * (i + 1));
+        [p[i], p[j]] = [p[j], p[i]];
+      }
+      if (Math.abs(median(p.slice(0, k)) - median(p.slice(k))) >= Math.abs(d) - 1e-12) hits++;
+    }
+    return { n: arr.length, B, k, blocks, pct: Math.round(100 * (Math.exp(d) - 1)), p: hits / 300, mid };
+  };
+  const tech = mv.filter((m) => m.L >= 2),
+    one = mv.filter((m) => m.L === 1);
+  const T = part(tech, Math.max(15, Math.ceil(tech.length / 12)));
+  // Pr. teknik: dine seneste træk med teknikken mod dine tidligere (kun med mindst 10 i hver halvdel)
+  const per = [];
+  if (T)
+    for (let L = 2; L <= 11; L++) {
+      const a = tech.filter((m) => m.L === L);
+      if (a.length < 20) continue;
+      const h = Math.floor(a.length / 2);
+      const i1 = Math.round(100 * Math.exp(-(median(a.slice(0, h).map((m) => m.res)) - T.mid))),
+        i2 = Math.round(100 * Math.exp(-(median(a.slice(h).map((m) => m.res)) - T.mid)));
+      per.push({ L, n: a.length, i1, i2 });
+    }
+  return { tech: T, one: part(one, Math.max(100, Math.ceil(one.length / 10))), per, games: list.filter((g) => g.route && g.route.ctx).length };
+}
+function verdictTxt(x) {
+  if (!x || x.p >= 0.15 || Math.abs(x.pct) < 5) return tr("ingen klar ændring");
+  return x.pct > 0 ? tr("{p} % hurtigere end i starten", { p: x.pct }) : tr("{p} % langsommere end i starten", { p: -x.pct });
+}
+function blockChart(x) {
+  const W = 320,
+    H = 120,
+    L = 30,
+    R = 10,
+    T = 8,
+    B = 18;
+  const vals = x.blocks.map((b) => b.v);
+  const lo = Math.min(...vals) < 50 ? 25 : 50,
+    hi = Math.max(...vals) > 200 ? 400 : 200;
+  const ly = (v) => Math.log(Math.max(lo, Math.min(hi, v)));
+  const xx = (i) => L + (vals.length === 1 ? 0 : (i * (W - L - R)) / (vals.length - 1));
+  const y = (v) => T + (H - T - B) * (1 - (ly(v) - Math.log(lo)) / (Math.log(hi) - Math.log(lo)));
+  const df = (s) => new Date(s).toLocaleDateString(LOCALE, { day: "numeric", month: "short" });
+  let s = `<svg class="trend" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(tr("Teknikfart i sammenhæng over tid"))}">`;
+  [lo, 50, 100, 200, hi]
+    .filter((v, i, a) => a.indexOf(v) === i)
+    .forEach((v) => {
+      s +=
+        `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" stroke="${v === 100 ? "var(--mute)" : "var(--grid)"}" stroke-width="1"${v === 100 ? ' stroke-dasharray="4 3"' : ""}/>` +
+        `<text x="${L - 6}" y="${y(v) + 4}" font-size="10" text-anchor="end" fill="var(--mute)">${v}</text>`;
+    });
+  s += `<polyline points="${vals.map((v, i) => xx(i) + "," + y(v)).join(" ")}" fill="none" stroke="var(--indigo)" stroke-width="2.5" stroke-linejoin="round"/>`;
+  x.blocks.forEach((b, i) => {
+    s +=
+      `<circle cx="${xx(i)}" cy="${y(b.v)}" r="3.5" fill="var(--indigo)"/>` +
+      `<circle cx="${xx(i)}" cy="${y(b.v)}" r="10" fill="transparent" data-tip="${esc(tr("{n} træk, {a} til {b}: indeks {v}", { n: x.B, a: df(b.from), b: df(b.to), v: b.v }))}"/>`;
+  });
+  s += `<text x="${L}" y="${H - 3}" font-size="10" fill="var(--mute)">${df(x.blocks[0].from)}</text><text x="${W - R}" y="${H - 3}" font-size="10" text-anchor="end" fill="var(--mute)">${df(x.blocks[x.blocks.length - 1].to)}</text></svg>`;
+  return s;
 }
 
 function progressHeadline(pd) {
@@ -155,9 +220,11 @@ function progressChart(pd) {
   s +=
     `<rect x="${x(0)}" y="${T}" width="${x(pd.k - 1) - x(0)}" height="${H - T - B}" fill="var(--chip)" opacity="0.7"/>` +
     `<rect x="${x(pd.n - pd.k)}" y="${T}" width="${x(pd.n - 1) - x(pd.n - pd.k)}" height="${H - T - B}" fill="var(--chip)" opacity="0.7"/>`;
+  const first = Math.max(0, pd.n - 300); // højst 300 prikker; den glidende linje og sammenligningen bruger alle
   pd.games.forEach((g, i) => {
+    if (i < first) return;
     const d = new Date(g.end).toLocaleDateString(LOCALE, { day: "numeric", month: "short" });
-    const tip = `${d}: ${BAND[gBand(g)]} ${dec(g.value)} · ${fmt(g.ms)} · ${tr("indeks {v}", { v: Math.round(vals[i]) })}`;
+    const tip = `${d}: ${BAND[gBand(g)]} ${dec(gradeFor(g))} · ${fmt(g.ms)} · ${tr("indeks {v}", { v: Math.round(vals[i]) })}`;
     s +=
       `<circle cx="${x(i)}" cy="${y(vals[i])}" r="3" fill="var(--indigo)" opacity="0.35"/>` +
       `<circle cx="${x(i)}" cy="${y(vals[i])}" r="9" fill="transparent" data-tip="${esc(tip)}"/>`;
@@ -173,62 +240,51 @@ function progressChart(pd) {
 
 function progressPanel() {
   const pd = progressData();
-  const head = `<div class="panelcard progress"><h3>${tr("Fremgang")}</h3><p class="prohead">${progressHeadline(pd)}</p>`;
-  if (pd.few !== undefined) return head + `</div>`;
-  const dfmt = (s) => new Date(s).toLocaleDateString(LOCALE, { day: "numeric", month: "short" });
-  let html =
-    head +
-    `<p>${tr("Indeks 100 er din normale tid for en opgaves grad. Over 100 er hurtigere, under 100 langsommere.")}</p>` +
-    progressChart(pd);
-  // Teknikker
-  if (pd.tech.length)
+  let html = `<div class="panelcard progress"><h3>${tr("Fremgang")}</h3><p class="prohead">${progressHeadline(pd)}</p>`;
+  if (pd.few === undefined)
     html +=
-      `<h4 class="proh">${tr("Tid pr. teknik: første halvdel mod anden halvdel af dine spil")}</h4><table class="data"><tr><th>${tr("Teknik")}</th><th>${tr("Før")}</th><th>${tr("Nu")}</th><th></th></tr>` +
-      pd.tech
-        .map((t) => {
-          const faster = t.ratio <= 0.9,
-            slower = t.ratio >= 1.1;
-          const txt = !t.sure
-            ? tr("for få træk")
-            : faster
-              ? tr("{p} % hurtigere", { p: Math.round(100 * (1 - t.ratio)) })
-              : slower
-                ? t.ratio >= 2
-                  ? tr("{x} gange så lang tid", { x: dec(t.ratio) })
-                  : tr("{p} % langsommere", { p: Math.round(100 * (t.ratio - 1)) })
-                : tr("uændret");
-          const col = !t.sure ? "var(--mute)" : faster ? "var(--indigo)" : slower ? "var(--bad)" : "var(--mute)";
+      `<p>${tr("Indeks 100 er din normale tid for en opgaves grad. Over 100 er hurtigere, under 100 langsommere.")}</p>` +
+      progressChart(pd) +
+      `<p class="caveat">${tr("Sammenligner dine første {k} og seneste {k} løste opgaver uden hints. Hver opgave måles mod, hvad dens grad plejer at koste dig pr. tomt felt, så en sværere opgave ikke ligner langsommere spil. Genspillede opgaver tæller ikke med.", { k: pd.k })}</p>`;
+  html += `</div>`;
+
+  // Uge for uge
+  const weeks = progressWeeks(games, pd.few === undefined ? pd : null).slice(0, 8);
+  if (weeks.length) {
+    const dfmt = (k) => new Date(k + "T12:00:00").toLocaleDateString(LOCALE, { day: "numeric", month: "short" });
+    html +=
+      `<div class="panelcard"><h3>${tr("Uge for uge")}</h3><p>${tr("Nyeste uge øverst. Fart er indekset ovenfor for ugens opgaver uden hints.")}</p>` +
+      `<table class="data wk"><tr><th>${tr("Uge fra")}</th><th>${tr("Spil")}</th><th>${tr("Fart")}</th><th>${tr("Fejl/100")}</th><th>${tr("Sværeste")}</th></tr>` +
+      weeks
+        .map((w) => {
+          const sp = w.speed == null ? "–" : `<b style="color:${w.speed >= 110 ? "var(--indigo)" : w.speed <= 90 ? "var(--bad)" : "var(--ink)"}">${w.speed}</b>`;
           return (
-            `<tr><td>${esc(LEVEL_TECH[t.L])}<br><small style="color:var(--mute)">${tr("{a} og {b} træk", { a: t.n1, b: t.n2 })}</small></td>` +
-            `<td>${fmtS(t.m1)}</td><td>${fmtS(t.m2)}</td><td style="color:${col}">${txt}</td></tr>`
+            `<tr><td>${dfmt(w.k)}</td><td>${w.won}${w.n > w.won ? `<small> / ${w.n}</small>` : ""}${w.hints ? `<br><small style="color:var(--mute)">${w.hints === 1 ? tr("1 med hints") : tr("{n} med hints", { n: w.hints })}</small>` : ""}</td>` +
+            `<td>${sp}</td><td>${w.errRate == null ? "–" : dec(w.errRate)}</td><td>${w.top ? dec(w.top) : "–"}</td></tr>`
           );
         })
         .join("") +
-      `</table><p class="caveat" style="margin-top:4px!important">${tr("Tiden for en teknik afhænger også af, hvor godt mønsteret var skjult i de opgaver, du fik. Med under 15 træk i hver halvdel vises ingen dom.")}</p>`;
-  // Fejl og rute
-  if (pd.acc) {
-    const A = pd.acc.a,
-      Bb = pd.acc.b;
-    const row = (label, a, b2, fmtv, betterLow) => {
-      const better = betterLow ? b2 < a - 0.05 * Math.max(1, a) : b2 > a + 0.05 * Math.max(1, a);
-      const worse = betterLow ? b2 > a + 0.05 * Math.max(1, a) : b2 < a - 0.05 * Math.max(1, a);
-      return `<tr><td>${label}</td><td>${fmtv(a)}</td><td>${fmtv(b2)}</td><td style="color:${better ? "var(--indigo)" : worse ? "var(--bad)" : "var(--mute)"}">${better ? tr("bedre") : worse ? tr("dårligere") : tr("uændret")}</td></tr>`;
-    };
-    html +=
-      `<h4 class="proh">${tr("Præcision: dine første {k} mod dine seneste {k} spil", { k: pd.acc.k })}</h4><table class="data"><tr><th></th><th>${tr("Før")}</th><th>${tr("Nu")}</th><th></th></tr>` +
-      row(tr("Fejl pr. 100 træk"), A.err, Bb.err, (v) => dec(v), true) +
-      row(tr("Letteste træk"), A.easy, Bb.easy, (v) => Math.round(v) + " %", false) +
-      row(tr("Spil med hints"), 100 * A.hints, 100 * Bb.hints, (v) => Math.round(v) + " %", true) +
-      `</table>`;
+      `</table><p class="caveat" style="margin-top:4px!important">${tr("Spil: løste (/ spillede). Fejl pr. 100 træk tæller kun første fejl, ikke følgefejl eller fejltryk. – betyder for få spil den uge.")}</p></div>`;
   }
-  // Sværeste løste pr. uge
-  if (pd.top.length >= 2)
+
+  // Teknikfart i sammenhæng
+  const pm = progressMoves(games);
+  html += `<div class="panelcard"><h3>${tr("Teknikfart i sammenhæng")}</h3><p>${tr("Hvert træk måles mod din normale tid for samme teknik, når der var lige så mange steder at finde den. Så tæller et par, der var det eneste træk på pladen, ikke som langsomt, bare fordi det var svært at få øje på. 100 er dit normale, over 100 er hurtigere.")}</p>`;
+  if (!pm.tech)
+    html += `<p class="caveat">${tr("Der er endnu for få træk med teknikker ({n} spil med data). Det kommer, efterhånden som du spiller.", { n: pm.games })}</p>`;
+  else {
     html +=
-      `<h4 class="proh">${tr("Sværeste opgave løst uden hints, uge for uge")}</h4><div class="protop">` +
-      pd.top.map(([wk, v]) => `<span><b>${dec(v)}</b><small>${tr("uge fra {d}", { d: dfmt(wk + "T12:00:00") })}</small></span>`).join("") +
-      `</div>`;
-  html +=
-    `<p class="caveat">${tr("Sammenligner dine første {k} og seneste {k} løste opgaver uden hints ({a} til {b}). Hver opgave måles mod, hvad dens grad plejer at koste dig pr. tomt felt, så en sværere opgave ikke ligner langsommere spil. Genspillede opgaver tæller ikke med.", { k: pd.k, a: dfmt(pd.from), b: dfmt(pd.games[pd.n - 1].end) })}</p></div>`;
+      `<p class="prohead">${tr("Teknikker: {v}.", { v: verdictTxt(pm.tech) })}${pm.one ? " " + tr("Enkle tal: {v}.", { v: verdictTxt(pm.one) }) : ""}</p>` +
+      blockChart(pm.tech) +
+      `<div class="legendrow">${tr("hvert punkt: {n} træk med teknikker", { n: pm.tech.B })}</div>`;
+    if (pm.per.length)
+      html +=
+        `<table class="data"><tr><th>${tr("Teknik")}</th><th>${tr("Tidligere")}</th><th>${tr("Senest")}</th></tr>` +
+        pm.per.map((r) => `<tr><td>${esc(LEVEL_TECH[r.L])}<br><small style="color:var(--mute)">${tr("{n} træk i alt", { n: r.n })}</small></td><td>${r.i1}</td><td><b>${r.i2}</b></td></tr>`).join("") +
+        `</table>`;
+    html += `<p class="caveat">${tr("Bygger på {n} spil, der har gemt sammenhængen for hvert træk. Teknikker med under 20 træk vises ikke enkeltvis.", { n: pm.games })}</p>`;
+  }
+  html += `</div>`;
   return html;
 }
 // En linje til Overblik

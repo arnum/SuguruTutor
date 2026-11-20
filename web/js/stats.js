@@ -180,7 +180,7 @@ function renderStats() {
           .reverse()
           .map(
             (g) =>
-              `<tr><td>${new Date(g.end).toLocaleDateString(LOCALE, { day: "numeric", month: "short" })}</td><td>${dec(g.value)}</td>` +
+              `<tr><td>${new Date(g.end).toLocaleDateString(LOCALE, { day: "numeric", month: "short" })}</td><td>${dec(gradeFor(g))}</td>` +
               `<td>${g.cols}×${g.rows}</td><td>${fmt(g.ms)}</td><td>${g.hints || ""}</td></tr>`,
           )
           .join("") +
@@ -196,9 +196,11 @@ function gameRow(g) {
     g.daily ? tr("Dagens") : "",
     g.hints ? (g.hints === 1 ? tr("1 hint") : tr("{n} hints", { n: g.hints })) : "",
     !g.solved ? (g.revealed ? tr("Løsning vist") : tr("Opgivet")) : "",
+    g.dbg && g.dbg.length ? tr("note") : "",
+    penUsed(g) === false && g.np != null && Math.abs(g.np - g.value) >= 0.1 ? tr("uden blyant") : "",
   ].filter(Boolean);
   return (
-    `<button class="game ${g.solved ? "" : "lost"}" type="button" data-code="${esc(g.code)}" data-id="${esc(g.id)}"><span class="v">${dec(g.value)}</span>` +
+    `<button class="game ${g.solved ? "" : "lost"}" type="button" data-code="${esc(g.code)}" data-id="${esc(g.id)}"><span class="v">${dec(gradeFor(g))}</span>` +
     `<span><span class="t">${esc(BAND[gBand(g)])} · ${g.cols}×${g.rows}</span><br><span class="s">${when}${tags.length ? " · " + tags.join(" · ") : ""}${g.peak != null ? "<br>" + plText(g) : ""}</span></span>` +
     `<span class="b">${g.solved ? fmt(g.ms) : Math.round((100 * (g.filled || 0)) / Math.max(1, g.empty || 1)) + " %"}</span></button>`
   );
@@ -303,8 +305,8 @@ function trendChart(list) {
     R = 10,
     T = 10,
     B = 20;
-  const maxV = Math.min(10, Math.max(3, Math.ceil(Math.max(...list.map((g) => +g.value)) + 0.5)));
-  const minV = Math.max(1, Math.floor(Math.min(...list.map((g) => +g.value))));
+  const maxV = Math.min(10, Math.max(3, Math.ceil(Math.max(...list.map(gradeFor)) + 0.5)));
+  const minV = Math.max(1, Math.floor(Math.min(...list.map(gradeFor))));
   const x = (i) => L + (list.length === 1 ? (W - L - R) / 2 : (i * (W - L - R)) / (list.length - 1));
   const y = (v) => T + (H - T - B) * (1 - (v - minV) / Math.max(1, maxV - minV));
   let s = `<svg class="trend" viewBox="0 0 ${W} ${H}" role="img" aria-label="${tr("Sværhedsgrad for dine seneste løste opgaver")}">`;
@@ -314,13 +316,13 @@ function trendChart(list) {
       `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" stroke="var(--grid)" stroke-width="1"/>` +
       `<text x="${L - 8}" y="${y(v) + 4}" font-size="10" text-anchor="end" fill="var(--mute)">${v}</text>`;
   s += `<text x="${L}" y="${H - 4}" font-size="10" fill="var(--mute)">${tr("ældst")}</text><text x="${W - R}" y="${H - 4}" font-size="10" text-anchor="end" fill="var(--mute)">${tr("nyest")}</text>`;
-  s += `<polyline points="${list.map((g, i) => x(i) + "," + y(+g.value)).join(" ")}" fill="none" stroke="var(--indigo)" stroke-width="2" stroke-linejoin="round" opacity="0.55"/>`;
+  s += `<polyline points="${list.map((g, i) => x(i) + "," + y(gradeFor(g))).join(" ")}" fill="none" stroke="var(--indigo)" stroke-width="2" stroke-linejoin="round" opacity="0.55"/>`;
   list.forEach((g, i) => {
     const d = new Date(g.end).toLocaleDateString(LOCALE, { day: "numeric", month: "short" });
-    const tip = `${d}: ${BAND[gBand(g)]} ${dec(g.value)} · ${g.cols}×${g.rows} · ${fmt(g.ms)}${g.hints ? " · " + (g.hints === 1 ? tr("1 hint") : tr("{n} hints", { n: g.hints })) : ""}${g.peak != null ? " · " + plText(g) : ""}`;
+    const tip = `${d}: ${BAND[gBand(g)]} ${dec(gradeFor(g))} · ${g.cols}×${g.rows} · ${fmt(g.ms)}${g.hints ? " · " + (g.hints === 1 ? tr("1 hint") : tr("{n} hints", { n: g.hints })) : ""}${g.peak != null ? " · " + plText(g) : ""}`;
     s +=
-      `<circle cx="${x(i)}" cy="${y(+g.value)}" r="4.5" fill="${g.hints ? "var(--cell)" : "var(--indigo)"}" stroke="${g.hints ? "var(--indigo)" : "var(--cell)"}" stroke-width="2"/>` +
-      `<circle cx="${x(i)}" cy="${y(+g.value)}" r="13" fill="transparent" data-tip="${esc(tip)}"/>`;
+      `<circle cx="${x(i)}" cy="${y(gradeFor(g))}" r="4.5" fill="${g.hints ? "var(--cell)" : "var(--indigo)"}" stroke="${g.hints ? "var(--indigo)" : "var(--cell)"}" stroke-width="2"/>` +
+      `<circle cx="${x(i)}" cy="${y(gradeFor(g))}" r="13" fill="transparent" data-tip="${esc(tip)}"/>`;
   });
   s += `</svg><div class="legendrow"><i style="background:var(--indigo);border-radius:50%"></i> ${tr("uden hints")} &nbsp; <i style="box-shadow:inset 0 0 0 2px var(--indigo);border-radius:50%"></i> ${tr("med hints")}</div>`;
   return s;

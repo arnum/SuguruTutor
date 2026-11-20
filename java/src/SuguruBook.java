@@ -197,7 +197,7 @@ public final class SuguruBook {
     }
     static int band(SuguruEngine.Puzzle p) { return p.grade == null ? Math.min(9, p.rating.level) : p.grade.band; }
     static String bandName(SuguruEngine.Puzzle p) { return SuguruGrade.BAND[band(p)]; }
-    static String label(SuguruEngine.Puzzle p) { return bandName(p) + (p.grade == null ? "" : " " + p.grade.valueText()) + " · " + shortTag(p); }
+    static String label(SuguruEngine.Puzzle p) { return bandName(p) + (p.grade == null ? "" : " " + p.grade.bothText()) + " · " + shortTag(p); }
 
     static String puzzleBlock(SuguruEngine.Puzzle p, int no, int perPage) {
         int[] g = p.givens; boolean[] bold = new boolean[g.length];
@@ -260,7 +260,7 @@ public final class SuguruBook {
         for (SuguruEngine.Puzzle p : ps) {
             String mem = shortTag(p);
             sb.append("<tr><td>").append(k++).append("</td><td>").append(esc(bandName(p)))
-              .append(p.grade == null ? "" : " <b>" + p.grade.valueText() + "</b>").append("</td><td>").append(dots(band(p)))
+              .append(p.grade == null ? "" : " <b>" + p.grade.bothText() + "</b>").append("</td><td>").append(dots(band(p)))
               .append("</td><td>").append(esc(mem)).append("</td><td>").append(p.clueCount()).append("</td></tr>");
         }
         sb.append("</tbody></table>");

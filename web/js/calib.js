@@ -12,6 +12,14 @@ const CAL_SHRINK = 4; // en teknik med n træk får n/(n+4) af sin målte afvige
 function calibRows(gs) {
   const rows = [];
   gs.forEach((g) => {
+    // Opsummeringen (route.ctx) har de samme træk og overlever, når ruteanalysen ryddes væk
+    if (g.route && g.route.ctx) {
+      g.route.ctx.forEach(([L, ds, n]) => {
+        if (L > 11 || !(ds > 0)) return;
+        rows.push({ L, y: Math.log(Math.max(0.5, ds / 10)), ln: Math.log(Math.max(1, n || 1)), dt: ds / 10, one: (n || 1) <= 1 });
+      });
+      return;
+    }
     if (!g.moves) return;
     markErrors(g.moves);
     g.moves.forEach((m) => {
@@ -151,7 +159,7 @@ function personalModel() {
   const hist = games.filter((g) => g.solved && !g.hints && g.empty > 0 && g.ms > 0 && g.value && g.tech).slice(-80);
   let m = null;
   if (hist.length >= 10) {
-    const x = hist.map((g) => g.value),
+    const x = hist.map(gradeFor),
       y = hist.map((g) => Math.log(g.ms / 1000 / g.empty));
     const n = x.length,
       mx = x.reduce((a, b) => a + b) / n,
@@ -170,7 +178,7 @@ function personalModel() {
         const k = Math.min(g.tech, 6),
           e = (grp[k] = grp[k] || { n: 0, sum: 0 });
         e.n++;
-        e.sum += (y[i] - a) / b - g.value; // hvor mange grader opgaven føltes over eller under sin grad (målt i tid)
+        e.sum += (y[i] - a) / b - x[i]; // hvor mange grader opgaven føltes over eller under sin grad (målt i tid)
       });
       // Forsigtig: en teknik skal have vist samme mønster i mange opgaver, før den flytter graden meget
       for (const k in grp) grp[k].adj = grp[k].sum / (grp[k].n + 12);

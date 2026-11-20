@@ -60,7 +60,7 @@ function engineFactory() {
     {
       level: 9,
       weight: 30,
-      label: tr("Hvis-så, kort"),
+      label: tr("Hvis-så med enkle tal"),
       desc: tr("Hvis cellen var v, ville enkle træk med alle tal føre til en modstrid. Altså er den ikke v."),
     },
     {
@@ -69,7 +69,7 @@ function engineFactory() {
       label: tr("Begge veje"),
       desc: tr("Et felt med to muligheder (eller et tal med to pladser): prøv begge veje med enkle træk. Giver begge det samme resultat, er det sandt."),
     },
-    { level: 11, weight: 60, label: tr("Hvis-så, dyb"), desc: tr("Som kort hvis-så, men modstriden kan kun findes med de sværere teknikker.") },
+    { level: 11, weight: 60, label: tr("Hvis-så med teknikker"), desc: tr("Som hvis-så med enkle tal, men vejen til modstriden kræver sværere teknikker undervejs, fx par eller kæder.") },
   ];
   const LEVELS = [
     "",
@@ -81,9 +81,9 @@ function engineFactory() {
     tr("Kæde: to muligheder"),
     tr("Kæde: blandet"),
     tr("Hvis-så: ét tal"),
-    tr("Hvis-så: kort"),
+    tr("Hvis-så: enkle tal"),
     tr("Begge veje"),
-    tr("Hvis-så: dyb"),
+    tr("Hvis-så: teknikker"),
     tr("Kræver gæt"),
   ];
   const LIMIT = { limit: true };

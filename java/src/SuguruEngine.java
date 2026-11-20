@@ -17,7 +17,7 @@ public final class SuguruEngine {
     public static final String[] TECH_LABEL = {
         "Eneste kandidat", "Eneste plads i region", "Nabo-eliminering", "Nøgent par", "Skjult par",
         "Nøgen trippel", "Skjult trippel", "Kæde med ét tal", "Kæde med to-mulighedsfelter", "Blandet kæde",
-        "Hvis-så med ét tal", "Hvis-så, kort", "Begge veje", "Hvis-så, dyb"
+        "Hvis-så med ét tal", "Hvis-så med enkle tal", "Begge veje", "Hvis-så med teknikker"
     };
     public static final String[] TECH_DESC = {
         "Cellen har kun ét muligt tal tilbage.",
@@ -33,12 +33,12 @@ public final class SuguruEngine {
         "Antag at et felt er x, og følg kun tallet x. Mangler en region plads til x, var antagelsen forkert.",
         "Antag et tal og følg enkle træk med alle tal. Ender det i en modstrid, var antagelsen forkert.",
         "Prøv begge muligheder i et felt (eller begge pladser for et tal). Det begge veje giver, er sandt.",
-        "Som kort hvis-så, men modstriden kræver de sværere teknikker undervejs."
+        "Som hvis-så med enkle tal, men vejen til modstriden kræver sværere teknikker undervejs, fx par eller kæder."
     };
     public static final int[] TECH_LEVEL = {1, 1, 2, 3, 3, 4, 4, 5, 6, 7, 8, 9, 10, 11};
     public static final int[] TECH_WEIGHT = {1, 1, 4, 8, 10, 15, 18, 20, 22, 24, 26, 30, 40, 60};
     public static final String[] LEVELS = {"", "Let", "Middel", "Svær", "Meget svær", "Kæde: ét tal",
-        "Kæde: to muligheder", "Kæde: blandet", "Hvis-så: ét tal", "Hvis-så: kort", "Begge veje", "Hvis-så: dyb", "Kræver gæt"};
+        "Kæde: to muligheder", "Kæde: blandet", "Hvis-så: ét tal", "Hvis-så: enkle tal", "Begge veje", "Hvis-så: teknikker", "Kræver gæt"};
     public static final int TOP_LEVEL = 11;
 
     private static final int[][] TARGET_SIZES = new int[7][];

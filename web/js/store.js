@@ -7,7 +7,7 @@ function loadPuzzle(p, saved, opts = {}) {
   hint = null;
   if (!p.maxRegion) p.maxRegion = 5;
   NOTE_POS = p.maxRegion >= 6 ? NOTE_POS6 : NOTE_POS5;
-  if (!p.grade || !p.grade.hard || p.grade.load === undefined || p.grade.fit !== 3 || !p.grade.lv) {
+  if (!p.grade || !p.grade.hard || p.grade.load === undefined || p.grade.fit !== 5 || !p.grade.lv) {
     const st = solveProfile(tutor, p.givens);
     p.grade = st ? gradeFromSteps(st, p.rating.level, p.maxRegion) : null;
   }
@@ -66,10 +66,14 @@ function recordGame(won) {
     rows: P.rows,
     cols: P.cols,
     maxRegion: P.maxRegion,
-    level: pBand(P),
+    level: P.grade ? P.grade.band : bandOf(P.rating.level), // almindelig grad (med blyant)
     tech: P.rating.level,
     scale: 2,
-    fit: 3,
+    fit: 5,
+    np: P.grade && P.grade.np ? P.grade.np.value : null, // graden uden blyant
+    npk: P.grade && P.grade.np ? P.grade.np.peak : null, // og dens top og mængde
+    npl: P.grade && P.grade.np ? P.grade.np.load : null,
+    pen: meta.pen || 0, // antal blyantsnoter skrevet i spillet (0 = spillet uden blyant)
     peak: P.grade ? P.grade.peak : null,
     load: P.grade ? P.grade.load : null,
     nHard: P.grade ? P.grade.nHard : null,
@@ -83,8 +87,9 @@ function recordGame(won) {
     code: P.code,
     daily: meta.daily,
     replay: meta.replay || undefined,
+    dbg: meta.dbg && meta.dbg.length ? meta.dbg : undefined,
     lv: P.grade ? P.grade.lv : null,
-    pv: (P.grade && (personalGrade(P.grade.value, P.rating.level) || {}).value) || null,
+    pv: (P.grade && (personalGrade(shownGrade(P), P.rating.level) || {}).value) || null,
     est: P.grade ? Math.round(estimateSec(myCal(), P.grade.lv) || 0) || null : null,
     filled: entries.filter(Boolean).length,
     empty: P.givens.filter((g) => !g).length,

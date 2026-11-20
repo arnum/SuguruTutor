@@ -18,31 +18,40 @@ public final class SuguruGrade {
     public static final String[] BAND = {"", "Begynder", "Let", "Middel", "Svær", "Meget svær", "Ekspert", "Mester", "Ekstrem", "Djævelsk"};
     /** Kort navn på teknikken for hvert teknikniveau 1-11 (12 = gæt). */
     public static final String[] LEVEL_TECH = {"", "eneste kandidat/plads", "nabo-eliminering", "par", "tripler", "kæde med ét tal",
-        "kæde med to-mulighedsfelter", "blandet kæde", "hvis-så med ét tal", "kort hvis-så", "begge veje", "dyb hvis-så", "gæt"};
+        "kæde med to-mulighedsfelter", "blandet kæde", "hvis-så med ét tal", "hvis-så med enkle tal", "begge veje", "hvis-så med teknikker", "gæt"};
     /** Grundpris for at genkende hver af de 14 teknikker. */
     // Par (3, 4) og tripler (5, 6) hævet 18. nov. 2026 efter 93 løste opgaver, samme som web/js/grade.js
-    static final double[] RECOG = {0, 0, 0.6, 2.2, 2.9, 3.0, 3.7, 1.9, 2.2, 2.5, 2.8, 3.1, 3.5, 4.4};
+    // Hvis-så (11) og hvis-så med teknikker (13) har samme grundtal; forskellen ligger i INNER (19. nov. 2026)
+    static final double[] RECOG = {0, 0, 0.6, 2.2, 2.9, 3.0, 3.7, 1.9, 2.2, 2.5, 2.8, 3.1, 3.5, 3.1};
+    /** Teknikker inde i et hvis-så vejer med: INNER x genkendelsen af den sværeste af dem. */
+    static final double INNER = 0.6;
+    /** Tillæg uden blyant pr. teknik (samme som web/js/grade.js, 20. nov. 2026). */
+    static final double[] NOPEN = {0, 0, 0, 0.3, 0.5, 1.0, 1.2, 0.4, 1.0, 1.2, 0.3, 1.5, 1.5, 1.5};
 
     public static final class Step {
-        final int L, T, mem, len, opts; final double progress; final double[] vis;
-        Step(int L, int T, double[] vis, int mem, int len, int opts, double progress) {
-            this.L = L; this.T = T; this.vis = vis; this.mem = mem; this.len = len; this.opts = opts; this.progress = progress;
+        final int L, T, mem, len, opts, innerMask, multi; final double progress; final double[] vis;
+        Step(int L, int T, double[] vis, int mem, int len, int opts, double progress, int innerMask, int multi) {
+            this.L = L; this.T = T; this.vis = vis; this.mem = mem; this.len = len; this.opts = opts; this.progress = progress; this.innerMask = innerMask; this.multi = multi;
         }
     }
 
     /** Indsatsen i ét skridt, delt op i sine led. */
     public static final class Effort {
-        public double e, R, base, shapeT, openT, workT, memT, lenT, spot;
+        public double e, R, base, shapeT, openT, workT, memT, lenT, spot, innerT, nopenT, multiT;
     }
 
     public static final class Grade {
         public double value, peak, avgOpts, narrow, W, loadT, earlyT;
         public int level, band, decimal, tech, total, advCount, mem, len, nHard, load;
         /** Det tungeste skridt. */
-        public int hardT, hardL, hardMem, hardLen, hardOpts; public double hardProgress; public double[] hardVis; public Effort hard;
+        public int hardT, hardL, hardMem, hardLen, hardOpts, hardMulti; public double hardProgress; public double[] hardVis; public Effort hard;
         /** Indsats for hvert skridt (0 = direkte tal). */
         public double[] series;
+        /** Graden uden blyant (null på selve uden-blyant-graden). */
+        public Grade np;
         public String valueText() { return String.format(Locale.ROOT, "%.1f", value); }
+        /** Graden, og graden uden blyant hvis den er en anden. */
+        public String bothText() { return np == null || Math.abs(np.value - value) < 0.05 ? valueText() : valueText() + " (uden blyant " + np.valueText() + ")"; }
         public String peakLoadText() { return "top " + String.format(Locale.ROOT, "%.1f", peak).replace('.', ',') + " · mængde " + load; }
     }
 
@@ -58,7 +67,7 @@ public final class SuguruGrade {
             if (!any) break;
             SuguruTutor.Hint h = tutor.easiest(known);
             if (h == null) return null;
-            steps.add(new Step(h.hardestLevel, h.hardest, h.vis, h.mem, h.len, h.opts, placed / (double) empty0));
+            steps.add(new Step(h.hardestLevel, h.hardest, h.vis, h.mem, h.len, h.opts, placed / (double) empty0, h.innerMask, h.multi));
             known[h.cell] = h.v;
             placed++;
         }
@@ -69,7 +78,7 @@ public final class SuguruGrade {
     static double log2(double x) { return Math.log(x) / Math.log(2); }
     static double round1(double x) { return Math.round(x * 10) / 10.0; }
 
-    static Effort stepEffort(Step s) {
+    static Effort stepEffort(Step s, boolean pen) {
         Effort f = new Effort();
         f.base = 1.0 * RECOG[s.T];
         double[] v = s.vis;
@@ -79,17 +88,28 @@ public final class SuguruGrade {
             f.workT = 0.35 * Math.max(-0.25, Math.min(0.5, 0.12 * (v[3] - 4)));
         }
         f.R = f.base + f.shapeT + f.openT + f.workT;
-        f.memT = 0.3 * log2(1 + s.mem);
+        f.memT = (pen || s.T < 3 ? 0.3 : 0.5) * log2(1 + s.mem);
         f.lenT = 0.35 * log2(1 + Math.max(0, Math.max(1, s.len) - 1));
         f.spot = s.opts <= 1 ? 0.5 : s.opts == 2 ? 0.3 : s.opts == 3 ? 0.15 : 0;
-        f.e = 1 + f.R + f.memT + f.lenT + f.spot;
+        double innerMax = 0; boolean anyInner = false;
+        for (int t = 0; t < RECOG.length; t++) if ((s.innerMask & (1 << t)) != 0) { innerMax = anyInner ? Math.max(innerMax, RECOG[t]) : RECOG[t]; anyInner = true; }
+        f.innerT = anyInner ? INNER * innerMax : 0;
+        f.nopenT = pen ? 0 : NOPEN[s.T];
+        f.multiT = pen || !((s.T >= 3 && s.T <= 6) || s.T == 8 || s.T == 9 || s.T == 12) ? 0 : Math.min(1, 0.25 * s.multi);
+        f.e = 1 + f.R + f.memT + f.lenT + f.spot + f.innerT + f.nopenT + f.multiT;
         return f;
     }
 
+    /** Graden med blyant; g.np er graden uden blyant (samme skridt, anden pris). */
     public static Grade gradeFromSteps(List<Step> steps) {
+        Grade g = gradeFromSteps(steps, true);
+        g.np = gradeFromSteps(steps, false);
+        return g;
+    }
+    public static Grade gradeFromSteps(List<Step> steps, boolean pen) {
         int N = steps.size();
         Effort[] ef = new Effort[N];
-        for (int i = 0; i < N; i++) ef[i] = stepEffort(steps.get(i));
+        for (int i = 0; i < N; i++) ef[i] = stepEffort(steps.get(i), pen);
         int hi = 0;
         for (int i = 0; i < N; i++) if (ef[i].e > ef[hi].e + 1e-9) hi = i;
         Effort top = ef[hi]; Step hs = steps.get(hi);
@@ -122,7 +142,7 @@ public final class SuguruGrade {
         g.value = value; g.band = (int) Math.floor(value); g.level = g.band; g.decimal = (int) Math.round((value - g.band) * 10);
         g.peak = round1(Math.min(9.9, peak));
         g.load = g.tech == 1 ? 0 : (int) Math.max(1, Math.min(10, Math.round(10 * (1 - Math.exp(-(g.W + Math.max(0, top.e - 1.5)) / 12)))));
-        g.hard = top; g.hardT = hs.T; g.hardL = hs.L; g.hardMem = hs.mem; g.hardLen = hs.len; g.hardOpts = hs.opts; g.hardProgress = hs.progress; g.hardVis = hs.vis;
+        g.hard = top; g.hardT = hs.T; g.hardL = hs.L; g.hardMem = hs.mem; g.hardLen = hs.len; g.hardOpts = hs.opts; g.hardProgress = hs.progress; g.hardVis = hs.vis; g.hardMulti = hs.multi;
         g.series = new double[N];
         for (int i = 0; i < N; i++) g.series[i] = steps.get(i).L < 2 ? 0 : round1(ef[i].e);
         return g;
@@ -189,6 +209,7 @@ public final class SuguruGrade {
             out.add(new String[]{compact ? n1(1 + h.R) : f1(h.R), rec.toString()});
             out.add(new String[]{f1(h.memT), "Hukommelse. " + (g.hardMem == 0 ? "Intet skal huskes." : g.hardMem + " ting skal holdes i hovedet på samme tid.")});
             out.add(new String[]{f1(h.lenT), "Længde. Ræsonnementet har " + g.hardLen + " led."});
+            if (h.innerT > 0) out.add(new String[]{f1(h.innerT), "Undervejs. Antagelsen kræver sværere teknikker undervejs."});
             if (h.spot > 0) out.add(new String[]{f1(h.spot), "Overblik. Der var kun " + (g.hardOpts <= 1 ? "ét sted" : g.hardOpts + " steder") + " at komme videre."});
             if (g.earlyT >= 0.05) out.add(new String[]{f1(g.earlyT), "Tidligt. Det tunge skridt kommer, mens pladen stadig er åben."});
             out.add(new String[]{n1(g.peak), "Top: det tungeste skridt alene."});

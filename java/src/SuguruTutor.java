@@ -29,11 +29,13 @@ public final class SuguruTutor {
     static final class Target { final int cell, mask; Target(int cell, int mask) { this.cell = cell; this.mask = mask; } }
     static final class App {
         int tech, region = -1, v, mask, cell = -1, goal = -1, relCount, memPeak;
+        /** Bitmaske over teknikker brugt inde i et hvis-så (kun skridt, der bærer modstriden). */
+        int innerMask;
         int[] spots, cells, nodes, rootA, rootB;
         List<Target> targets = new ArrayList<>();
         App copy() {
             App a = new App();
-            a.tech = tech; a.region = region; a.v = v; a.mask = mask; a.cell = cell; a.goal = goal; a.relCount = relCount; a.memPeak = memPeak;
+            a.tech = tech; a.region = region; a.v = v; a.mask = mask; a.cell = cell; a.goal = goal; a.relCount = relCount; a.memPeak = memPeak; a.innerMask = innerMask;
             a.spots = spots; a.cells = cells; a.nodes = nodes; a.rootA = rootA; a.rootB = rootB; a.targets = new ArrayList<>(targets);
             return a;
         }
@@ -44,6 +46,10 @@ public final class SuguruTutor {
     /** Resultat: det letteste næste tal og dets støtte. */
     public static final class Hint {
         public final int cell, v, hardest, hardestLevel, opts, mem, len; public final int[] support;
+        /** Teknikker inde i det sværeste hvis-så (bitmaske over teknik-numre; 0 = kun enkle tal). */
+        public int innerMask;
+        /** Felter, som det sværeste skridt stryger i, og som stadig har flere muligheder bagefter (uden blyant skal de huskes). */
+        public int multi;
         /** Hvor synligt det sværeste skridt er: [antal felter i mønstret, 1 hvis det bøjer, andel udfyldte felter omkring, tomme felter man skal kende]. Kan være null. */
         public double[] vis;
         Hint(int cell, int v, int hardest, int opts, int[] support, int mem, int len) {
@@ -52,7 +58,7 @@ public final class SuguruTutor {
         }
     }
     /** Resultat af et sporet hvis-så-forløb: relevante skridt og arbejdshukommelse. */
-    static final class TrialResult { final int relCount, memPeak; TrialResult(int r, int m) { relCount = r; memPeak = m; } }
+    static final class TrialResult { final int relCount, memPeak; int innerMask; TrialResult(int r, int m) { relCount = r; memPeak = m; } }
 
     /**
      * Arbejdshukommelse: hvor mange fakta der er "levende" (skal bruges senere) på samme tid.
@@ -426,7 +432,9 @@ public final class SuguruTutor {
     final class Run {
         final St t; final Map<Integer, Integer> removedBy = new HashMap<>(), placedBy = new HashMap<>();
         final List<Set<Integer>> nodes = new ArrayList<>(); int chainLen = 0; final St s0;
-        Run(St s) { s0 = s; t = s.copy(); nodes.add(new HashSet<>()); }
+        /** Teknik for hvert skridt (-1 = et sat tal eller antagelsen). */
+        final List<Integer> nodeTech = new ArrayList<>();
+        Run(St s) { s0 = s; t = s.copy(); nodes.add(new HashSet<>()); nodeTech.add(-1); }
         void record(St b, St after, int node) {
             for (int c = 0; c < n; c++) {
                 if (after.val[c] != 0 && b.val[c] == 0) placedBy.put(c, node);
@@ -495,6 +503,7 @@ public final class SuguruTutor {
                 for (int q : cells) R.depsOfCell(q, b, deps);
             }
             R.nodes.add(deps);
+            R.nodeTech.add(st.place ? -1 : st.app.tech);
             R.chainLen++;
             R.record(b, R.t, id);
         }
@@ -506,7 +515,9 @@ public final class SuguruTutor {
         Set<Integer> rel = new HashSet<>(); rel.add(0);
         Deque<Integer> stack = new ArrayDeque<>(root);
         while (!stack.isEmpty()) { int x = stack.pop(); if (!rel.add(x)) continue; for (int y : R.nodes.get(x)) stack.push(y); }
-        return new TrialResult(rel.size() - 1, peakLive(R.nodes, rel, root));
+        TrialResult res = new TrialResult(rel.size() - 1, peakLive(R.nodes, rel, root));
+        for (int x : rel) { int tq = R.nodeTech.get(x); if (tq >= 0) res.innerMask |= 1 << tq; }
+        return res;
     }
     List<App> trialApps(St s, int inner, boolean first) {
         List<App> out = new ArrayList<>();
@@ -515,7 +526,7 @@ public final class SuguruTutor {
             for (int v : bitsOf(s.cand[c])) {
                 TrialResult rc = runTrial(s, c, v, inner);
                 if (rc != null) {
-                    App a = new App(); a.tech = inner == 1 ? 11 : 13; a.cell = c; a.v = v; a.cells = new int[]{c}; a.relCount = rc.relCount; a.memPeak = rc.memPeak;
+                    App a = new App(); a.tech = inner == 1 ? 11 : 13; a.cell = c; a.v = v; a.cells = new int[]{c}; a.relCount = rc.relCount; a.memPeak = rc.memPeak; a.innerMask = rc.innerMask;
                     a.targets.add(new Target(c, 1 << v));
                     out.add(a); if (first) return out;
                 }
@@ -677,7 +688,7 @@ public final class SuguruTutor {
         if (T.val[a.cell] != 0 || (T.cand[a.cell] & (1 << a.v)) == 0) return null;
         TrialResult rc = a.tech == 10 ? nishioRun(T, a.cell, a.v) : runTrial(T, a.cell, a.v, a.tech == 11 ? 1 : 8);
         if (rc == null) return null;
-        App b = a.copy(); b.relCount = rc.relCount; b.memPeak = rc.memPeak;
+        App b = a.copy(); b.relCount = rc.relCount; b.memPeak = rc.memPeak; b.innerMask = rc.innerMask;
         return b;
     }
     static final class Replay { final List<App> steps; final int kind; Replay(List<App> steps, int kind) { this.steps = steps; this.kind = kind; } }
@@ -774,6 +785,14 @@ public final class SuguruTutor {
         int len = 0;
         for (int i = 0; i < steps.size(); i++) { hardest = Math.max(hardest, steps.get(i).tech); support[i] = steps.get(i).relCount; len += 1 + support[i]; }
         Hint h = new Hint(cell, v, hardest, singles(S0).size(), support, outerPeak(S0, steps, cell, v), len);
+        for (App a : steps) if (a.tech == hardest) h.innerMask |= a.innerMask;
+        {
+            St Tm = S0.copy();
+            for (App a : steps) {
+                apply(Tm, a);
+                if (a.tech == hardest) for (Target t : a.targets) if (t.cell != cell && Tm.val[t.cell] == 0 && pc(Tm.cand[t.cell]) >= 2) h.multi++;
+            }
+        }
         for (App a : steps) {
             if (a.tech != hardest) continue;
             int[] raw = a.tech == 2 ? a.spots : a.cells != null ? a.cells : new int[]{a.cell};

@@ -30,9 +30,9 @@ const TECH_NAMES_UI = [
   tr("kæder med to-mulighedsfelter"),
   tr("blandede kæder"),
   tr("hvis-så med ét tal"),
-  tr("hvis-så, kort"),
+  tr("hvis-så med enkle tal"),
   tr("begge veje"),
-  tr("hvis-så, dyb"),
+  tr("hvis-så med teknikker"),
 ];
 const SIZES = [
   { r: 5, c: 5, t: tr("Hurtig") },
@@ -65,22 +65,45 @@ const LEVEL_TECH = [
   tr("kæde med to-mulighedsfelter"),
   tr("blandet kæde"),
   tr("hvis-så med ét tal"),
-  tr("kort hvis-så"),
+  tr("hvis-så med enkle tal"),
   tr("begge veje"),
-  tr("dyb hvis-så"),
+  tr("hvis-så med teknikker"),
   tr("gæt"),
 ];
 const BAND = ["", tr("Begynder"), tr("Let"), tr("Middel"), tr("Svær"), tr("Meget svær"), tr("Ekspert"), tr("Mester"), tr("Ekstrem"), tr("Djævelsk")];
 const bandOf = (v) => Math.min(9, Math.max(1, Math.floor(+v || 1)));
-const pBand = (p) => (p.grade ? p.grade.band : bandOf(p.rating.level));
-const gBand = (g) => bandOf(g.value);
+// To grader: med blyant (standard) og uden blyant (grade.np). Du vælger i indstillingerne, hvilken du ser og får nye
+// opgaver efter. For et spillet spil bruges den grad, der passer til, om du faktisk brugte blyant.
+const noPen = () => settings.pencil === "uden";
+const shownGrade = (p) => (p.grade ? (noPen() && p.grade.np ? p.grade.np.value : p.grade.value) : null);
+const pBand = (p) => (p.grade ? bandOf(shownGrade(p)) : bandOf(p.rating.level));
+const PEN_MIN = 3; // så mange blyantsnoter, før et spil tæller som spillet med blyant
+const penUsed = (g) => (g.pen == null ? null : g.pen >= PEN_MIN); // null: spillet før appen gemte det
+// Hvad blyanten vil koste i det igangværende spil, så længe det ikke er afgjort. null, når der ikke er nogen
+// konsekvens: graderne er ens, spillet er løst, eller det tæller allerede som med blyant.
+// Gælder i begge indstillinger: et spil uden blyant gemmes altid med graden uden blyant.
+function penStake() {
+  if (!P || !P.grade || !P.grade.np || solved || !meta) return null;
+  if (dec(P.grade.np.value) === dec(P.grade.value)) return null;
+  const used = meta.pen || 0;
+  return used >= PEN_MIN ? null : { left: PEN_MIN - used, pen: P.grade.value, nopen: P.grade.np.value };
+}
+const gradeFor = (g) => (penUsed(g) === false && g.np != null ? +g.np : +g.value);
+const gBand = (g) => bandOf(gradeFor(g));
 const KINDS = [
   ["alle", tr("Alle"), tr("blandet")],
   ["kort", tr("Kort og skarp"), tr("få tunge træk")],
   ["lang", tr("Lang og sej"), tr("mange tunge træk")],
 ];
 // "top 4,6 · mængde 7" for en opgave eller et gemt spil
-const plText = (o) => (o && o.peak != null ? tr("top {top} · mængde {load}", { top: dec(o.peak), load: o.load }) : "");
+// Top og mængde for den grad, der vises: uden blyant for en opgave, når indstillingen er "uden blyant",
+// og for et spil, der blev spillet uden blyant.
+const plText = (o) => {
+  if (!o) return "";
+  if (o.np && typeof o.np === "object" && noPen()) o = o.np;
+  else if (o.npk != null && penUsed(o) === false) o = { peak: o.npk, load: o.npl };
+  return o.peak != null ? tr("top {top} · mængde {load}", { top: dec(o.peak), load: o.load }) : "";
+};
 const LEVEL_GROUPS = [
   { name: tr("Grundteknikker"), levels: [1, 2, 3, 4] },
   { name: tr("Kæder"), levels: [5, 6, 7] },
@@ -127,7 +150,10 @@ const store = {
     MEM[k] = v;
     try {
       localStorage.setItem("suguru." + k, JSON.stringify(v));
-    } catch (e) {}
+      return true;
+    } catch (e) {
+      return false; // typisk: lageret er fuldt
+    }
   },
   del(k) {
     delete MEM[k];
@@ -147,16 +173,113 @@ if (ui.scale !== 2) {
   ui.must = 0;
 }
 ui.level = Math.min(9, Math.max(1, ui.level));
-let games = store.get("history", []);
+// ---------- Spilhistorik: nyeste spil som almindelig JSON, ældre spil i et komprimeret arkiv
+// Arkivet (nøglen suguru.archive) rummer spil ældre end de nyeste ARCH_KEEP. De gemmes uden ruteanalysens træk og
+// skridtkoder (lv), som statistikken ikke bruger, og komprimeres ca. 6 gange (lz.js). Alt andet er uændret, så
+// statistikken er den samme. Arkivet skrives kun om, når spil flyttes ned i det, eller når ældre spil ændres
+// (ny bedømmelse, import, nulstilling).
+const ARCH_MAX = 300, // så mange spil i den ukomprimerede del, før de ældste flyttes til arkivet
+  ARCH_KEEP = 200; // så mange beholdes ukomprimeret efter en flytning
+let ARCH_N = 0, // antal spil i arkivet (de første ARCH_N i games)
+  ARCH_LEN = 0; // arkivets størrelse i tegn
+function loadGames() {
+  let arch = [];
+  try {
+    const raw = localStorage.getItem("suguru.archive");
+    if (raw) {
+      const txt = LZ.unpack(raw);
+      if (txt) arch = JSON.parse(txt);
+      ARCH_LEN = raw.length;
+    }
+  } catch (e) {
+    arch = [];
+  }
+  const recent = store.get("history", []);
+  const ids = new Set(recent.map((g) => g.id));
+  arch = arch.filter((g) => !ids.has(g.id)); // et spil, der ligger begge steder (afbrudt flytning), tælles kun én gang
+  arch.forEach((g) => (g.arc = 1));
+  ARCH_N = arch.length;
+  return arch.concat(recent);
+}
+let games = loadGames();
+// Kompakt kopi af et spil til arkivet
+function archForm(g) {
+  const o = Object.assign({}, g);
+  delete o.moves;
+  delete o.lv;
+  delete o.routePending;
+  o.arc = 1;
+  return o;
+}
+let archBusy = 0;
+function writeArchive(n) {
+  const list = games.slice(0, n).map(archForm);
+  const json = JSON.stringify(list);
+  const gen = ++archBusy;
+  const done = (packed) => {
+    if (gen !== archBusy) return; // en nyere skrivning er i gang
+    try {
+      if (n) localStorage.setItem("suguru.archive", packed);
+      else localStorage.removeItem("suguru.archive");
+      ARCH_LEN = n ? packed.length : 0;
+      // Arkivets spil først (efter id, så et spil, der er kommet til imens, ikke forskyder noget)
+      const ids = new Set(list.map((g) => g.id));
+      const arch = games.filter((g) => ids.has(g.id)),
+        rest = games.filter((g) => !ids.has(g.id));
+      arch.forEach((g) => {
+        delete g.moves;
+        delete g.lv;
+        g.arc = 1;
+      });
+      games = arch.concat(rest);
+      ARCH_N = arch.length;
+      if (!store.set("history", rest)) toast(tr("Statistikken kunne ikke gemmes: lageret er fuldt."));
+    } catch (e) {
+      toast(tr("Statistikken kunne ikke gemmes: lageret er fuldt."));
+    }
+  };
+  if (!n) return done("");
+  // Komprimér i baggrunden, så appen ikke hakker; uden Web Worker gøres det med det samme
+  try {
+    const w = new Worker("js/lzworker.js");
+    w.onmessage = (e) => {
+      done(e.data);
+      w.terminate();
+    };
+    w.onerror = () => {
+      w.terminate();
+      done(LZ.pack(json));
+    };
+    w.postMessage(json);
+  } catch (e) {
+    done(LZ.pack(json));
+  }
+}
 function saveSettings() {
   store.set("settings", settings);
 }
 function saveUi() {
   store.set("ui", ui);
 }
-function saveGames() {
-  if (games.length > 3000) games = games.slice(-3000);
-  store.set("history", games);
+// all = true: ældre spil er ændret (ny bedømmelse, import, nulstilling), så arkivet skal skrives om
+function saveGames(all) {
+  if (games.length > 100000) games = games.slice(-100000);
+  if (ARCH_N > games.length) ARCH_N = games.length;
+  if (all || games.length - ARCH_N > ARCH_MAX) writeArchive(all && games.length <= ARCH_MAX ? 0 : Math.max(ARCH_N, games.length - ARCH_KEEP));
+  if (store.set("history", games.slice(ARCH_N))) return;
+  // Lageret er fuldt: fjern rute-detaljer for ældre spil (statistikken bevares) og prøv igen
+  for (const keep of [20, 10, 1]) {
+    if (!trimMoves(keep)) continue;
+    if (store.set("history", games.slice(ARCH_N))) {
+      settings.keepMoves = Math.min(settings.keepMoves ?? 40, keep);
+      saveSettings();
+      toast(tr("Lageret var fuldt, så ruteanalysen for ældre spil er fjernet. Statistikken er bevaret."));
+      return;
+    }
+  }
+  // Sidste udvej: flyt næsten alt ned i det komprimerede arkiv
+  if (games.length - ARCH_N > 20) return writeArchive(games.length - 20);
+  toast(tr("Statistikken kunne ikke gemmes: lageret er fuldt."));
 }
 
 // ---------- Spiltilstand
@@ -200,7 +323,7 @@ function fmtLong(ms) {
   return m < 60 ? tr("{m} min", { m }) : tr("{h} t {m} min", { h: Math.floor(m / 60), m: m % 60 });
 }
 function levelValue(p) {
-  return p.grade ? dec(p.grade.value) : String(p.rating.level);
+  return p.grade ? dec(shownGrade(p)) : String(p.rating.level);
 }
 function cellName(i) {
   return "abcdefghij"[i % G.cols] + (Math.floor(i / G.cols) + 1);

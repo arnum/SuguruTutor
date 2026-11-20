@@ -1,7 +1,7 @@
 // Service worker: gør appen tilgængelig offline.
 // Egne filer hentes fra nettet først (højst 3 sekunder), så en ny version slår igennem med det samme; uden net bruges den gemte kopi.
 // Der er derfor ikke noget versionsnummer, der skal rettes, når filerne opdateres.
-const CACHE = "suguru-v16";
+const CACHE = "suguru-v27";
 const FONTS = "suguru-fonts";
 const SHELL = [
   "./",
@@ -12,6 +12,8 @@ const SHELL = [
   "./css/app.css",
   "./js/lang/en.js",
   "./js/i18n.js",
+  "./js/lz.js",
+  "./js/lzworker.js",
   "./js/engine.js",
   "./js/tutor.js",
   "./js/grade.js",
@@ -28,6 +30,7 @@ const SHELL = [
   "./js/analysis.js",
   "./js/takeaway.js",
   "./js/progress.js",
+  "./js/debug.js",
   "./js/settings.js",
   "./js/main.js",
   "./js/worker.js",

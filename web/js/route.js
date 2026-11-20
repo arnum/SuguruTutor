@@ -29,6 +29,7 @@ function analyzeRoute(SE, p, moves, onProgress) {
     }
     if (m.v && !m.u) {
       const rec = { c: m.c, v: m.v, t: m.t, dt };
+      if (m.pn) rec.pn = m.pn;
       // Pladen præcis som den stod lige før trækket (dine tal, også forkerte; 0 = tomt). Bruges til at tegne den.
       rec.b = ent.map((x) => x || 0).join("");
       if (chk) {
@@ -200,6 +201,8 @@ function routeSummary(list) {
       if (L) (o[L] = o[L] || []).push(Math.round(m.dt / 1000));
       return o;
     }, {}),
+    // Træk med sammenhæng til fremgangsmålet: [teknikniveau, tid i tiendedele sekunder, antal mulige steder]
+    ctx: a.filter((m) => m.cls !== "wrong" && m.dt > 0 && moveLevel(m)).map((m) => [moveLevel(m), Math.round(m.dt / 100), m.nAvail || 1]),
     longest: a.reduce((x, m) => Math.max(x, m.dt), 0),
     // spot[L] = [gange L var det letteste, gange du tog det letteste]
     spot: a.reduce((o, m) => {

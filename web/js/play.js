@@ -17,6 +17,11 @@ function input(d) {
     hintCell = -1;
     pendingOverwrite = null;
     notes[selected] ^= 1 << d;
+    if (notes[selected] & (1 << d)) {
+      const stake = penStake();
+      meta.pen = (meta.pen || 0) + 1; // bruges til at vælge graden med/uden blyant
+      if (stake && stake.left === 1) toast(tr("Spillet tæller nu som med blyant: {a}.", { a: dec(stake.pen) }));
+    }
     afterChange();
     return;
   }
@@ -39,7 +44,9 @@ function input(d) {
   hintCell = -1;
   pendingOverwrite = null;
   entries[selected] = d;
-  meta.moves.push({ c: selected, v: d, t: elapsed() });
+  // pn: hvor mange felter havde blyantsnoter, da tallet blev sat
+  const pn = notes.reduce((a, x) => a + (x ? 1 : 0), 0);
+  meta.moves.push(pn ? { c: selected, v: d, t: elapsed(), pn } : { c: selected, v: d, t: elapsed() });
   for (const j of peerSets[selected]) notes[j] &= ~(1 << d);
   afterChange();
 }
@@ -343,8 +350,10 @@ function showMenu() {
       menuItem("mAgain", IC.plus, tr("Ny opgave med samme indstillinger"), BAND[ui.level]) +
       menuItem("mNew", IC.sliders, tr("Vælg ny opgave")) +
       menuItem("mHome", IC.home, tr("Til forsiden")) +
-      `</div>`,
+      `</div>` +
+      noteLink("play"),
     (b) => {
+      bindNoteLinks(b, null, showMenu);
       b.querySelector("#mCheck").onclick = () => {
         closeSheet();
         checkErrors();
@@ -474,13 +483,17 @@ function showRating() {
   }).join("");
   openSheet(
     `<div class="rating"><h2>${tr("Hvorfor {v}?", { v: levelValue(P) })}</h2>` +
-      personalLineHtml(P.grade.value, P.rating.level) +
+      personalLineHtml(shownGrade(P), P.rating.level) +
+      penLineHtml(P.grade) +
       profileHtml(P.grade) +
       `<h3>${tr("Opgavekode")}</h3><p>${tr("Koden indeholder selve opgaven. Den kan hentes her i appen og i Java-programmet.")}</p><div class="codebox">${P.code}</div>` +
       `<div class="actions row2"><button class="secondary" type="button" id="rCopy">${tr("Kopiér kode")}</button><button class="secondary" type="button" id="rShare">${tr("Del")}</button></div>` +
       `<h3>${tr("Teknikker")}</h3><p>${tr("De teknikker en løser skal bruge, og hvor mange gange. De bestemmer ikke længere tallet alene.")}</p><ul class="tech">${items}</ul>` +
-      `<div class="actions"><button class="primary big" type="button" id="rClose">${tr("Luk")}</button></div></div>`,
+      `<div class="actions"><button class="primary big" type="button" id="rClose">${tr("Luk")}</button></div>` +
+      noteLink("grade") +
+      `</div>`,
     (b) => {
+      bindNoteLinks(b, null, showRating);
       b.querySelector("#rClose").onclick = closeSheet;
       b.querySelector("#rCopy").onclick = async () => {
         try {
@@ -545,12 +558,38 @@ function visText(h) {
   );
   return tr("Fordelt: {parts}.", { parts: parts.join("; ") });
 }
+// Hvorfor graden uden blyant er højere
+function penWhy(g) {
+  const why = [];
+  if (g.np.nopenT > 0) why.push(tr("{tech} kræver, at du husker felternes muligheder", { tech: E.TECH[g.np.T].label.toLowerCase() }));
+  if (g.np.multiT > 0) why.push(g.np.multi === 1 ? tr("1 felt står tilbage med flere muligheder efter strygningen") : tr("{n} felter står tilbage med flere muligheder efter strygningen", { n: g.np.multi }));
+  if (g.np.memT - (g.hard ? g.hard.memT : 0) > 0.05) why.push(tr("mere skal holdes i hovedet"));
+  return why;
+}
+// Graden med og uden blyant, og hvorfor de er forskellige
+function penLineHtml(g) {
+  if (!g || !g.np) return "";
+  const other = noPen() ? g.value : g.np.value,
+    otherName = noPen() ? tr("Med blyant") : tr("Uden blyant");
+  if (Math.abs(g.np.value - g.value) < 0.1)
+    return `<p class="estline"><b>${tr("Samme grad med og uden blyant.")}</b> ${tr("Opgaven kræver ikke, at du holder styr på muligheder.")}</p>`;
+  const why = penWhy(g);
+  return (
+    `<p class="estline"><b>${tr("{name}: {v}.", { name: otherName, v: dec(other) })}</b> ` +
+    (why.length ? tr("Uden blyant er den sværere, fordi {why}.", { why: list2(why) }) : "") +
+    `</p>`
+  );
+}
 function profileHtml(g) {
   if (!g || !g.hard) return "";
   const f = (v) => dec(v),
     h = g.hard,
     pct = Math.round(h.progress * 100);
-  const bar = Array.from({ length: 9 }, (_, i) => `<i class="${i < g.band ? "on" : ""}"></i>`).join("");
+  // Uden blyant: samme skridt, men tallet ender ved graden uden blyant
+  const np = noPen() && g.np && Math.abs(g.np.value - g.value) >= 0.05 ? g.np : null,
+    total = np ? np.value : g.value,
+    band = np ? np.band : g.band;
+  const bar = Array.from({ length: 9 }, (_, i) => `<i class="${i < band ? "on" : ""}"></i>`).join("");
   const row = (num, lead, text) => `<dt>${num}</dt><dd>${lead ? "<b>" + lead + "</b> " : ""}${text}</dd>`;
   let rows;
   if (g.tech === 1) {
@@ -578,6 +617,11 @@ function profileHtml(g) {
       ) +
       row("+" + f(h.memT), tr("Hukommelse."), mem) +
       row("+" + f(h.lenT), tr("Længde."), h.len === 1 ? tr("Ræsonnementet har 1 led.") : tr("Ræsonnementet har {n} led.", { n: h.len })) +
+      (h.innerT
+        ? row("+" + f(h.innerT), tr("Undervejs."), tr("Undervejs i antagelsen skal du bruge {tech}.", { tech: list2((h.inner || []).map((t) => esc(E.TECH[t].label.toLowerCase()))) }))
+        : h.T === 11 || h.T === 13
+          ? row("+0", tr("Undervejs."), tr("Undervejs i antagelsen er der kun enkle tal."))
+          : "") +
       (h.spot
         ? row("+" + f(h.spot), tr("Overblik."), h.opts <= 1 ? tr("Der var kun ét sted at komme videre.") : tr("Der var kun {n} steder at komme videre.", { n: h.opts }))
         : "") +
@@ -592,6 +636,16 @@ function profileHtml(g) {
           " " +
           tr("Hvert af de øvrige lægger lidt til, og gentagelser af samme teknik tæller mindre og mindre. Tillægget kan højst blive {max}.", { max: dec(1) }),
       );
+    if (np) {
+      const why = penWhy(g);
+      rows +=
+        row(`<b>${f(g.value)}</b>`, tr("Med blyant."), "") +
+        row(
+          "+" + f(np.value - g.value),
+          tr("Uden blyant."),
+          why.length ? tr("Det, blyanten ellers holder styr på, skal huskes: {why}.", { why: list2(why) }) : "",
+        );
+    }
     if (E.TECH[h.T].level !== g.tech)
       rows += row(
         tr("NB"),
@@ -603,7 +657,7 @@ function profileHtml(g) {
     `<div class="decbar" aria-hidden="true">${bar}</div>` +
     `<p>${tr("Tallet er det tungeste skridt (top) plus et tillæg for, hvor mange tunge skridt der er (mængde). Det måler indsats, ikke hvilken teknik der bruges.")}</p>` +
     effortStrip(g) +
-    `<dl class="profile">${rows}<dt><b>${f(g.value)}</b></dt><dd><b>${BAND[g.band]}</b>${g.value >= 9.9 ? " " + tr("(skalaen stopper ved {max})", { max: dec(9.9) }) : ""}</dd></dl>` +
+    `<dl class="profile">${rows}<dt><b>${f(total)}</b></dt><dd><b>${BAND[band]}</b>${total >= 9.9 ? " " + tr("(skalaen stopper ved {max})", { max: dec(9.9) }) : ""}</dd></dl>` +
     estLineHtml(g.lv) +
     `<p>${tr("Vægtene er tilpasset de første 17 vurderede opgaver. Bliv ved med at svare på »hvordan føltes den?«, så kan de justeres igen.")}</p>`
   );

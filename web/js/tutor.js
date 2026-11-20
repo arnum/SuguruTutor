@@ -15,9 +15,9 @@ function createTutor(G, region) {
     tr("Kæde med to-mulighedsfelter"),
     tr("Blandet kæde"),
     tr("Hvis-så med ét tal"),
-    tr("Hvis-så, kort"),
+    tr("Hvis-så med enkle tal"),
     tr("Begge veje"),
-    tr("Hvis-så, dyb"),
+    tr("Hvis-så med teknikker"),
   ];
   const TECH_LEVEL = [1, 1, 2, 3, 3, 4, 4, 5, 6, 7, 8, 9, 10, 11];
   const TECH_WEIGHT = [1, 1, 4, 8, 10, 15, 18, 20, 22, 24, 26, 30, 40, 60];
@@ -1334,6 +1334,26 @@ function createTutor(G, region) {
     }));
     const mem = outerPeak(S0, steps, cell, v);
     const len = support.reduce((m, x) => m + 1 + x.chain, 0);
+    // Teknikker inde i et hvis-så / begge veje (kun skridt, der bærer modstriden). Enkle tal tæller ikke med.
+    const inner = [
+      ...new Set(
+        steps
+          .filter((a) => a.tech === hardest)
+          .flatMap((a) => (a.branches ? a.branches.flatMap((b) => b.chain) : a.chain || []))
+          .filter((st) => st && st.rel !== false && st.kind === "elim" && st.app)
+          .map((st) => st.app.tech),
+      ),
+    ].sort((x, y) => x - y);
+    // Felter, som det sværeste skridt stryger i, men som stadig har flere muligheder bagefter. Med blyant står de på
+    // pladen; uden blyant skal de huskes (bruges til graden uden blyant).
+    let multi = 0;
+    {
+      const Tm = clone(S0);
+      for (const a of steps) {
+        apply(Tm, a);
+        if (a.tech === hardest) for (const t of a.targets) if (t.cell !== cell && !Tm.val[t.cell] && pc(Tm.cand[t.cell]) >= 2) multi++;
+      }
+    }
     // Hvor synligt er det sværeste skridt? Form, hvor fyldt området er, og hvor mange felters muligheder man skal kende.
     let vis = null;
     res.steps.forEach((s) => {
@@ -1372,6 +1392,8 @@ function createTutor(G, region) {
       opts: singles(S0).length,
       mem,
       len,
+      inner,
+      multi,
       eliminations: steps.flatMap((a) => a.targets),
     };
   }

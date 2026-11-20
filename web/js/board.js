@@ -278,8 +278,27 @@ function renderPad() {
     b.dataset.d = d;
     pad.appendChild(b);
   }
+  const stake = penStake(),
+    sb = $("penStake");
+  sb.hidden = !stake;
+  if (stake) {
+    // Uden blyant-visning: hvad opgaven falder til med blyant. Med blyant-visning: hvad den tæller som, så længe blyanten ikke bruges.
+    const np = noPen();
+    sb.textContent = dec(np ? stake.pen : stake.nopen);
+    sb.classList.toggle("gain", !np);
+    sb.title = np
+      ? tr("Med blyant tæller opgaven som {a} i stedet for {b}.", { a: dec(stake.pen), b: dec(stake.nopen) })
+      : tr("Uden blyant tæller opgaven som {b} i stedet for {a}.", { a: dec(stake.pen), b: dec(stake.nopen) });
+  }
+  $("noteBtn").setAttribute("aria-label", tr("Blyant") + (stake ? ". " + sb.title : ""));
   $("padhint").textContent = solved
     ? ""
+    : noteMode && stake
+      ? stake.left === PEN_MIN
+        ? tr("Blyant: fra {k}. note tæller opgaven som {a} i stedet for {b}.", { k: PEN_MIN, a: dec(stake.pen), b: dec(stake.nopen) })
+        : stake.left === 1
+          ? tr("1 note mere, så tæller opgaven som {a} i stedet for {b}.", { a: dec(stake.pen), b: dec(stake.nopen) })
+          : tr("{n} noter mere, så tæller opgaven som {a} i stedet for {b}.", { n: stake.left, a: dec(stake.pen), b: dec(stake.nopen) })
     : selected < 0
       ? tr("Tryk på en celle.")
       : P.givens[selected]
@@ -293,8 +312,8 @@ function renderPad() {
   ["noteBtn", "eraseBtn", "undoBtn", "hintBtn"].forEach((id) => ($(id).disabled = solved));
 }
 function pillPersonal() {
-  const pg = P.grade && personalGrade(P.grade.value, P.rating.level);
-  return pg && Math.abs(pg.value - P.grade.value) >= 0.2 ? ` <span class="pval">${tr("for dig ≈{v}", { v: dec(pg.value) })}</span>` : "";
+  const pg = P.grade && personalGrade(shownGrade(P), P.rating.level);
+  return pg && Math.abs(pg.value - shownGrade(P)) >= 0.2 ? ` <span class="pval">${tr("for dig ≈{v}", { v: dec(pg.value) })}</span>` : "";
 }
 function renderStatus() {
   if (!P) return;
