@@ -72,9 +72,9 @@ const LEVEL_TECH = [
 ];
 const BAND = ["", tr("Begynder"), tr("Let"), tr("Middel"), tr("Svær"), tr("Meget svær"), tr("Ekspert"), tr("Mester"), tr("Ekstrem"), tr("Djævelsk")];
 const bandOf = (v) => Math.min(9, Math.max(1, Math.floor(+v || 1)));
-// To grader: med blyant (standard) og uden blyant (grade.np). Du vælger i indstillingerne, hvilken du ser og får nye
-// opgaver efter. For et spillet spil bruges den grad, der passer til, om du faktisk brugte blyant.
-const noPen = () => settings.pencil === "uden";
+// To grader: uden blyant (grade.np, standard) og med blyant (grade.value). Du vælger i indstillingerne, hvilken du ser og
+// får nye opgaver efter. For et spillet spil bruges den grad, der passer til, om du faktisk brugte blyant (se gradeFor).
+const noPen = () => settings.pencil !== "med";
 const shownGrade = (p) => (p.grade ? (noPen() && p.grade.np ? p.grade.np.value : p.grade.value) : null);
 const pBand = (p) => (p.grade ? bandOf(shownGrade(p)) : bandOf(p.rating.level));
 const PEN_MIN = 3; // så mange blyantsnoter, før et spil tæller som spillet med blyant
@@ -88,7 +88,13 @@ function penStake() {
   const used = meta.pen || 0;
   return used >= PEN_MIN ? null : { left: PEN_MIN - used, pen: P.grade.value, nopen: P.grade.np.value };
 }
-const gradeFor = (g) => (penUsed(g) === false && g.np != null ? +g.np : +g.value);
+// Den grad, der passer til, hvordan spillet blev spillet: med blyant (3+ noter), uden, eller, for spil fra før blyant blev
+// registreret, som du plejede (g.tg: den grad, vægtene er tilpasset, så deres tal er de samme som før).
+const gradeFor = (g) => {
+  const u = penUsed(g);
+  if (u === null && g.tg != null) return +g.tg;
+  return u !== true && g.np != null ? +g.np : +g.value;
+};
 const gBand = (g) => bandOf(gradeFor(g));
 const KINDS = [
   ["alle", tr("Alle"), tr("blandet")],
@@ -101,7 +107,8 @@ const KINDS = [
 const plText = (o) => {
   if (!o) return "";
   if (o.np && typeof o.np === "object" && noPen()) o = o.np;
-  else if (o.npk != null && penUsed(o) === false) o = { peak: o.npk, load: o.npl };
+  else if (o.tgk != null && penUsed(o) === null) o = { peak: o.tgk, load: o.tgl };
+  else if (o.npk != null && penUsed(o) !== true) o = { peak: o.npk, load: o.npl };
   return o.peak != null ? tr("top {top} · mængde {load}", { top: dec(o.peak), load: o.load }) : "";
 };
 const LEVEL_GROUPS = [
@@ -133,6 +140,7 @@ const FRAMED = (() => {
 })();
 const STANDALONE = (window.matchMedia && matchMedia("(display-mode: standalone)").matches) || navigator.standalone === true;
 const IOS = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+const cap = (s) => (s ? s[0].toUpperCase() + s.slice(1) : s); // stort begyndelsesbogstav
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 
 // ---------- Lagring. Alt pakkes ind i try/catch: i nogle visninger er lagring slået fra, og så husker appen kun i hukommelsen.

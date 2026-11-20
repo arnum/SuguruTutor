@@ -28,7 +28,7 @@ window.claude?.hot?.snapshot?.(() => (P ? { current: { puzzle: P, entries, notes
 // Gamle spil regnes om til den nyeste skala ud fra opgavekoden, lidt ad gangen, så statistikken ikke blander skalaer
 function regradeOld() {
   // Alle på én gang i baggrunden (40 ms ad gangen); nyeste først, og der gemmes undervejs for hver 500 spil
-  const todo = games.filter((g) => (g.fit !== 5 || (!g.lv && !g.arc)) && g.code && !g.noRegrade).reverse();
+  const todo = games.filter((g) => (g.fit !== GW.fit || (!g.lv && !g.arc)) && g.code && !g.noRegrade).reverse();
   if (!todo.length) return;
   let i = 0,
     lastSave = 0;
@@ -54,10 +54,17 @@ function regradeOld() {
           g.load = gr.load;
           g.nHard = gr.nHard;
           g.scale = 2;
-          g.fit = 5;
+          g.fit = GW.fit;
           g.np = gr.np ? gr.np.value : g.value;
           g.npk = gr.np ? gr.np.peak : g.peak;
           g.npl = gr.np ? gr.np.load : g.load;
+          if (g.pen == null) {
+            // spil fra før blyant blev registreret: graden som du plejede (den, vægtene er tilpasset)
+            const tg = gradeFromSteps(st, null);
+            g.tg = tg.value;
+            g.tgk = tg.peak;
+            g.tgl = tg.load;
+          }
           g.lv = gr.lv;
         } else g.noRegrade = 1;
       } catch (e) {

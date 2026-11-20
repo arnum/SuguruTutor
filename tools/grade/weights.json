@@ -1,0 +1,62 @@
+{
+  "_om": "Alle tal i sværhedsgraden. Ret her, kør derefter: python3 tools/grade/gen.py (skriver web/js/grade.js og java/src/SuguruGrade.java). Hæv fit, når tallene ændres, så gemte spil regrades. Teknik-numre: 0 nøgen single, 1 skjult single, 2 nabo-eliminering, 3 nøgent par, 4 skjult par, 5 nøgen tripel, 6 skjult tripel, 7 kæde med ét tal, 8 xy-kæde, 9 blandet kæde, 10 hvis-så med ét tal, 11 hvis-så med enkle tal, 12 begge veje, 13 hvis-så med teknikker.",
+  "fit": 8,
+
+  "_recog": "Genkendelse: mønstrets grundpris pr. teknik (justeret 18.-19. nov. 2026).",
+  "recog": [0, 0, 0.6, 2.2, 2.9, 3.0, 3.7, 1.9, 2.2, 2.5, 2.8, 3.1, 3.5, 3.1],
+  "_inner": "Teknikker inde i et hvis-så: inner x genkendelsen af den sværeste af dem.",
+  "inner": 0.6,
+
+  "_vis": "Hvor godt netop dette tilfælde skjuler sig: vis x (form + åbenhed + arbejde).",
+  "vis": 0.35,
+  "shapeSize": 0.15,
+  "shapeSizeCap": 3,
+  "shapeBent": 0.2,
+  "open": 0.8,
+  "openMid": 0.55,
+  "workPer": 0.12,
+  "workMid": 4,
+  "workLo": -0.25,
+  "workHi": 0.5,
+
+  "len": 0.35,
+  "_spot": "Overblik: tillæg efter antal steder at komme videre (indeks = antal, 4 og derover = sidste).",
+  "spot": [0.5, 0.5, 0.3, 0.15, 0],
+
+  "_load": "Mængde: tunge skridt ud over det tungeste. Gentagelser af samme teknik tæller 1/(1 + loadTechRepeat x (k-1)).",
+  "loadOver": 1.5,
+  "loadTechRepeat": 0.25,
+  "loadScale": 9,
+  "loadWeight": 1.0,
+  "loadCountScale": 12,
+  "early": 0.3,
+
+  "_singles": "Opgaver med kun enkle tal: hvor smal vejen er.",
+  "singlesK": 0.9,
+  "singlesOptsW": 0.65,
+  "singlesOptsMid": 4.5,
+  "singlesOptsSpan": 2.5,
+  "singlesNarrowW": 0.35,
+  "singlesNarrowSpan": 0.15,
+
+  "_pencil": "Blyant. Graderne udledes af gen.py: med blyant = base - (1 - anchor) x diff, uden blyant = base + anchor x diff, som du plejede = base. 'base' er de tilpassede tal (kun hukommelsen er ikke 0), 'diff' er hvor meget sværere det er uden blyant, og 'anchor' er hvor stor en del af de spil, grundtallene er tilpasset, der blev spillet med blyant, pr. teknik (0 = uden, 1 = med). Sat 20. nov. 2026 ud fra spillerens egne ord: hvis-så og kæder over to-mulighedsfelter med blyant, tripler nogle gange (ved lang søgning), resten uden. 'diff' er et kvalificeret skøn; 'repeat' og 'partial' er forberedt, men står på 0.",
+  "pencil": {
+    "_anchor": "Andel af de tilpassede spil, der blev spillet med blyant, pr. teknik: 0 nøgen single, 1 skjult single, 2 nabo, 3 nøgent par, 4 skjult par, 5 nøgen tripel, 6 skjult tripel, 7 kæde ét tal, 8 xy-kæde, 9 blandet kæde, 10-13 hvis-så.",
+    "anchor": [0, 0, 0, 0, 0, 0.5, 0.5, 0, 1, 1, 1, 1, 1, 1],
+    "_base": "Tilpassede værdier (samme for begge grader, før blyant-forskellen). Led, der ikke står her, har base 0.",
+    "base": {
+      "mem": [0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3]
+    },
+    "_diff": "Hvor meget sværere uden blyant, pr. led og teknik. mem: w x log2(1 + ting i hovedet); tech: fast; multi: w x felter med flere muligheder tilbage (højst multiCap i begge retninger); trial: hvis-så fra et felt med 3+ muligheder (0/1); built: w x log2(1 + felter bygget på tidligere strygninger); repeat: sparer w x genkendelsen, når mønstret er brugt før (0/1); partial: delvis tripel (0/1).",
+    "diff": {
+      "mem": [0, 0, 0, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2],
+      "tech": [0, 0, 0, 0.3, 0.5, 1, 1.2, 0.4, 1, 1.2, 0.3, 1.5, 1.5, 1.5],
+      "multi": [0, 0, 0, 0.25, 0.25, 0.25, 0.25, 0, 0.25, 0.25, 0, 0, 0.25, 0],
+      "trial": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.3, 0.3, 0, 0.3],
+      "built": [0, 0, 0, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4],
+      "repeat": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      "partial": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+    },
+    "multiCap": 1
+  }
+}

@@ -1441,7 +1441,7 @@ function gameSheet(g) {
   openSheet(
     `<h2>${esc(BAND[gBand(g)])} ${dec(gradeFor(g))} · ${g.cols}×${g.rows}</h2>` +
       (g.np != null && Math.abs(g.np - g.value) >= 0.1
-        ? `<p class="sub">${penUsed(g) === false ? tr("Spillet uden blyant. Med blyant: {v}.", { v: dec(g.value) }) : tr("Uden blyant: {v}.", { v: dec(g.np) })}</p>`
+        ? `<p class="sub">${penUsed(g) === true ? tr("Spillet med blyant. Uden blyant: {v}.", { v: dec(g.np) }) : penUsed(g) === false ? tr("Spillet uden blyant. Med blyant: {v}.", { v: dec(g.value) }) : tr("Med blyant: {a}. Uden blyant: {b}.", { a: dec(g.value), b: dec(g.np) })}</p>`
         : "") +
       `<p style="color:var(--mute)">${new Date(g.end).toLocaleString(LOCALE, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })} · ${g.solved ? tr("løst på {tid}", { tid: fmt(g.ms) }) : tr("ikke løst")}${g.solved && g.lv ? " · " + tr("estimat {t}", { t: estFmt(g.est || estimateSec(myCal(), g.lv)) }) : ""}</p>` +
       `<div class="menu">` +

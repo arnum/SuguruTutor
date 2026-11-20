@@ -1354,6 +1354,31 @@ function createTutor(G, region) {
         if (a.tech === hardest) for (const t of a.targets) if (t.cell !== cell && !Tm.val[t.cell] && pc(Tm.cand[t.cell]) >= 2) multi++;
       }
     }
+    // Træk ved det første skridt med den sværeste teknik, målt lige før det (til graden; se tools/grade/weights.json):
+    //   trial   hvis-så fra et felt med 3+ muligheder: modstriden stryger kun ét tal, som uden blyant skal huskes
+    //   built   mønstrets felter, hvis muligheder bygger på tidligere strygninger og ikke kun på de placerede tal
+    //           (for skjulte par/tripler: regionens felter, hvor tallenes pladser er ændret)
+    //   partial delvis tripel: ikke alle tre felter har alle tre tal ({1,2},{2,3},{1,3})
+    //   sig     mønstrets identitet (teknik, felter, tal), så en senere placering kan se, at mønstret er brugt før
+    let trial = 0,
+      built = 0,
+      partial = 0,
+      sig = null;
+    {
+      const i = steps.findIndex((a) => a.tech === hardest);
+      if (i >= 0) {
+        const a = steps[i],
+          Tb = clone(S0);
+        for (let j = 0; j < i; j++) apply(Tb, steps[j]);
+        const own = (a.tech === 2 ? a.spots : a.cells || [a.cell]).filter((c) => c >= 0);
+        if (a.tech === 4 || a.tech === 6) {
+          for (const c of RC[a.region]) if (!S0.val[c] && (Tb.cand[c] ^ S0.cand[c]) & a.mask) built++;
+        } else for (const c of own) if (Tb.cand[c] !== S0.cand[c]) built++;
+        if ((a.tech === 10 || a.tech === 11 || a.tech === 13) && pc(Tb.cand[a.cell]) >= 3) trial = 1;
+        if ((a.tech === 5 || a.tech === 6) && a.cells.some((c) => pc(Tb.cand[c] & a.mask) < 3)) partial = 1;
+        sig = a.tech + ":" + own.slice().sort((x, y) => x - y).join(",") + ":" + (a.mask != null ? a.mask : a.v != null ? a.v : "");
+      }
+    }
     // Hvor synligt er det sværeste skridt? Form, hvor fyldt området er, og hvor mange felters muligheder man skal kende.
     let vis = null;
     res.steps.forEach((s) => {
@@ -1394,6 +1419,10 @@ function createTutor(G, region) {
       len,
       inner,
       multi,
+      trial,
+      built,
+      partial,
+      sig,
       eliminations: steps.flatMap((a) => a.targets),
     };
   }

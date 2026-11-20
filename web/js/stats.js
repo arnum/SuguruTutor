@@ -197,7 +197,7 @@ function gameRow(g) {
     g.hints ? (g.hints === 1 ? tr("1 hint") : tr("{n} hints", { n: g.hints })) : "",
     !g.solved ? (g.revealed ? tr("Løsning vist") : tr("Opgivet")) : "",
     g.dbg && g.dbg.length ? tr("note") : "",
-    penUsed(g) === false && g.np != null && Math.abs(g.np - g.value) >= 0.1 ? tr("uden blyant") : "",
+    penUsed(g) === true && g.np != null && Math.abs(g.np - g.value) >= 0.1 ? tr("med blyant") : "",
   ].filter(Boolean);
   return (
     `<button class="game ${g.solved ? "" : "lost"}" type="button" data-code="${esc(g.code)}" data-id="${esc(g.id)}"><span class="v">${dec(gradeFor(g))}</span>` +

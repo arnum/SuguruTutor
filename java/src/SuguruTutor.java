@@ -50,6 +50,14 @@ public final class SuguruTutor {
         public int innerMask;
         /** Felter, som det sværeste skridt stryger i, og som stadig har flere muligheder bagefter (uden blyant skal de huskes). */
         public int multi;
+        /** Hvis-så fra et felt med 3+ muligheder (0/1): modstriden stryger kun ét tal, som skal huskes uden blyant. */
+        public int trial;
+        /** Felter i det sværeste mønster, hvis muligheder bygger på tidligere strygninger (ikke kun de placerede tal). */
+        public int built;
+        /** Delvis tripel (0/1): ikke alle tre felter/tal har alle tre muligheder. */
+        public int partial;
+        /** Mønstrets identitet (teknik og felter), til at se om samme mønster bruges igen. */
+        public String sig;
         /** Hvor synligt det sværeste skridt er: [antal felter i mønstret, 1 hvis det bøjer, andel udfyldte felter omkring, tomme felter man skal kende]. Kan være null. */
         public double[] vis;
         Hint(int cell, int v, int hardest, int opts, int[] support, int mem, int len) {
@@ -791,6 +799,31 @@ public final class SuguruTutor {
             for (App a : steps) {
                 apply(Tm, a);
                 if (a.tech == hardest) for (Target t : a.targets) if (t.cell != cell && Tm.val[t.cell] == 0 && pc(Tm.cand[t.cell]) >= 2) h.multi++;
+            }
+        }
+        // Træk ved det første skridt med den sværeste teknik, målt lige før det (samme som web/js/tutor.js)
+        {
+            int i = -1;
+            for (int j = 0; j < steps.size(); j++) if (steps.get(j).tech == hardest) { i = j; break; }
+            if (i >= 0) {
+                App a = steps.get(i);
+                St Tb = S0.copy();
+                for (int j = 0; j < i; j++) apply(Tb, steps.get(j));
+                int[] own0 = a.tech == 2 ? a.spots : a.cells != null ? a.cells : new int[]{a.cell};
+                List<Integer> own = new ArrayList<>();
+                for (int c : own0) if (c >= 0) own.add(c);
+                if (a.tech == 4 || a.tech == 6) {
+                    for (int c : RC[a.region]) if (S0.val[c] == 0 && ((Tb.cand[c] ^ S0.cand[c]) & a.mask) != 0) h.built++;
+                } else for (int c : own) if (Tb.cand[c] != S0.cand[c]) h.built++;
+                if ((a.tech == 10 || a.tech == 11 || a.tech == 13) && pc(Tb.cand[a.cell]) >= 3) h.trial = 1;
+                if (a.tech == 5 || a.tech == 6) for (int c : a.cells) if (pc(Tb.cand[c] & a.mask) < 3) { h.partial = 1; break; }
+                Collections.sort(own);
+                StringBuilder sb = new StringBuilder().append(a.tech).append(':');
+                for (int k = 0; k < own.size(); k++) sb.append(k > 0 ? "," : "").append(own.get(k));
+                sb.append(':');
+                if (a.tech >= 3 && a.tech <= 6) sb.append(a.mask);
+                else if (a.tech == 2 || a.tech == 10 || a.tech == 11 || a.tech == 13) sb.append(a.v);
+                h.sig = sb.toString();
             }
         }
         for (App a : steps) {

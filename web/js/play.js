@@ -559,12 +559,41 @@ function visText(h) {
   return tr("Fordelt: {parts}.", { parts: parts.join("; ") });
 }
 // Hvorfor graden uden blyant er højere
+// Én forklaring pr. blyant-led (se PEN_TERMS i grade.js); h er det tungeste skridt (g.hard eller g.np).
+function penReason(k, h) {
+  switch (k) {
+    case "nopenT":
+      return tr("{tech} kræver, at du husker felternes muligheder", { tech: E.TECH[h.T].label.toLowerCase() });
+    case "multiT":
+      return h.multi === 1 ? tr("1 felt står tilbage med flere muligheder efter strygningen") : tr("{n} felter står tilbage med flere muligheder efter strygningen", { n: h.multi });
+    case "memT":
+      return tr("mere skal holdes i hovedet");
+    case "trialT":
+      return tr("antagelsen starter i et felt med 3 eller flere muligheder, så modstriden stryger kun ét tal, som skal huskes");
+    case "builtT":
+      return tr("mønstret bygger på tidligere strygninger, som ikke kan ses ud fra tallene på pladen");
+    case "repeatT":
+      return tr("mønstret er brugt før, og med blyant står det allerede på pladen");
+    case "partialT":
+      return tr("en delvis tripel kræver, at du kender hvert felts muligheder præcist");
+  }
+  return "";
+}
+// Hvorfor graden uden blyant er højere: de blyant-led, der koster mere uden blyant (g.np er hele graden uden blyant)
 function penWhy(g) {
-  const why = [];
-  if (g.np.nopenT > 0) why.push(tr("{tech} kræver, at du husker felternes muligheder", { tech: E.TECH[g.np.T].label.toLowerCase() }));
-  if (g.np.multiT > 0) why.push(g.np.multi === 1 ? tr("1 felt står tilbage med flere muligheder efter strygningen") : tr("{n} felter står tilbage med flere muligheder efter strygningen", { n: g.np.multi }));
-  if (g.np.memT - (g.hard ? g.hard.memT : 0) > 0.05) why.push(tr("mere skal holdes i hovedet"));
-  return why;
+  const a = g.hard || {},
+    b = (g.np && g.np.hard) || {};
+  return PEN_TERMS.filter((k) => (b[k] || 0) - (a[k] || 0) > 0.05).map((k) => penReason(k, Math.abs(a[k] || 0) >= Math.abs(b[k] || 0) ? a : b));
+}
+// Én række for blyant-leddene i det viste skridt (hukommelsen står i sin egen række). Med blyant er de fradrag.
+function penRow(h, row, f) {
+  const ks = PEN_TERMS.filter((k) => k !== "memT" && Math.abs(h[k] || 0) >= 0.05),
+    sum = ks.reduce((a, k) => a + h[k], 0);
+  if (Math.abs(sum) < 0.05) return "";
+  const why = list2(ks.map((k) => penReason(k, h)));
+  return sum < 0
+    ? row("−" + f(-sum), tr("Med blyant."), tr("Noterne holder styr på det, du ellers skulle huske: {why}.", { why }))
+    : row("+" + f(sum), tr("Uden blyant."), tr("Det, blyanten ellers holder styr på, skal huskes: {why}.", { why }));
 }
 // Graden med og uden blyant, og hvorfor de er forskellige
 function penLineHtml(g) {
@@ -580,15 +609,15 @@ function penLineHtml(g) {
     `</p>`
   );
 }
-function profileHtml(g) {
-  if (!g || !g.hard) return "";
+function profileHtml(g0) {
+  if (!g0 || !g0.hard) return "";
+  // Forklar den grad, der vises: uden blyant er ankeret (ingen blyant-led); med blyant har fradrag for noterne
+  const g = noPen() && g0.np && g0.np.hard ? g0.np : g0;
   const f = (v) => dec(v),
     h = g.hard,
-    pct = Math.round(h.progress * 100);
-  // Uden blyant: samme skridt, men tallet ender ved graden uden blyant
-  const np = noPen() && g.np && Math.abs(g.np.value - g.value) >= 0.05 ? g.np : null,
-    total = np ? np.value : g.value,
-    band = np ? np.band : g.band;
+    pct = Math.round(h.progress * 100),
+    total = g.value,
+    band = g.band;
   const bar = Array.from({ length: 9 }, (_, i) => `<i class="${i < band ? "on" : ""}"></i>`).join("");
   const row = (num, lead, text) => `<dt>${num}</dt><dd>${lead ? "<b>" + lead + "</b> " : ""}${text}</dd>`;
   let rows;
@@ -625,6 +654,7 @@ function profileHtml(g) {
       (h.spot
         ? row("+" + f(h.spot), tr("Overblik."), h.opts <= 1 ? tr("Der var kun ét sted at komme videre.") : tr("Der var kun {n} steder at komme videre.", { n: h.opts }))
         : "") +
+      penRow(h, row, f) +
       (g.earlyT >= 0.05 ? row("+" + f(g.earlyT), tr("Tidligt."), tr("Det tunge skridt kommer, mens pladen stadig er åben.")) : "") +
       row(`<b>${f(g.peak)}</b>`, tr("Top:"), tr("det tungeste skridt alene.")) +
       row(
@@ -636,16 +666,6 @@ function profileHtml(g) {
           " " +
           tr("Hvert af de øvrige lægger lidt til, og gentagelser af samme teknik tæller mindre og mindre. Tillægget kan højst blive {max}.", { max: dec(1) }),
       );
-    if (np) {
-      const why = penWhy(g);
-      rows +=
-        row(`<b>${f(g.value)}</b>`, tr("Med blyant."), "") +
-        row(
-          "+" + f(np.value - g.value),
-          tr("Uden blyant."),
-          why.length ? tr("Det, blyanten ellers holder styr på, skal huskes: {why}.", { why: list2(why) }) : "",
-        );
-    }
     if (E.TECH[h.T].level !== g.tech)
       rows += row(
         tr("NB"),
@@ -658,7 +678,7 @@ function profileHtml(g) {
     `<p>${tr("Tallet er det tungeste skridt (top) plus et tillæg for, hvor mange tunge skridt der er (mængde). Det måler indsats, ikke hvilken teknik der bruges.")}</p>` +
     effortStrip(g) +
     `<dl class="profile">${rows}<dt><b>${f(total)}</b></dt><dd><b>${BAND[band]}</b>${total >= 9.9 ? " " + tr("(skalaen stopper ved {max})", { max: dec(9.9) }) : ""}</dd></dl>` +
-    estLineHtml(g.lv) +
+    estLineHtml(g0.lv) +
     `<p>${tr("Vægtene er tilpasset de første 17 vurderede opgaver. Bliv ved med at svare på »hvordan føltes den?«, så kan de justeres igen.")}</p>`
   );
 }

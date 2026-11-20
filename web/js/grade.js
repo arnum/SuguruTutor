@@ -8,65 +8,142 @@
 function solveProfile(tutor, givens) {
   const known = givens.slice();
   const empty0 = known.filter((v) => !v).length;
-  const steps = [];
+  const steps = [],
+    seen = new Set(); // mønstre brugt ved tidligere placeringer
   let placed = 0;
   while (known.some((v) => !v)) {
     const h = tutor.easiest(known);
     if (!h) return null;
-    steps.push({ L: h.hardestLevel, T: h.hardest, vis: h.vis, mem: h.mem, len: h.len, inner: h.inner || [], multi: h.multi || 0, opts: h.opts, progress: placed / empty0 });
+    const repeat = h.sig != null && seen.has(h.sig) ? 1 : 0;
+    if (h.sig != null) seen.add(h.sig);
+    steps.push({
+      L: h.hardestLevel,
+      T: h.hardest,
+      vis: h.vis,
+      mem: h.mem,
+      len: h.len,
+      inner: h.inner || [],
+      multi: h.multi || 0,
+      trial: h.trial || 0,
+      built: h.built || 0,
+      partial: h.partial || 0,
+      repeat,
+      opts: h.opts,
+      progress: placed / empty0,
+    });
     known[h.cell] = h.v;
     placed++;
   }
   return steps;
 }
 // Sværhedsgrad som indsats, ikke som teknik-stige.
-// Hvert skridt i en simuleret menneskelig løsning får en indsats ud fra fire ting:
+// Hvert skridt i en simuleret menneskelig løsning får en indsats som en sum af navngivne led:
 //   genkendelse (hvor svært mønstret er at få øje på), hukommelse (ting der skal holdes i hovedet samtidig),
-//   længde (antal led i ræsonnementet) og overblik (hvor få steder der var at komme videre).
-// Opgavens tal er det tungeste skridt plus et lille tillæg for mange tunge skridt og for at de kommer tidligt.
-// Konstanterne er tilpasset 17 opgaver med målt løsningstid og oplevet sværhed (nov. 2026): teknikken vejer tungt,
-// hukommelse og omgivelser mindre end først antaget. Sammenhæng med log(tid): 0,89.
-// Justeret 18. nov. 2026 ud fra 93 løste opgaver: par og tripler tog ca. 1,5 gange så lang tid som deres grad sagde
-// (og blev oplevet sværere), så deres genkendelse er hævet (par +1,2, tripler +1,1). Sammenhæng med log(tid): 0,75 -> 0,80.
-// pen = false: graden uden blyant (20. nov. 2026). Teknikker, der kræver at man husker muligheder, koster mere:
-// tripler og skjulte par mere end nøgne par, kæder over to-mulighedsfelter mere end kæder med ét tal, og hvis-så med
-// alle tal meget mere end at følge ét tal. Hukommelse vejer mere, og strygninger, der efterlader felter med flere
-// muligheder, skal huskes. Enkle tal og nabo-eliminering er uændret, så lette opgaver får samme grad.
-// Tallene er et kvalificeret skøn; de tilpasses, når der er spil nok med og uden blyant (spillet gemmer, om der blev brugt blyant).
-function gradeFromSteps(steps, pen = true) {
-  // (konstanter og hjælpefunktion ligger inde i funktionen, så den kan sendes til baggrunds-workeren)
-  // Hvis-så (11) og hvis-så med teknikker (13) har samme grundtal; forskellen ligger nu i INNER nedenfor.
-  const RECOG = [0, 0, 0.6, 2.2, 2.9, 3.0, 3.7, 1.9, 2.2, 2.5, 2.8, 3.1, 3.5, 3.1];
-  // Teknikker inde i et hvis-så / begge veje vejer med: 0,6 x genkendelsen af den sværeste af dem (19. nov. 2026).
-  // Et hvis-så med kun enkle tal og nabo-eliminering er langt lettere end et, der kræver par, tripler eller kæder
-  // undervejs. Typisk værdi svarer til det gamle faste tillæg for et dybt hvis-så (4,4).
-  const INNER = 0.6;
-  const NOPEN = [0, 0, 0, 0.3, 0.5, 1.0, 1.2, 0.4, 1.0, 1.2, 0.3, 1.5, 1.5, 1.5];
-  function stepEffort(s) {
-    // Genkendelse = mønstrets grundpris + hvor godt netop dette tilfælde skjuler sig
-    const base = 1.0 * (RECOG[s.T] || 0),
-      v = s.vis;
-    let shapeT = 0,
-      openT = 0,
-      workT = 0;
-    if (v) {
-      if (s.T >= 2 && s.T <= 6) shapeT = 0.35 * (0.15 * Math.min(3, Math.max(0, v.size - 2)) + 0.2 * v.bent);
-      openT = 0.35 * 0.8 * (0.55 - v.fill); // tæt udfyldt giver rabat, åbent giver tillæg
-      workT = 0.35 * Math.max(-0.25, Math.min(0.5, 0.12 * (v.work - 4)));
-    }
-    const R = base + shapeT + openT + workT;
-    const memT = (pen || s.T < 3 ? 0.3 : 0.5) * Math.log2(1 + (s.mem || 0));
-    const lenT = 0.35 * Math.log2(1 + Math.max(0, (s.len || 1) - 1));
-    const spot = s.opts <= 1 ? 0.5 : s.opts === 2 ? 0.3 : s.opts === 3 ? 0.15 : 0;
-    const innerT = s.inner && s.inner.length ? INNER * Math.max(...s.inner.map((t) => RECOG[t])) : 0;
-    const nopenT = pen ? 0 : NOPEN[s.T] || 0,
-      // (kæder med ét tal stryger kun ét tal, som nabo-eliminering, så de tæller ikke her)
-      multiT = pen || !((s.T >= 3 && s.T <= 6) || s.T === 8 || s.T === 9 || s.T === 12) ? 0 : Math.min(1, 0.25 * (s.multi || 0));
-    return { e: 1 + R + memT + lenT + spot + innerT + nopenT + multiT, R, base, shapeT, openT, workT, memT, lenT, spot, innerT, nopenT, multiT };
+//   længde (antal led i ræsonnementet), overblik (hvor få steder der var at komme videre), og led der afhænger af,
+//   om man bruger blyant. Opgavens tal er det tungeste skridt plus et lille tillæg for mange tunge skridt og for at de
+//   kommer tidligt.
+// Tre lag: træk (tutor.js beskriver hvert skridt: teknik, felter, hukommelse, ...), vægte (GW nedenfor, skrevet fra
+// tools/grade/weights.json) og indsats (stepEffort). En kalibrering ændrer kun weights.json; se tools/grade/README.md.
+// Historik: tilpasset 17 opgaver med målt tid (nov. 2026, sammenhæng med log(tid) 0,89); par og tripler hævet efter
+// 93 opgaver (18. nov., 0,75 -> 0,80); teknikker inde i hvis-så (19. nov.); graden uden blyant (20. nov.).
+// pen = false: graden uden blyant; pen = null: som du plejede. Grundtallene er tilpasset spil, hvor hvis-så og kæder over
+// to-mulighedsfelter blev løst med blyant, tripler nogle gange, og resten uden (20. nov. 2026). weights.json siger pr.
+// teknik, hvor stor en del der var med blyant; gen.py udleder derfra graden med og uden blyant.
+// <gen:weights> Skrevet af tools/grade/gen.py ud fra tools/grade/weights.json. Ret dér, ikke her.
+// Blyant-led: [med blyant, uden blyant, som du plejede], hver en liste pr. teknik (udledt af base, diff og anchor).
+const GW = {
+  fit: 8,
+  recog: [0, 0, 0.6, 2.2, 2.9, 3, 3.7, 1.9, 2.2, 2.5, 2.8, 3.1, 3.5, 3.1],
+  spot: [0.5, 0.5, 0.3, 0.15, 0],
+  inner: 0.6,
+  vis: 0.35,
+  shapeSize: 0.15,
+  shapeSizeCap: 3,
+  shapeBent: 0.2,
+  open: 0.8,
+  openMid: 0.55,
+  workPer: 0.12,
+  workMid: 4,
+  workLo: -0.25,
+  workHi: 0.5,
+  len: 0.35,
+  loadOver: 1.5,
+  loadTechRepeat: 0.25,
+  loadScale: 9,
+  loadWeight: 1,
+  loadCountScale: 12,
+  early: 0.3,
+  singlesK: 0.9,
+  singlesOptsW: 0.65,
+  singlesOptsMid: 4.5,
+  singlesOptsSpan: 2.5,
+  singlesNarrowW: 0.35,
+  singlesNarrowSpan: 0.15,
+  pencil: {
+    mem: [[0.3, 0.3, 0.3, 0.1, 0.1, 0.2, 0.2, 0.1, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3], [0.3, 0.3, 0.3, 0.3, 0.3, 0.4, 0.4, 0.3, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5], [0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3]],
+    tech: [[0, 0, 0, -0.3, -0.5, -0.5, -0.6, -0.4, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0.5, 0.6, 0, 1, 1.2, 0.3, 1.5, 1.5, 1.5], [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]],
+    multi: [[0, 0, 0, -0.25, -0.25, -0.125, -0.125, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0.125, 0.125, 0, 0.25, 0.25, 0, 0, 0.25, 0], [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]],
+    trial: [[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.3, 0.3, 0, 0.3], [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]],
+    built: [[0, 0, 0, -0.4, -0.4, -0.2, -0.2, -0.4, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0.2, 0.2, 0, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4], [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]],
+    repeat: [[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]],
+    partial: [[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]],
+    multiCap: 1,
+  },
+};
+// </gen:weights>
+// Indsatsen for ét skridt. pen: true = med blyant, false = uden, null = som du plejede (graden, vægtene er tilpasset;
+// bruges til spil fra før blyant blev registreret). Leddene lægges sammen i fast rækkefølge (samme som Java).
+function stepEffort(s, pen = true) {
+  const m = pen === null ? 2 : pen === false ? 1 : 0,
+    T = s.T,
+    P = GW.pencil;
+  // Genkendelse = mønstrets grundpris + hvor godt netop dette tilfælde skjuler sig
+  const base = 1.0 * (GW.recog[T] || 0),
+    v = s.vis;
+  let shapeT = 0,
+    openT = 0,
+    workT = 0;
+  if (v) {
+    if (T >= 2 && T <= 6) shapeT = GW.vis * (GW.shapeSize * Math.min(GW.shapeSizeCap, Math.max(0, v.size - 2)) + GW.shapeBent * v.bent);
+    openT = GW.vis * GW.open * (GW.openMid - v.fill); // tæt udfyldt giver rabat, åbent giver tillæg
+    workT = GW.vis * Math.max(GW.workLo, Math.min(GW.workHi, GW.workPer * (v.work - GW.workMid)));
   }
+  const R = base + shapeT + openT + workT;
+  const memT = P.mem[m][T] * Math.log2(1 + (s.mem || 0));
+  const lenT = GW.len * Math.log2(1 + Math.max(0, (s.len || 1) - 1));
+  const spot = GW.spot[Math.max(0, Math.min(4, s.opts == null ? 4 : s.opts))];
+  const innerT = s.inner && s.inner.length ? GW.inner * Math.max(...s.inner.map((t) => GW.recog[t])) : 0;
+  const nopenT = P.tech[m][T],
+    multiT = Math.max(-P.multiCap, Math.min(P.multiCap, P.multi[m][T] * (s.multi || 0))),
+    trialT = P.trial[m][T] * (s.trial || 0),
+    builtT = P.built[m][T] * Math.log2(1 + (s.built || 0)),
+    repeatT = -P.repeat[m][T] * (s.repeat ? R : 0),
+    partialT = P.partial[m][T] * (s.partial || 0);
+  return {
+    e: 1 + R + memT + lenT + spot + innerT + nopenT + multiT + trialT + builtT + repeatT + partialT,
+    R,
+    base,
+    shapeT,
+    openT,
+    workT,
+    memT,
+    lenT,
+    spot,
+    innerT,
+    nopenT,
+    multiT,
+    trialT,
+    builtT,
+    repeatT,
+    partialT,
+  };
+}
+// Led, der afhænger af blyant (til forklaringen af forskellen mellem graderne)
+const PEN_TERMS = ["memT", "nopenT", "multiT", "trialT", "builtT", "repeatT", "partialT"];
+function gradeFromSteps(steps, pen = true) {
   const clamp = (x) => Math.max(0, Math.min(1, x));
   const N = steps.length,
-    ef = steps.map(stepEffort);
+    ef = steps.map((s) => stepEffort(s, pen === null || pen === false ? pen : true));
   let hi = 0;
   ef.forEach((x, i) => {
     if (x.e > ef[hi].e + 1e-9) hi = i;
@@ -89,27 +166,23 @@ function gradeFromSteps(steps, pen = true) {
     if (steps[i].L < 2) return;
     nHard++;
     const k = (seen[steps[i].T] = (seen[steps[i].T] || 0) + 1);
-    if (i !== hi) W += Math.max(0, x.e - 1.5) / (1 + 0.25 * (k - 1));
+    if (i !== hi) W += Math.max(0, x.e - GW.loadOver) / (1 + GW.loadTechRepeat * (k - 1));
   });
   if (tech === 1) {
     // Kun enkle træk: sværheden er, hvor smal vejen er
-    value = 1 + 0.9 * (0.65 * clamp((4.5 - avgOpts) / 2.5) + 0.35 * clamp(narrow / 0.15));
+    value = 1 + GW.singlesK * (GW.singlesOptsW * clamp((GW.singlesOptsMid - avgOpts) / GW.singlesOptsSpan) + GW.singlesNarrowW * clamp(narrow / GW.singlesNarrowSpan));
   } else {
-    loadT = 1.0 * (1 - Math.exp(-W / 9));
-    earlyT = 0.3 * (1 - hs.progress);
+    loadT = GW.loadWeight * (1 - Math.exp(-W / GW.loadScale));
+    earlyT = GW.early * (1 - hs.progress);
     peak = top.e + earlyT;
     value = peak + loadT;
   }
   if (tech === 1) peak = value;
-  const load = tech === 1 ? 0 : Math.max(1, Math.min(10, Math.round(10 * (1 - Math.exp(-(W + Math.max(0, top.e - 1.5)) / 12)))));
+  const load = tech === 1 ? 0 : Math.max(1, Math.min(10, Math.round(10 * (1 - Math.exp(-(W + Math.max(0, top.e - GW.loadOver)) / GW.loadCountScale)))));
   value = Math.max(1, Math.min(9.9, Math.round(value * 10) / 10));
   const band = Math.floor(value);
-  // Graden uden blyant (samme skridt, anden pris)
-  let np = null;
-  if (pen) {
-    const n = gradeFromSteps(steps, false);
-    np = { value: n.value, band: n.band, peak: n.peak, load: n.load, T: n.hard.T, memT: n.hard.memT, nopenT: n.hard.nopenT, multiT: n.hard.multiT, multi: n.hard.multi };
-  }
+  // Graden uden blyant (ankeret, se tools/grade/weights.json) som et fuldt gradobjekt, så forklaringen kan vise dens egne led
+  const np = pen !== null && pen !== false ? gradeFromSteps(steps, false) : null;
   return {
     np,
     value,
@@ -145,8 +218,16 @@ function gradeFromSteps(steps, pen = true) {
       multi: hs.multi || 0,
       nopenT: top.nopenT,
       multiT: top.multiT,
+      trialT: top.trialT,
+      builtT: top.builtT,
+      repeatT: top.repeatT,
+      partialT: top.partialT,
+      trial: hs.trial || 0,
+      built: hs.built || 0,
+      repeat: hs.repeat || 0,
+      partial: hs.partial || 0,
     },
-    fit: 5,
+    fit: GW.fit,
     nHard,
     W,
     loadT,

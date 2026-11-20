@@ -7,9 +7,9 @@ function loadPuzzle(p, saved, opts = {}) {
   hint = null;
   if (!p.maxRegion) p.maxRegion = 5;
   NOTE_POS = p.maxRegion >= 6 ? NOTE_POS6 : NOTE_POS5;
-  if (!p.grade || !p.grade.hard || p.grade.load === undefined || p.grade.fit !== 5 || !p.grade.lv) {
+  if (!p.grade || !p.grade.hard || p.grade.load === undefined || p.grade.fit !== GW.fit || !p.grade.lv) {
     const st = solveProfile(tutor, p.givens);
-    p.grade = st ? gradeFromSteps(st, p.rating.level, p.maxRegion) : null;
+    p.grade = st ? gradeFromSteps(st) : null;
   }
   const n = G.n,
     count = {};
@@ -69,7 +69,7 @@ function recordGame(won) {
     level: P.grade ? P.grade.band : bandOf(P.rating.level), // almindelig grad (med blyant)
     tech: P.rating.level,
     scale: 2,
-    fit: 5,
+    fit: GW.fit,
     np: P.grade && P.grade.np ? P.grade.np.value : null, // graden uden blyant
     npk: P.grade && P.grade.np ? P.grade.np.peak : null, // og dens top og mængde
     npl: P.grade && P.grade.np ? P.grade.np.load : null,

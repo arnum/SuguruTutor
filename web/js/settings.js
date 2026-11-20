@@ -28,7 +28,7 @@ function renderSettings() {
       ["med", tr("Med blyant")],
       ["uden", tr("Uden blyant")],
     ]
-      .map(([k, name]) => `<button type="button" data-p="${k}" aria-pressed="${(settings.pencil === "uden" ? "uden" : "med") === k}">${name}</button>`)
+      .map(([k, name]) => `<button type="button" data-p="${k}" aria-pressed="${(settings.pencil === "med" ? "med" : "uden") === k}">${name}</button>`)
       .join("") +
     `</div></div>` +
     `<div class="set stack"><span>${tr("Fejl under spillet")}</span><small>${tr("Regelbrud er ens tal, der rører hinanden, to ens tal i en region eller et tal større end regionen. Tal, der kun er forkerte i forhold til løsningen, vises aldrig af sig selv. «Tjek fejl» viser altid alle fejl.")}</small><div class="seg" id="errSeg">` +
