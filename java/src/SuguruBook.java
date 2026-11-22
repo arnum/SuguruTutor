@@ -5,104 +5,123 @@ import java.time.LocalDate;
 import java.util.*;
 
 /**
- * Laver et printbart Suguru-hæfte: mange opgaver i én HTML-fil sat op til A4,
- * med sværhedsforklaring til hver opgave og løsninger bagerst.
- * Åbn filen i Chrome og vælg Udskriv → Gem som PDF (eller brug --pdf).
+ * Makes a printable Suguru booklet: many puzzles in one HTML file laid out for A4,
+ * with an explanation of the difficulty for each puzzle and the solutions at the back.
+ * Open the file in Chrome and choose Print → Save as PDF (or use --pdf).
  *
- * Eksempler:
- *   java SuguruBook --antal 12 --str 6x6 --grad 3-6 --ud haefte.html
- *   java SuguruBook --antal 8 --str 8x8 --grad 6 --type lang --maks 6 --pr-side 1 --pdf
- *   java SuguruBook --antal 6 --str 7x7 --grad 5 --teknik 5
+ * Examples:
+ *   java SuguruBook --count 12 --size 6x6 --grade 3-6 --out booklet.html
+ *   java SuguruBook --count 8 --size 8x8 --grade 6 --type long --max 6 --per-page 1 --pdf
+ *   java SuguruBook --count 6 --size 7x7 --grade 5 --technique 5 --lang da
  *
- * Valg:
- *   --antal N          antal opgaver (standard 12)
- *   --str BxH          bredde x højde, fx 6x6 eller 8x10 (standard 6x6)
- *   --grad X           sværhedsgrad: ét tal (1-9), et interval (3-6) eller en liste (2,4,6). Standard 3-6
- *   --teknik T         opgaven skal kræve teknikniveau T (1-11): 2 nabo-eliminering, 3 par, 4 tripler, 5-7 kæder, 8-11 hvis-så
- *   --type K           alle | kort (få tunge træk) | lang (mange tunge træk). Standard alle
- *   --nuance N         alle | mild (.0-.3) | middel (.4-.6) | haard (.7-.9). Standard alle
- *   --maks M           største regionsstørrelse 4, 5 eller 6 (standard 5; 4 kun op til 7x7)
- *   --pr-side P        1, 2 eller 4 opgaver pr. side (standard 2)
- *   --seed S           startfrø; samme frø og valg giver samme hæfte
- *   --tid T            sekunder pr. opgave før nærmeste bruges (standard 20)
- *   --titel "..."      overskrift
- *   --ud FIL           filnavn (standard suguru-haefte.html)
- *   --pdf              forsøg også at lave PDF med Chrome/Chromium (headless)
- *   --usorteret        behold rækkefølgen i stedet for at sortere efter sværhed
- *   --koder "A,B,..."  lav hæftet af bestemte opgaver ud fra deres koder (SU1-...)
- *   --koder-fil FIL    som --koder, men læs koderne fra en tekstfil (én pr. linje)
+ * Options:
+ *   --count N          number of puzzles (default 12)
+ *   --size WxH         width x height, e.g. 6x6 or 8x10 (default 6x6)
+ *   --grade X          difficulty: one number (1-9), a range (3-6) or a list (2,4,6). Default 3-6
+ *   --technique T      the puzzle must need technique level T (1-11): 2 neighbour elimination, 3 pairs, 4 triples,
+ *                      5-7 chains, 8-11 what-if
+ *   --type K           all | short (few heavy moves) | long (many heavy moves). Default all
+ *   --nuance N         all | mild (.0-.3) | medium (.4-.6) | hard (.7-.9). Default all
+ *   --max M            largest region size 4, 5 or 6 (default 5; 4 only up to 7x7)
+ *   --per-page P       1, 2 or 4 puzzles per page (default 2)
+ *   --seed S           starting seed; the same seed and options give the same booklet
+ *   --time T           seconds per puzzle before the nearest is used (default 20)
+ *   --title "..."      heading
+ *   --out FILE         file name (default suguru-booklet.html, or suguru-haefte.html with --lang da)
+ *   --pdf              also try to make a PDF with Chrome/Chromium (headless)
+ *   --unsorted         keep the order instead of sorting by difficulty
+ *   --codes "A,B,..."  make the booklet from particular puzzles given by their codes (SU1-...)
+ *   --codes-file FILE  like --codes, but read the codes from a text file (one per line)
+ *   --lang L           en (default) or da: the language of the booklet and the messages
  *
- * Hver opgave får en kode (SU1-...), der indeholder selve opgaven. Koden kan skrives ind i
- * Suguru-spillet i browseren, så man kan spille opgaven med hints, og den virker på tværs af versioner.
+ * The Danish option names from before still work (--antal, --str, --grad, --teknik, --maks, --pr-side, --tid,
+ * --titel, --ud, --usorteret, --koder, --koder-fil, --sprog), and so do the Danish values (alle, kort, lang, middel, haard).
+ *
+ * Each puzzle gets a code (SU1-...) that contains the puzzle itself. The code can be typed into the
+ * Suguru game in the browser, so the puzzle can be played with hints, and it works across versions.
  */
 public final class SuguruBook {
 
     public static void main(String[] args) throws Exception {
         SuguruEngine.fixConsoleEncoding();
         Map<String, String> o = parseArgs(args);
-        int count = Integer.parseInt(o.getOrDefault("antal", "12"));
-        String[] wh = o.getOrDefault("str", "6x6").toLowerCase().replace("×", "x").split("x");
+        SuguruText.da = o.getOrDefault("lang", "en").toLowerCase().startsWith("da");
+        int count = Integer.parseInt(o.getOrDefault("count", "12"));
+        String[] wh = o.getOrDefault("size", "6x6").toLowerCase().replace("×", "x").split("x");
         int cols = Integer.parseInt(wh[0].trim()), rows = Integer.parseInt(wh[1].trim());
-        List<Integer> levels = parseLevels(o.getOrDefault("grad", o.getOrDefault("niveau", "3-6")));
-        int must = Integer.parseInt(o.getOrDefault("teknik", "0"));
-        if (must < 0 || must > SuguruEngine.TOP_LEVEL) throw new IllegalArgumentException("--teknik skal være 1-11");
-        String kind = o.getOrDefault("type", "alle").toLowerCase();
-        int[] band = nuance(o.getOrDefault("nuance", "alle"));
-        int maxRegion = Integer.parseInt(o.getOrDefault("maks", "5"));
-        int perPage = Integer.parseInt(o.getOrDefault("pr-side", "2"));
+        List<Integer> levels = parseLevels(o.getOrDefault("grade", o.getOrDefault("level", "3-6")));
+        int must = Integer.parseInt(o.getOrDefault("technique", "0"));
+        if (must < 0 || must > SuguruEngine.TOP_LEVEL) throw new IllegalArgumentException(SuguruText.t("--technique must be 1-11"));
+        String kind = KIND.getOrDefault(o.getOrDefault("type", "all").toLowerCase(), "all");
+        int[] band = nuance(o.getOrDefault("nuance", "all"));
+        int maxRegion = Integer.parseInt(o.getOrDefault("max", "5"));
+        int perPage = Integer.parseInt(o.getOrDefault("per-page", "2"));
         long seed = Long.parseLong(o.getOrDefault("seed", String.valueOf(System.currentTimeMillis() % 1_000_000_000L)));
-        long budget = (long) (Double.parseDouble(o.getOrDefault("tid", "20")) * 1000);
-        String title = o.getOrDefault("titel", "Suguru");
-        String outName = o.getOrDefault("ud", "suguru-haefte.html");
+        long budget = (long) (Double.parseDouble(o.getOrDefault("time", "20")) * 1000);
+        String title = o.getOrDefault("title", "Suguru");
+        String outName = o.getOrDefault("out", SuguruText.da ? "suguru-haefte.html" : "suguru-booklet.html");
 
-        if (o.containsKey("koder") || o.containsKey("koder-fil")) maxRegion = Math.max(4, Math.min(6, maxRegion));
-        if (maxRegion < 4 || maxRegion > 6) throw new IllegalArgumentException("--maks skal være 4, 5 eller 6");
-        if (maxRegion == 4 && rows * cols > 49 && !o.containsKey("koder") && !o.containsKey("koder-fil")) throw new IllegalArgumentException("Regioner på højst 4 felter kan kun laves op til 7x7");
-        if (perPage != 1 && perPage != 2 && perPage != 4) throw new IllegalArgumentException("--pr-side skal være 1, 2 eller 4");
+        if (o.containsKey("codes") || o.containsKey("codes-file")) maxRegion = Math.max(4, Math.min(6, maxRegion));
+        if (maxRegion < 4 || maxRegion > 6) throw new IllegalArgumentException(SuguruText.t("--max must be 4, 5 or 6"));
+        if (maxRegion == 4 && rows * cols > 49 && !o.containsKey("codes") && !o.containsKey("codes-file")) throw new IllegalArgumentException(SuguruText.t("Regions of at most 4 cells can only be made up to 7x7"));
+        if (perPage != 1 && perPage != 2 && perPage != 4) throw new IllegalArgumentException(SuguruText.t("--per-page must be 1, 2 or 4"));
 
         List<SuguruEngine.Puzzle> puzzles = new ArrayList<>();
         List<String> codes = new ArrayList<>();
-        if (o.containsKey("koder")) for (String c : o.get("koder").split(",")) if (!c.trim().isEmpty()) codes.add(c.trim());
-        if (o.containsKey("koder-fil")) for (String c : Files.readAllLines(Paths.get(o.get("koder-fil")), StandardCharsets.UTF_8)) if (!c.trim().isEmpty()) codes.add(c.trim());
+        if (o.containsKey("codes")) for (String c : o.get("codes").split(",")) if (!c.trim().isEmpty()) codes.add(c.trim());
+        if (o.containsKey("codes-file")) for (String c : Files.readAllLines(Paths.get(o.get("codes-file")), StandardCharsets.UTF_8)) if (!c.trim().isEmpty()) codes.add(c.trim());
         if (!codes.isEmpty()) count = 0;
         for (String c : codes) {
             try {
                 SuguruEngine.Puzzle p = SuguruCode.toPuzzle(c);
                 puzzles.add(p);
-                System.out.printf("Kode %d/%d: %s%n", puzzles.size(), codes.size(), label(p));
+                System.out.print(SuguruText.f("Code %d/%d: %s%n", puzzles.size(), codes.size(), label(p)));
             } catch (IllegalArgumentException e) {
-                System.out.println("Springer over " + c + ": " + e.getMessage());
+                System.out.println(SuguruText.f("Skipping %s: %s", c, e.getMessage()));
             }
         }
-        if (!codes.isEmpty() && puzzles.isEmpty()) throw new IllegalArgumentException("Ingen gyldige koder.");
+        if (!codes.isEmpty() && puzzles.isEmpty()) throw new IllegalArgumentException(SuguruText.t("No valid codes."));
         for (int i = 0; i < count; i++) {
             int level = levels.get((int) ((long) i * levels.size() / count));
             long t0 = System.currentTimeMillis();
             SuguruEngine.Puzzle p = SuguruGrade.generateGraded(rows, cols, level, must, band[0], band[1], kind, seed + i * 7919L, budget, maxRegion);
             puzzles.add(p);
-            String miss = p.grade != null && p.grade.band != level ? "  (ønsket grad " + level + ", nærmeste brugt)" : "";
-            System.out.printf("Opgave %d/%d: %s · %.1f s%s%n", i + 1, count, label(p), (System.currentTimeMillis() - t0) / 1000.0, miss);
+            String miss = p.grade != null && p.grade.band != level ? SuguruText.f("  (wanted grade %d, nearest used)", level) : "";
+            System.out.print(SuguruText.f("Puzzle %d/%d: %s · %.1f s%s%n", i + 1, count, label(p), (System.currentTimeMillis() - t0) / 1000.0, miss));
         }
-        if (!o.containsKey("usorteret"))
+        if (!o.containsKey("unsorted"))
             puzzles.sort(Comparator.comparingDouble(p -> p.grade == null ? p.rating.level : p.grade.value));
 
-        String html = render(puzzles, title, perPage, o.getOrDefault("nuance", "alle"));
+        String html = render(puzzles, title, perPage);
         Path out = Paths.get(outName).toAbsolutePath();
         Files.write(out, html.getBytes(StandardCharsets.UTF_8));
-        System.out.println("Gemt: " + out);
+        System.out.println(SuguruText.f("Saved: %s", out));
         if (o.containsKey("pdf")) makePdf(out);
-        else System.out.println("Åbn filen i Chrome og vælg Udskriv → Gem som PDF (A4, uden sidehoved/-fod).");
+        else System.out.println(SuguruText.t("Open the file in Chrome and choose Print → Save as PDF (A4, without headers and footers)."));
     }
 
-    // ------------------------------------------------------------------ argumenter
+    // ------------------------------------------------------------------ arguments
+    /** The Danish option names from before, and the English ones they stand for. */
+    static final Map<String, String> ALIAS = new HashMap<>();
+    /** --type values: Danish ones as well. */
+    static final Map<String, String> KIND = new HashMap<>();
+    static {
+        String[][] a = {{"antal", "count"}, {"str", "size"}, {"grad", "grade"}, {"niveau", "level"}, {"teknik", "technique"},
+            {"maks", "max"}, {"pr-side", "per-page"}, {"tid", "time"}, {"titel", "title"}, {"ud", "out"}, {"usorteret", "unsorted"},
+            {"koder", "codes"}, {"koder-fil", "codes-file"}, {"sprog", "lang"}};
+        for (String[] x : a) ALIAS.put(x[0], x[1]);
+        String[][] k = {{"all", "all"}, {"alle", "all"}, {"short", "short"}, {"kort", "short"}, {"long", "long"}, {"lang", "long"}};
+        for (String[] x : k) KIND.put(x[0], x[1]);
+    }
     static Map<String, String> parseArgs(String[] args) {
         Map<String, String> m = new HashMap<>();
         for (int i = 0; i < args.length; i++) {
-            if (!args[i].startsWith("--")) throw new IllegalArgumentException("Ukendt argument: " + args[i]);
+            if (!args[i].startsWith("--")) throw new IllegalArgumentException(SuguruText.f("Unknown argument: %s", args[i]));
             String k = args[i].substring(2);
-            if (k.equals("pdf") || k.equals("usorteret")) m.put(k, "ja");
+            k = ALIAS.getOrDefault(k, k);
+            if (k.equals("pdf") || k.equals("unsorted")) m.put(k, "yes");
             else if (i + 1 < args.length) m.put(k, args[++i]);
-            else throw new IllegalArgumentException("Mangler værdi til --" + k);
+            else throw new IllegalArgumentException(SuguruText.f("Missing value for --%s", k));
         }
         return m;
     }
@@ -115,13 +134,13 @@ public final class SuguruBook {
                 for (int x = Integer.parseInt(ab[0].trim()); x <= Integer.parseInt(ab[1].trim()); x++) l.add(x);
             } else l.add(Integer.parseInt(part));
         }
-        for (int x : l) if (x < 1 || x > 9) throw new IllegalArgumentException("Sværhedsgrad skal være 1-9: " + x);
+        for (int x : l) if (x < 1 || x > 9) throw new IllegalArgumentException(SuguruText.f("Difficulty must be 1-9: %d", x));
         return l;
     }
     static int[] nuance(String s) {
         switch (s.toLowerCase().replace("å", "aa")) {
             case "mild": return new int[]{0, 3};
-            case "middel": return new int[]{4, 6};
+            case "medium": case "middel": return new int[]{4, 6};
             case "haard": case "hard": return new int[]{7, 9};
             default: return new int[]{0, 9};
         }
@@ -140,17 +159,17 @@ public final class SuguruBook {
             try {
                 Process pr = new ProcessBuilder(exe, "--headless=new", "--disable-gpu", "--no-pdf-header-footer",
                     "--print-to-pdf=" + pdf, html.toUri().toString()).redirectErrorStream(true).start();
-                try (InputStream in = pr.getInputStream()) { byte[] buf = new byte[4096]; while (in.read(buf) != -1) { /* tøm output */ } }
+                try (InputStream in = pr.getInputStream()) { byte[] buf = new byte[4096]; while (in.read(buf) != -1) { /* drain the output */ } }
                 if (pr.waitFor() == 0 && Files.exists(pdf)) { System.out.println("PDF: " + pdf); return; }
-            } catch (Exception ignored) { /* prøv næste */ }
+            } catch (Exception ignored) { /* try the next one */ }
         }
-        System.out.println("Fandt ikke Chrome/Chromium. Sæt miljøvariablen CHROME til programmets sti, eller udskriv HTML-filen fra Chrome.");
+        System.out.println(SuguruText.t("Could not find Chrome/Chromium. Set the environment variable CHROME to the program's path, or print the HTML file from Chrome."));
     }
 
     // ------------------------------------------------------------------ HTML
     static String esc(String s) { return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;"); }
 
-    /** Gitter som SVG. values: tal at vise (0 = tomt); bold = givne tal. */
+    /** The grid as SVG. values: numbers to show (0 = empty); bold = given numbers. */
     static String svg(SuguruEngine.Puzzle p, int[] values, boolean[] bold, double cellMm, boolean labels) {
         int S = 100, M = labels ? 30 : 6;
         StringBuilder sb = new StringBuilder();
@@ -187,16 +206,16 @@ public final class SuguruBook {
         for (int t = 0; t < p.rating.uses.length; t++) if (p.rating.uses[t] > 0) hardest = t;
         List<String> l = new ArrayList<>();
         for (int t = 0; t < p.rating.uses.length; t++) if (p.rating.uses[t] > 0)
-            l.add((t == hardest ? "<b>" : "") + esc(SuguruEngine.TECH_LABEL[t]) + " ×" + p.rating.uses[t] + (t == hardest ? "</b>" : ""));
+            l.add((t == hardest ? "<b>" : "") + esc(SuguruText.t(SuguruEngine.TECH_LABEL[t])) + " ×" + p.rating.uses[t] + (t == hardest ? "</b>" : ""));
         return String.join(" · ", l);
     }
 
-    /** "top 4,1 · mængde 5 · par" */
+    /** "peak 4.1 · load 5 · pairs" */
     static String shortTag(SuguruEngine.Puzzle p) {
-        return (p.grade == null ? "" : p.grade.peakLoadText() + " · ") + SuguruGrade.LEVEL_TECH[Math.min(12, p.rating.level)];
+        return (p.grade == null ? "" : p.grade.peakLoadText() + " · ") + SuguruText.t(SuguruGrade.LEVEL_TECH[Math.min(12, p.rating.level)]);
     }
     static int band(SuguruEngine.Puzzle p) { return p.grade == null ? Math.min(9, p.rating.level) : p.grade.band; }
-    static String bandName(SuguruEngine.Puzzle p) { return SuguruGrade.BAND[band(p)]; }
+    static String bandName(SuguruEngine.Puzzle p) { return SuguruText.t(SuguruGrade.BAND[band(p)]); }
     static String label(SuguruEngine.Puzzle p) { return bandName(p) + (p.grade == null ? "" : " " + p.grade.bothText()) + " · " + shortTag(p); }
 
     static String puzzleBlock(SuguruEngine.Puzzle p, int no, int perPage) {
@@ -216,7 +235,7 @@ public final class SuguruBook {
         if (perPage == 4) {
             sb.append("<p class=\"tag\">").append(esc(shortTag(p))).append("</p>");
         } else {
-            sb.append("<h3>Hvorfor").append(esc(value)).append("?</h3>");
+            sb.append("<h3>").append(esc(SuguruText.f("Why%s?", value))).append("</h3>");
             if (p.grade != null) {
                 sb.append("<p class=\"tag\">").append(esc(shortTag(p))).append("</p><dl>");
                 for (String[] l : SuguruGrade.profileLines(p.grade, perPage != 1)) {
@@ -227,10 +246,10 @@ public final class SuguruBook {
                 }
                 sb.append("</dl>");
             }
-            sb.append("<p class=\"tech\"><span>Teknikker:</span> ").append(techList(p)).append("</p>");
+            sb.append("<p class=\"tech\"><span>").append(SuguruText.t("Techniques:")).append("</span> ").append(techList(p)).append("</p>");
         }
-        sb.append(String.format("<p class=\"small\">%d×%d · regioner op til %d · %d givne%s</p>", p.cols, p.rows, p.maxRegion, p.clueCount(), p.seed >= 0 ? " · #" + p.seed : ""));
-        sb.append("<p class=\"code\"><span>Kode til hints:</span> ").append(SuguruCode.encode(p)).append("</p>");
+        sb.append("<p class=\"small\">").append(SuguruText.f("%d×%d · regions up to %d · %d givens%s", p.cols, p.rows, p.maxRegion, p.clueCount(), p.seed >= 0 ? " · #" + p.seed : "")).append("</p>");
+        sb.append("<p class=\"code\"><span>").append(SuguruText.t("Code for hints:")).append("</span> ").append(SuguruCode.encode(p)).append("</p>");
         sb.append("</div></div></section>");
         return sb.toString();
     }
@@ -241,21 +260,22 @@ public final class SuguruBook {
         return "<figure class=\"sol\"><figcaption>" + no + "</figcaption>" + svg(p, p.solution, bold, cell, false) + "</figure>";
     }
 
-    static String render(List<SuguruEngine.Puzzle> ps, String title, int perPage, String nuance) {
+    static String render(List<SuguruEngine.Puzzle> ps, String title, int perPage) {
         StringBuilder sb = new StringBuilder();
         SuguruEngine.Puzzle first = ps.get(0);
-        sb.append("<!DOCTYPE html><html lang=\"da\"><head><meta charset=\"utf-8\"><title>").append(esc(title)).append("</title>");
+        sb.append("<!DOCTYPE html><html lang=\"").append(SuguruText.da ? "da" : "en").append("\"><head><meta charset=\"utf-8\"><title>").append(esc(title)).append("</title>");
         sb.append("<style>").append(CSS).append("</style></head><body>");
 
-        // forside / indhold
+        // cover / contents
         sb.append("<div class=\"page cover\"><div class=\"stamp\">数</div><h1>").append(esc(title)).append("</h1>");
         boolean same = true; int maxR = 0, maxC = 0, maxReg = 0;
         for (SuguruEngine.Puzzle p : ps) { if (p.rows != first.rows || p.cols != first.cols) same = false; maxR = Math.max(maxR, p.rows); maxC = Math.max(maxC, p.cols); maxReg = Math.max(maxReg, p.maxRegion); }
-        sb.append(String.format("<p class=\"sub\">%d opgaver · %s · regioner op til %d · %s</p>", ps.size(), same ? first.cols + "×" + first.rows : "blandede størrelser", maxReg,
-            LocalDate.now().toString()));
-        sb.append("<p class=\"rules\"><b>Regler.</b> Hver region med n felter skal have tallene 1 til n. Ens tal må ikke røre hinanden, heller ikke diagonalt.</p>");
-        sb.append("<p class=\"rules\"><b>Hints.</b> Hver opgave har en kode (SU1-…). Skriv den i feltet »Har du en kode?« i Suguru-spillet, så kan du spille opgaven med trinvise hints.</p>");
-        sb.append("<table class=\"toc\"><thead><tr><th>Nr.</th><th>Sværhed</th><th></th><th>Top, mængde og teknik</th><th>Givne</th></tr></thead><tbody>");
+        sb.append("<p class=\"sub\">").append(SuguruText.f("%d puzzles · %s · regions up to %d · %s", ps.size(), same ? first.cols + "×" + first.rows : SuguruText.t("mixed sizes"), maxReg,
+            LocalDate.now().toString())).append("</p>");
+        sb.append("<p class=\"rules\">").append(SuguruText.t("<b>Rules.</b> Each region of n cells must contain the numbers 1 to n. Equal numbers may not touch, not even diagonally.")).append("</p>");
+        sb.append("<p class=\"rules\">").append(SuguruText.t("<b>Hints.</b> Each puzzle has a code (SU1-…). Type it in the field “Do you have a puzzle code?” in the Suguru game, and you can play the puzzle with step-by-step hints.")).append("</p>");
+        sb.append("<table class=\"toc\"><thead><tr><th>").append(SuguruText.t("No.")).append("</th><th>").append(SuguruText.t("Difficulty")).append("</th><th></th><th>")
+          .append(SuguruText.t("Peak, load and technique")).append("</th><th>").append(SuguruText.t("Givens")).append("</th></tr></thead><tbody>");
         int k = 1;
         for (SuguruEngine.Puzzle p : ps) {
             String mem = shortTag(p);
@@ -264,26 +284,28 @@ public final class SuguruBook {
               .append("</td><td>").append(esc(mem)).append("</td><td>").append(p.clueCount()).append("</td></tr>");
         }
         sb.append("</tbody></table>");
-        sb.append("<div class=\"howto\"><h2>Sådan læses sværhedsgraden</h2><p>Tallet måler <b>indsats</b>, ikke hvilken teknik der bruges. ")
-          .append("Det er <b>top</b>, indsatsen i opgavens tungeste skridt, plus et tillæg på højst 1,0 for <b>mængde</b>, hvor mange tunge skridt der er (1-10). ")
-          .append("Et skridts indsats er summen af <b>genkendelse</b> (hvor svært mønstret er at få øje på), <b>hukommelse</b> (hvor mange ting der skal holdes i hovedet på samme tid), ")
-          .append("<b>længde</b> (antal led i ræsonnementet) og <b>overblik</b> (hvor få steder der var at komme videre). Ved hver opgave står regnestykket linje for linje.</p><ol class=\"levels\">");
+        sb.append("<div class=\"howto\"><h2>").append(SuguruText.t("How to read the difficulty")).append("</h2><p>")
+          .append(SuguruText.t("The number measures <b>effort</b>, not which technique is used. "
+            + "It is <b>peak</b>, the effort in the puzzle's heaviest step, plus an addition of at most 1.0 for <b>load</b>, how many heavy steps there are (1-10). "
+            + "A step's effort is the sum of <b>recognition</b> (how hard the pattern is to spot), <b>memory</b> (how many things must be kept in mind at once), "
+            + "<b>length</b> (the number of links in the reasoning) and <b>overview</b> (how few places there were to make progress). Each puzzle shows the sum line by line."))
+          .append("</p><ol class=\"levels\">");
         for (int l = 1; l <= 9; l++)
-            sb.append("<li><b>").append(l).append(" ").append(esc(SuguruGrade.BAND[l])).append("</b></li>");
+            sb.append("<li><b>").append(l).append(" ").append(esc(SuguruText.t(SuguruGrade.BAND[l]))).append("</b></li>");
         sb.append("</ol></div></div>");
 
-        // opgaver
+        // puzzles
         for (int i = 0; i < ps.size(); i += perPage) {
             sb.append("<div class=\"page puzzles pp").append(perPage).append("\">");
             for (int j = i; j < Math.min(ps.size(), i + perPage); j++) sb.append(puzzleBlock(ps.get(j), j + 1, perPage));
             sb.append("</div>");
         }
 
-        // løsninger
+        // solutions
         int solPerPage = maxR * maxC <= 49 ? 12 : 6;
         double solCell = solPerPage == 12 ? Math.min(52.0 / maxC, 52.0 / maxR) : Math.min(80.0 / maxC, 72.0 / maxR);
         for (int i = 0; i < ps.size(); i += solPerPage) {
-            sb.append("<div class=\"page sols n").append(solPerPage).append("\"><h2>Løsninger</h2><div class=\"solgrid\">");
+            sb.append("<div class=\"page sols n").append(solPerPage).append("\"><h2>").append(SuguruText.t("Solutions")).append("</h2><div class=\"solgrid\">");
             for (int j = i; j < Math.min(ps.size(), i + solPerPage); j++) sb.append(solutionBlock(ps.get(j), j + 1, solCell));
             sb.append("</div></div>");
         }

@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sudoku-strategier</title>
+<link rel="icon" href="icons/icon-192.png" type="image/png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho+B1:wght@600;800&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap" rel="stylesheet">
+<script>try{var t=JSON.parse(localStorage.getItem("sudoku.settings")||"{}").theme;if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+<style>
+/* Layout: one column of cards, one per strategy. Each card has a drawing you tap through. The same paper-and-marker style as the game. */
+:root {
+  --paper: #f3f4ef;
+  --cell: #fbfbf8;
+  --off: #e9eae4;
+  --ink: #17191e;
+  --mute: #6a6f79;
+  --grid: #cfd2c9;
+  --indigo: #2c47a0;
+  --pat: #d9e1f6;
+  --tgt: #f5e9bd;
+  --badbg: #f6d6ce;
+  --bad: #c8402b;
+  --hypo: #a8610b;
+  --stamp: #c8402b;
+  --chip: #e7e9e2;
+  --font-display: "Shippori Mincho B1", "Hiragino Mincho ProN", Georgia, serif;
+  --font-body: "Zen Kaku Gothic New", "Hiragino Sans", system-ui, sans-serif;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #121419; --cell: #191c22; --off: #15171c; --ink: #e9eaee; --mute: #959aa6; --grid: #343843;
+    --indigo: #93a9f2; --pat: #283357; --tgt: #3d3520; --badbg: #4a2620; --bad: #ff7c64; --hypo: #f0a54a;
+    --stamp: #e0563f; --chip: #23262e; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #121419; --cell: #191c22; --off: #15171c; --ink: #e9eaee; --mute: #959aa6; --grid: #343843;
+  --indigo: #93a9f2; --pat: #283357; --tgt: #3d3520; --badbg: #4a2620; --bad: #ff7c64; --hypo: #f0a54a;
+  --stamp: #e0563f; --chip: #23262e; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--paper); color: var(--ink); }
+body { font-family: var(--font-body); font-size: 15px; line-height: 1.55; -webkit-tap-highlight-color: transparent; }
+main { max-width: 520px; margin: 0 auto; padding: 16px 16px 48px; display: flex; flex-direction: column; gap: 22px; }
+
+header { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; align-items: center; }
+.stamp { grid-row: span 2; width: 46px; height: 46px; border: 2.5px solid var(--stamp); color: var(--stamp); border-radius: 6px;
+  display: grid; place-items: center; font-family: var(--font-display); font-weight: 800; font-size: 28px; transform: rotate(-4deg); }
+h1 { margin: 0; font-family: var(--font-display); font-weight: 800; font-size: 30px; line-height: 1.05; text-wrap: balance; }
+.lede { margin: 0; color: var(--mute); font-size: 14px; }
+
+.legend { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 14px; font-size: 13px; padding: 12px 14px; background: var(--cell);
+  border-radius: 12px; box-shadow: inset 0 0 0 1.5px var(--grid); }
+.legend h2 { grid-column: 1 / -1; margin: 0 0 2px; font-size: 13px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--mute); }
+.legend span { display: flex; align-items: center; gap: 8px; }
+.sw { width: 22px; height: 22px; border-radius: 4px; flex: 0 0 auto; display: grid; place-items: center; font-size: 15px; line-height: 1;
+  box-shadow: inset 0 0 0 1.5px var(--grid); background: var(--cell); }
+.sw.given { font-family: var(--font-display); font-weight: 800; }
+.sw.found { color: var(--mute); font-weight: 500; }
+.sw.cand { font-size: 10px; color: var(--mute); }
+.sw.pat { background: var(--pat); }
+.sw.tgt { background: var(--tgt); }
+.sw.badbg { background: var(--badbg); }
+.sw.hypo { color: var(--hypo); font-weight: 700; }
+.sw.strike { color: var(--bad); font-size: 11px; text-decoration: line-through; }
+
+nav.toc { display: flex; flex-wrap: wrap; gap: 6px; }
+nav.toc a { text-decoration: none; color: var(--ink); background: var(--chip); padding: 5px 10px; border-radius: 999px; font-size: 13px; font-weight: 500; }
+nav.toc a b { font-family: var(--font-display); margin-right: 4px; color: var(--indigo); }
+nav.toc a:focus-visible { outline: 2px solid var(--indigo); outline-offset: 2px; }
+
+article { display: flex; flex-direction: column; gap: 10px; scroll-margin-top: 12px; }
+.kicker { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12.5px; color: var(--mute); font-weight: 500; }
+.dots { display: inline-flex; gap: 3px; }
+.dots i { width: 6px; height: 6px; border-radius: 50%; background: var(--grid); }
+.dots i.on { background: var(--indigo); }
+.real { margin-left: auto; font-size: 11.5px; padding: 2px 8px; border-radius: 999px; background: var(--chip); color: var(--ink); }
+article h2 { margin: 0; font-family: var(--font-display); font-weight: 800; font-size: 24px; line-height: 1.15; text-wrap: balance; }
+.rule { margin: 0; font-weight: 500; }
+figure { margin: 0; display: flex; flex-direction: column; gap: 8px; }
+figure svg { width: 100%; height: auto; display: block; cursor: pointer; user-select: none; -webkit-user-select: none; }
+.stepper { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 8px; }
+.stepper button { border: 0; border-radius: 10px; background: var(--cell); color: var(--ink); font: 500 14px var(--font-body); padding: 9px 14px;
+  box-shadow: inset 0 0 0 1.5px var(--grid); cursor: pointer; min-width: 92px; }
+.stepper button.next { background: var(--indigo); color: var(--paper); box-shadow: none; }
+.stepper button:disabled { opacity: 0.4; cursor: default; }
+.stepper button:focus-visible { outline: 2px solid var(--indigo); outline-offset: 2px; }
+.progress { display: flex; justify-content: center; gap: 5px; }
+.progress i { width: 18px; height: 4px; border-radius: 2px; background: var(--grid); }
+.progress i.on { background: var(--indigo); }
+.caption { margin: 0; min-height: 4.65em; font-size: 14.5px; }
+.look { margin: 0; font-size: 13.5px; color: var(--mute); padding-left: 12px; border-left: 3px solid var(--grid); }
+.look b { color: var(--ink); font-weight: 700; }
+hr { border: 0; border-top: 1px solid var(--grid); margin: 0; width: 100%; }
+
+section.practice h2 { margin: 0 0 6px; font-family: var(--font-display); font-weight: 800; font-size: 22px; }
+section.practice ol { margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 6px; }
+section.practice p { margin: 8px 0 0; color: var(--mute); font-size: 13.5px; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="stamp" aria-hidden="true">独</div>
+    <h1>Sudoku-strategier</h1>
+    <p class="lede">De fjorten teknikker, som spillets sværhedsvurdering bruger, fra de letteste til de sværeste. Tryk på tegningen eller på Næste for at gå et trin frem.</p>
+  </header>
+
+  <div class="legend" aria-label="Sådan læser du tegningerne">
+    <h2>Sådan læser du tegningerne</h2>
+    <span><i class="sw given">3</i>Givet tal</span>
+    <span><i class="sw found">3</i>Fundet tidligere</span>
+    <span><i class="sw cand">1 2</i>Mulige tal</span>
+    <span><i class="sw strike">4</i>Streges ud</span>
+    <span><i class="sw pat"></i>Mønsteret</span>
+    <span><i class="sw tgt"></i>Påvirkes</span>
+    <span><i class="sw hypo">2</i>Antagelse</span>
+    <span><i class="sw badbg"></i>Modstrid</span>
+  </div>
+
+  <nav class="toc" id="toc" aria-label="Indhold"></nav>
+  <div id="cards" style="display:flex;flex-direction:column;gap:30px"></div>
+
+  <section class="practice">
+    <h2>Rækkefølgen i praksis</h2>
+    <ol>
+      <li>Skan boks for boks for eneste plads, og derefter række for række og kolonne for kolonne, til der ikke sker mere.</li>
+      <li>Kig efter låste kandidater: et tal, der i en boks kun kan stå i én række eller kolonne, eller i en linje kun inden for én boks.</li>
+      <li>Skriv mulige tal med blyant, og led efter par og tripler i hver række, kolonne og boks.</li>
+      <li>Find tal med to pladser i et hus (X-wing og lignende) og felter med to muligheder (XY-wing), og se om de kan kædes sammen. Start med ét tal ad gangen.</li>
+      <li>Først når intet andet virker: antag et tal og følg det. Begynd med kun det ene tal, så alle tal, og prøv til sidst begge veje.</li>
+    </ol>
+    <p>I spillet måles en opgaves sværhed som indsats: det tungeste skridt plus et tillæg for, hvor mange tunge skridt der er. Niveauet ved hver teknik herunder er teknikkens plads fra let til svær, ikke opgavens sværhedsgrad. Alle eksempler er fundet i rigtige opgaver fra spillets generator, og teksterne er de samme, som spillets hints viser.</p>
+  </section>
+</main>
+
+<script>
+const EXAMPLES = [{"id":"eneste-kandidat","level":1,"name":"Eneste kandidat","rule":"Feltet har kun ét muligt tal tilbage.","look":"Felter, hvor rækken, kolonnen og boksen tilsammen allerede har otte forskellige tal.","R":9,"C":9,"regions":["AAABBBCCC","AAABBBCCC","AAABBBCCC","DDDEEEFFF","DDDEEEFFF","DDDEEEFFF","GGGHHHIII","GGGHHHIII","GGGHHHIII"],"givens":{"b1":7,"c1":3,"f1":8,"i1":2,"b2":6,"e2":1,"f2":4,"e3":5,"i3":9,"b4":1,"c4":5,"g4":8,"d5":8,"f5":2,"c6":8,"g6":4,"h6":6,"a7":3,"e7":8,"d8":5,"e8":7,"h8":8,"a9":8,"d9":4,"g9":7,"h9":1},"base":{"val":{"i2":8,"b3":8,"h4":2,"a5":7,"i5":1,"d6":1,"f6":5,"i6":7,"c7":7,"f7":1,"e9":2},"cand":{}},"real":true,"code":"SD1-9X9-B92WH-AJ2C0-M3118-5R5T4-2W9TM-GQ055-HEQ4S-D07T","source":null,"frames":[{"full":{"val":{"i2":8,"b3":8,"h4":2,"a5":7,"i5":1,"d6":1,"f6":5,"i6":7,"c7":7,"f7":1,"e9":2},"cand":{"i4":"3"}},"pattern":[],"target":["i4"],"set":{"i4":3},"newv":["i4"],"text":"Eneste kandidat. i4 ser allerede 1, 2, 4, 5, 6, 7, 8 og 9 i sin række, kolonne og boks. Kun 3 er tilbage: i4 = 3."}]},{"id":"eneste-plads","level":1,"name":"Eneste plads","rule":"Et tal kan kun stå ét sted i en række, kolonne eller boks.","look":"Et tal, der står i mange af de omkringliggende rækker og kolonner: i en boks er der så ofte kun én plads tilbage.","R":9,"C":9,"regions":["AAABBBCCC","AAABBBCCC","AAABBBCCC","DDDEEEFFF","DDDEEEFFF","DDDEEEFFF","GGGHHHIII","GGGHHHIII","GGGHHHIII"],"givens":{"a1":1,"f1":7,"h1":9,"b2":3,"e2":2,"i2":8,"c3":9,"d3":6,"g3":5,"c4":5,"d4":3,"g4":9,"b5":1,"e5":8,"i5":2,"a6":6,"f6":4,"a7":3,"h7":1,"b8":4,"i8":7,"c9":7,"g9":3},"base":{"val":{"d1":8,"e1":5,"g1":4,"i1":3,"a2":5,"c2":4,"e3":4,"f3":3,"h3":2,"i3":1,"h4":8,"c5":3,"d5":5,"c6":8,"g6":1,"h6":3,"i6":5,"c8":1,"d8":9,"e8":3},"cand":{}},"real":true,"code":"SD1-9X9-G1CR4-H25SH-AA0MJ-60G5R-HN164-G20K0-B2R91-4M","source":"AI Escargot","frames":[{"full":{"val":{"d1":8,"e1":5,"g1":4,"i1":3,"a2":5,"c2":4,"e3":4,"f3":3,"h3":2,"i3":1,"h4":8,"c5":3,"d5":5,"c6":8,"g6":1,"h6":3,"i6":5,"c8":1,"d8":9,"e8":3},"cand":{"d2":"1","f2":"19"}},"pattern":["d2"],"target":["f2"],"set":{"f2":9},"newv":["f2"],"text":"Eneste plads. Boks 2 mangler 9. d2 ser 9-tallet i d8. Så kan 9 kun stå i f2: f2 = 9."}]},{"id":"laaste-kandidater","level":2,"name":"Låste kandidater","rule":"Alle pladser for et tal i en boks ligger i samme række eller kolonne (eller omvendt). Så kan tallet ikke stå andre steder der.","look":"Bokse, hvor et tal kun mangler i én række eller kolonne, og linjer, hvor et tal kun kan stå inden for én boks.","R":9,"C":9,"regions":["AAABBBCCC","AAABBBCCC","AAABBBCCC","DDDEEEFFF","DDDEEEFFF","DDDEEEFFF","GGGHHHIII","GGGHHHIII","GGGHHHIII"],"givens":{"a1":7,"d1":3,"a2":3,"b2":8,"e2":5,"b3":5,"f3":9,"g3":7,"a4":4,"d4":7,"h4":8,"b5":3,"d5":2,"f5":5,"h5":9,"b6":1,"f6":8,"i6":2,"c7":4,"d7":5,"h7":3,"e8":3,"h8":7,"i8":6,"f9":6,"i9":1},"base":{"val":{"b1":4,"f2":7,"i2":4,"i3":3,"f4":3,"i4":5,"a5":6,"c5":8,"i5":7,"a6":5,"c6":7,"g6":3,"b7":6,"e7":7,"c8":5,"f8":4,"b9":7,"c9":3},"cand":{}},"real":true,"code":"SD1-9X9-P4G4N-S8186-5H6B1-E94AH-G81E8-JEG90-92TM2-MGSB","source":null,"frames":[{"full":{"val":{"b1":4,"f2":7,"i2":4,"i3":3,"f4":3,"i4":5,"a5":6,"c5":8,"i5":7,"a6":5,"c6":7,"g6":3,"b7":6,"e7":7,"c8":5,"f8":4,"b9":7,"c9":3},"cand":{"c1":"1269","c2":"1269","a3":"12","c3":"126","c4":"29"}},"pattern":["c1","c2"],"target":["c4"],"strike":{"c4":"9"},"text":"Trin 1: Låste kandidater. I boks 1 kan 9 kun stå i c1 og c2. Vi ved ikke hvor, men 9 lander i ét af dem. c4 ser begge felter, så den kan ikke være 9."},{"full":{"val":{"b1":4,"f2":7,"i2":4,"i3":3,"f4":3,"i4":5,"a5":6,"c5":8,"i5":7,"a6":5,"c6":7,"g6":3,"b7":6,"e7":7,"c8":5,"f8":4,"b9":7,"c9":3},"cand":{"b4":"29","c4":"2"}},"pattern":["c4"],"target":["b4"],"set":{"b4":9},"newv":["b4"],"text":"Eneste plads. Boks 4 mangler 9. c4 mistede 9 i trin 1. Så kan 9 kun stå i b4: b4 = 9."}]},{"id":"noegent-par","level":3,"name":"Nøgent par","rule":"To felter i samme hus har tilsammen kun to mulige tal. Resten af huset kan ikke have dem.","look":"Felter med kun to blyantstal. Står to af dem i samme hus med de samme to tal, er det et par.","R":9,"C":9,"regions":["AAABBBCCC","AAABBBCCC","AAABBBCCC","DDDEEEFFF","DDDEEEFFF","DDDEEEFFF","GGGHHHIII","GGGHHHIII","GGGHHHIII"],"givens":{"c1":8,"g1":7,"h1":9,"c2":7,"e2":3,"h2":1,"a3":4,"f3":5,"a4":9,"b4":1,"e4":7,"g4":5,"h4":3,"b6":3,"c6":6,"e6":9,"h6":7,"i6":2,"d7":4,"i7":3,"b8":4,"e8":1,"g8":6,"b9":6,"c9":2,"g9":8},"base":{"val":{"a1":3,"a2":6,"b3":9,"c3":1,"d3":7,"g3":3,"c4":4,"a5":2,"b5":7,"c5":5,"g5":9,"a6":8,"d6":5,"b7":8,"c7":9,"c8":3,"e9":5,"h9":4},"cand":{}},"real":true,"code":"SD1-9X9-5RPR2-S484R-A1H0B-54G02-ANGB8-H6296-858NH-2WT4","source":null,"frames":[{"full":{"val":{"a1":3,"a2":6,"b3":9,"c3":1,"d3":7,"g3":3,"c4":4,"a5":2,"b5":7,"c5":5,"g5":9,"a6":8,"d6":5,"b7":8,"c7":9,"c8":3,"e9":5,"h9":4},"cand":{"h3":"268","g7":"12","h7":"25","h8":"25"}},"pattern":["h7","h8"],"target":["h3","g7"],"strike":{"h3":"2","g7":"2"},"text":"Trin 1: Nøgent par. h7 og h8 ligger i boks 9 og kan tilsammen kun være 2 og 5. De to tal bliver altså brugt af netop de to felter. h3 og g7 ser dem begge og kan ikke være 2."},{"full":{"val":{"a1":3,"a2":6,"b3":9,"c3":1,"d3":7,"g3":3,"c4":4,"a5":2,"b5":7,"c5":5,"g5":9,"a6":8,"d6":5,"b7":8,"c7":9,"c8":3,"e9":5,"h9":4},"cand":{"i1":"456","g2":"24","i2":"458","h3":"68","i3":"68"}},"pattern":["i1","i2","h3","i3"],"target":["g2"],"set":{"g2":2},"newv":["g2"],"text":"Eneste plads. Boks 3 mangler 2. i1, i2 og i3 ser 2-tallet i i6. h3 mistede 2 i trin 1. Så kan 2 kun stå i g2: g2 = 2."}]},{"id":"skjult-par","level":3,"name":"Skjult par","rule":"To tal kan kun stå i de samme to felter i et hus. De felter kan ikke have andre tal.","look":"Et hus, hvor to tal begge kun kan stå de samme to steder.","R":9,"C":9,"regions":["AAABBBCCC","AAABBBCCC","AAABBBCCC","DDDEEEFFF","DDDEEEFFF","DDDEEEFFF","GGGHHHIII","GGGHHHIII","GGGHHHIII"],"givens":{"a1":3,"f1":8,"h1":4,"b2":8,"h2":6,"c3":2,"g3":8,"b4":6,"d4":4,"g4":1,"c5":3,"g5":9,"h5":5,"e6":1,"i6":4,"a7":1,"b7":5,"c7":4,"d7":7,"e7":9,"a8":7,"e8":3,"c9":9,"d9":1,"g9":2},"base":{"val":{"d1":6,"e1":2,"g1":5,"e2":4,"g2":7,"i2":2,"a3":6,"b3":4,"a5":4,"b5":1,"d5":2,"f7":2,"b8":2,"c8":6,"d8":8,"f8":5,"g8":4,"a9":8,"b9":3,"e9":6,"f9":4,"h9":7,"i9":5},"cand":{}},"real":true,"code":"SD1-9X9-J1EK5-R58H2-WAMS0-28CA0-81719-7DG2R-90641-22WG","source":null,"frames":[{"full":{"val":{"d1":6,"e1":2,"g1":5,"e2":4,"g2":7,"i2":2,"a3":6,"b3":4,"a5":4,"b5":1,"d5":2,"f7":2,"b8":2,"c8":6,"d8":8,"f8":5,"g8":4,"a9":8,"b9":3,"e9":6,"f9":4,"h9":7,"i9":5},"cand":{"h3":"139","h4":"238","h6":"238","h7":"38","h8":"19"}},"pattern":["h3","h8"],"target":["h3"],"strike":{"h3":"3"},"text":"Trin 1: Skjult par. I kolonne h kan 1 og 9 kun stå i h3 og h8. De to felter er altså optaget af de tal, selv om de har andre muligheder. h3 kan ikke være 3."},{"full":{"val":{"d1":6,"e1":2,"g1":5,"e2":4,"g2":7,"i2":2,"a3":6,"b3":4,"a5":4,"b5":1,"d5":2,"f7":2,"b8":2,"c8":6,"d8":8,"f8":5,"g8":4,"a9":8,"b9":3,"e9":6,"f9":4,"h9":7,"i9":5},"cand":{"i1":"19","h3":"19","i3":"139"}},"pattern":["i1","h3"],"target":["i3"],"set":{"i3":3},"newv":["i3"],"text":"Eneste plads. Boks 3 mangler 3. i1 ser 3-tallet i a1. h3 mistede 3 i trin 1. Så kan 3 kun stå i i3: i3 = 3."}]},{"id":"noegen-trippel","level":4,"name":"Nøgen trippel","rule":"Som nøgent par, men med tre felter og tre tal.","look":"Tre felter i samme hus, hvor blyantstallene tilsammen kun er tre forskellige tal.","R":9,"C":9,"regions":["AAABBBCCC","AAABBBCCC","AAABBBCCC","DDDEEEFFF","DDDEEEFFF","DDDEEEFFF","GGGHHHIII","GGGHHHIII","GGGHHHIII"],"givens":{"a1":5,"b1":3,"d1":6,"i1":4,"a2":7,"e2":2,"g2":3,"b3":2,"d3":1,"e3":5,"g3":9,"a4":6,"b4":7,"d4":5,"f6":9,"h6":8,"i6":2,"c7":3,"e7":1,"f7":6,"h7":4,"c8":7,"e8":4,"i8":3,"a9":1,"f9":5,"h9":7,"i9":8},"base":{"val":{"c1":1,"e1":9,"f1":7,"g1":8,"h1":2,"f3":3,"h3":6,"i3":7,"e4":8,"h4":3,"e5":7,"i5":6,"b6":1,"c6":5,"e6":6,"g6":7,"d7":7,"e9":3},"cand":{}},"real":true,"code":"SD1-9X9-MJAGK-P2544-A2HGA-V5000-0C5W9-4GN9H-CK2A0-52TWG-8","source":null,"frames":[{"full":{"val":{"c1":1,"e1":9,"f1":7,"g1":8,"h1":2,"f3":3,"h3":6,"i3":7,"e4":8,"h4":3,"e5":7,"i5":6,"b6":1,"c6":5,"e6":6,"g6":7,"d7":7,"e9":3},"cand":{"a8":"289","b8":"5689","d8":"289","f8":"28","g8":"1256","h8":"159"}},"pattern":["a8","d8","f8"],"target":["b8","g8","h8"],"strike":{"b8":"89","g8":"2","h8":"9"},"text":"Trin 1: Nøgen trippel. a8, d8 og f8 ligger i række 8 og kan tilsammen kun være 2, 8 og 9. De tre tal bliver altså brugt af netop de tre felter. b8 ser dem alle tre og kan hverken være 8 eller 9. g8 ser dem alle tre og kan ikke være 2. h8 ser dem alle tre og kan ikke være 9."},{"full":{"val":{"c1":1,"e1":9,"f1":7,"g1":8,"h1":2,"f3":3,"h3":6,"i3":7,"e4":8,"h4":3,"e5":7,"i5":6,"b6":1,"c6":5,"e6":6,"g6":7,"d7":7,"e9":3},"cand":{"g7":"25","i7":"59","g8":"156","h8":"15","g9":"26"}},"pattern":["g7","g8","h8","g9"],"target":["i7"],"set":{"i7":9},"newv":["i7"],"text":"Eneste plads. Boks 9 mangler 9. g7, g8 og g9 ser 9-tallet i g3. h8 mistede 9 i trin 1. Så kan 9 kun stå i i7: i7 = 9."}]},{"id":"skjult-trippel","level":4,"name":"Skjult trippel","rule":"Som skjult par, men med tre tal og tre felter.","look":"Tre tal, der i et hus kun kan stå i de samme tre felter.","R":9,"C":9,"regions":["AAABBBCCC","AAABBBCCC","AAABBBCCC","DDDEEEFFF","DDDEEEFFF","DDDEEEFFF","GGGHHHIII","GGGHHHIII","GGGHHHIII"],"givens":{"h1":8,"i1":3,"c2":5,"d2":8,"e2":6,"h2":9,"c3":1,"d3":5,"e3":4,"b4":4,"d4":6,"e4":5,"g4":9,"c6":7,"e6":1,"f6":4,"h6":6,"e7":7,"f7":6,"g7":3,"b8":8,"e8":3,"f8":5,"g8":4,"a9":5,"b9":2},"base":{"val":{"g1":5,"g2":1,"i2":4,"a3":8,"h4":3,"h5":4,"g6":8,"d7":2,"h7":5,"i7":8,"a8":7,"c8":6,"c9":3,"d9":4},"cand":{}},"real":true,"code":"SD1-9X9-05WH9-FAC11-9616N-MC001-CGKAG-BAS1E-9A9JJ-40ZV","source":null,"frames":[{"full":{"val":{"g1":5,"g2":1,"i2":4,"a3":8,"h4":3,"h5":4,"g6":8,"d7":2,"h7":5,"i7":8,"a8":7,"c8":6,"c9":3,"d9":4},"cand":{"d1":"179","e1":"29","f1":"1279","f2":"237","f3":"2379","f5":"23789"}},"pattern":["f2","f3"],"target":["f5"],"strike":{"f5":"3"},"text":"Trin 1: Låste kandidater. I boks 2 kan 3 kun stå i f2 og f3. Vi ved ikke hvor, men 3 lander i ét af dem. f5 ser begge felter, så den kan ikke være 3."},{"full":{"val":{"g1":5,"g2":1,"i2":4,"a3":8,"h4":3,"h5":4,"g6":8,"d7":2,"h7":5,"i7":8,"a8":7,"c8":6,"c9":3,"d9":4},"cand":{"a5":"12369","b5":"13569","c5":"289","d5":"379","e5":"289","f5":"2789","g5":"27","i5":"1257"}},"pattern":["a5","b5","i5"],"target":["a5","b5","i5"],"strike":{"a5":"239","b5":"39","i5":"27"},"text":"Trin 2: Skjult trippel. I række 5 kan 1, 5 og 6 kun stå i a5, b5 og i5. De tre felter er altså optaget af de tal, selv om de har andre muligheder. a5 kan hverken være 2, 3 eller 9. b5 kan hverken være 3 eller 9. i5 kan hverken være 2 eller 7."},{"full":{"val":{"g1":5,"g2":1,"i2":4,"a3":8,"h4":3,"h5":4,"g6":8,"d7":2,"h7":5,"i7":8,"a8":7,"c8":6,"c9":3,"d9":4},"cand":{"a5":"16","b5":"156","c5":"289","d5":"379","e5":"289","f5":"2789","g5":"27","i5":"15"}},"pattern":["a5","b5","c5","e5","f5","g5","i5"],"target":["d5"],"set":{"d5":3},"newv":["d5"],"text":"Eneste plads. Række 5 mangler 3. c5 ser 3-tallet i c9. e5 ser 3-tallet i e8. g5 ser 3-tallet i h4. i5 ser 3-tallet i i1. a5 og b5 mistede 3 i trin 2. f5 mistede 3 i trin 1. Så kan 3 kun stå i d5: d5 = 3."}]},{"id":"kaede-et-tal","level":5,"name":"Kæde med ét tal","rule":"Følg ét tal gennem huse, hvor det kun har to pladser (X-wing, skyscraper og lignende). Felter, der ser begge ender, kan ikke have tallet.","look":"Et tal med præcis to pladser i flere rækker, kolonner eller bokse. X-wing er den korteste form: to rækker med pladserne i de samme to kolonner.","R":9,"C":9,"regions":["AAABBBCCC","AAABBBCCC","AAABBBCCC","DDDEEEFFF","DDDEEEFFF","DDDEEEFFF","GGGHHHIII","GGGHHHIII","GGGHHHIII"],"givens":{"d1":4,"h1":7,"i1":6,"a2":5,"d2":7,"f2":6,"g2":8,"h2":1,"d3":1,"h3":9,"i3":5,"h4":3,"c5":2,"e5":4,"g5":9,"b6":6,"a7":6,"b7":4,"f7":7,"b8":2,"c8":3,"d8":6,"f8":8,"i8":4,"a9":9,"b9":5,"f9":4},"base":{"val":{"c1":1,"e1":5,"f1":9,"b2":9,"c2":4,"c3":6,"e3":8,"g3":4,"a4":4,"e4":6,"f5":5,"h5":6,"e6":7,"h6":4,"c7":8,"d7":5,"h7":2,"i7":9,"a8":1,"e8":9,"g8":7,"h8":5,"c9":7,"g9":6,"h9":8},"cand":{}},"real":true,"code":"SD1-9X9-2CBAT-2SBF0-20CA0-288MV-0AG2P-CB0HJ-NBJF2-G9HH4","source":null,"frames":[{"full":{"val":{"c1":1,"e1":5,"f1":9,"b2":9,"c2":4,"c3":6,"e3":8,"g3":4,"a4":4,"e4":6,"f5":5,"h5":6,"e6":7,"h6":4,"c7":8,"d7":5,"h7":2,"i7":9,"a8":1,"e8":9,"g8":7,"h8":5,"c9":7,"g9":6,"h9":8},"cand":{"g1":"23","e2":"23","i2":"23","g4":"125","g6":"125","e7":"13","g7":"13"}},"pattern":["i2","g1","g7","e7"],"target":["e2"],"strike":{"e2":"3"},"text":"Trin 1: Kæde med ét tal. Antag at i2 ikke er 3. Så må 3 stå i g1, den eneste anden plads i boks 3. Så kan g7 ikke være 3, fordi den ser g1. Så må 3 stå i e7, den eneste anden plads i række 7. Altså er enten i2 = 3, eller e7 = 3. e2 kan ikke være 3, fordi det ville udelukke begge muligheder."},{"full":{"val":{"c1":1,"e1":5,"f1":9,"b2":9,"c2":4,"c3":6,"e3":8,"g3":4,"a4":4,"e4":6,"f5":5,"h5":6,"e6":7,"h6":4,"c7":8,"d7":5,"h7":2,"i7":9,"a8":1,"e8":9,"g8":7,"h8":5,"c9":7,"g9":6,"h9":8},"cand":{"e2":"2","f3":"23"}},"pattern":["e2"],"target":["f3"],"set":{"f3":3},"newv":["f3"],"text":"Eneste plads. Boks 2 mangler 3. e2 mistede 3 i trin 1. Så kan 3 kun stå i f3: f3 = 3."}]},{"id":"kaede-to-muligheder","level":6,"name":"Kæde med to-mulighedsfelter","rule":"Felter med kun to muligheder i en kæde (XY-wing og længere): felter, der ser begge ender, kan ikke have endernes fælles tal.","look":"Felter med kun to blyantstal, der ser hinanden og deler et tal. XY-wing er tre sådanne felter.","R":9,"C":9,"regions":["AAABBBCCC","AAABBBCCC","AAABBBCCC","DDDEEEFFF","DDDEEEFFF","DDDEEEFFF","GGGHHHIII","GGGHHHIII","GGGHHHIII"],"givens":{"b1":2,"c1":3,"h1":6,"a2":8,"f2":2,"a3":5,"e3":9,"c4":6,"d4":7,"e4":5,"g4":8,"a5":2,"b5":7,"h5":1,"i5":3,"c6":5,"e6":1,"f6":3,"g6":4,"e7":7,"i7":1,"d8":8,"i8":4,"b9":4,"g9":6,"h9":5},"base":{"val":{"a1":4,"d1":5,"e1":8,"d2":6,"e2":4,"h2":3,"i2":5,"b3":6,"d3":3,"g3":2,"h3":4,"i3":8,"f4":4,"c5":4,"d5":9,"e5":6,"f5":8,"g5":5,"a6":9,"b6":8,"d6":2,"h6":7,"i6":6,"c7":2,"d7":4,"h7":8,"c9":8,"d9":1,"f9":9},"cand":{}},"real":true,"code":"SD1-9X9-8S0NB-GH2GC-05DN2-WHP0G-J522A-C1C40-Q16K1-B8H3","source":null,"frames":[{"full":{"val":{"a1":4,"d1":5,"e1":8,"d2":6,"e2":4,"h2":3,"i2":5,"b3":6,"d3":3,"g3":2,"h3":4,"i3":8,"f4":4,"c5":4,"d5":9,"e5":6,"f5":8,"g5":5,"a6":9,"b6":8,"d6":2,"h6":7,"i6":6,"c7":2,"d7":4,"h7":8,"c9":8,"d9":1,"f9":9},"cand":{"g7":"39","a8":"1367","b8":"1359","c8":"179","e8":"23","f8":"56","g8":"379","h8":"29","i9":"27"}},"pattern":["g7","h8","e8"],"target":["g8"],"strike":{"g8":"3"},"text":"Trin 1: Kæde med to-mulighedsfelter. Antag at g7 ikke er 3. Så er g7 = 9, feltets eneste anden mulighed. Så kan h8 ikke være 9, fordi den ser g7. Så er h8 = 2, feltets eneste anden mulighed. Så kan e8 ikke være 2, fordi den ser h8. Så er e8 = 3, feltets eneste anden mulighed. Altså er enten g7 = 3, eller e8 = 3. g8 kan ikke være 3, fordi det ville udelukke begge muligheder."},{"full":{"val":{"a1":4,"d1":5,"e1":8,"d2":6,"e2":4,"h2":3,"i2":5,"b3":6,"d3":3,"g3":2,"h3":4,"i3":8,"f4":4,"c5":4,"d5":9,"e5":6,"f5":8,"g5":5,"a6":9,"b6":8,"d6":2,"h6":7,"i6":6,"c7":2,"d7":4,"h7":8,"c9":8,"d9":1,"f9":9},"cand":{"g7":"39","g8":"79","h8":"29","i9":"27"}},"pattern":["g8","h8","i9"],"target":["g7"],"set":{"g7":3},"newv":["g7"],"text":"Eneste plads. Boks 9 mangler 3. h8 ser 3-tallet i h2. i9 ser 3-tallet i i5. g8 mistede 3 i trin 1. Så kan 3 kun stå i g7: g7 = 3."}]},{"id":"kaede","level":7,"name":"Blandet kæde","rule":"En kæde der blander begge slags led: felter med to muligheder og tal med to pladser i et hus.","look":"Når hverken ét tal alene eller to-mulighedsfelter alene rækker: skift mellem de to slags led.","R":9,"C":9,"regions":["AAABBBCCC","AAABBBCCC","AAABBBCCC","DDDEEEFFF","DDDEEEFFF","DDDEEEFFF","GGGHHHIII","GGGHHHIII","GGGHHHIII"],"givens":{"a1":3,"c1":7,"d1":8,"e2":6,"f2":5,"h2":7,"c3":5,"d3":2,"f3":3,"f4":4,"i4":1,"b5":3,"e5":5,"f5":2,"b6":8,"g6":4,"b7":5,"d7":9,"h7":6,"i7":8,"b8":6,"c8":1,"e8":3,"h8":9,"i8":2,"g9":1},"base":{"val":{"a3":6,"e3":7,"g3":8,"e4":8,"h5":8,"e9":2},"cand":{}},"real":true,"code":"SD1-9X9-JBBG0-NMB19-2J02C-G92J4-5R9H8-R2PXB-0J648-20HD","source":null,"frames":[{"full":{"val":{"a3":6,"e3":7,"g3":8,"e4":8,"h5":8,"e9":2},"cand":{"e1":"149","f1":"19","e6":"19","f6":"1679","a7":"247","c7":"234","e7":"14","f7":"17","g7":"37","d8":"457","f8":"78","d9":"4567","f9":"678"}},"pattern":["f1","f7","e7","e1"],"target":["e1"],"strike":{"e1":"9"},"text":"Trin 1: Blandet kæde. Antag at f1 ikke er 9. Så er f1 = 1, feltets eneste anden mulighed. Så kan f7 ikke være 1, fordi den ser f1. Så må 1 stå i e7, den eneste anden plads i boks 8. Så er e7 ikke 4. Så må 4 stå i e1, den eneste anden plads i kolonne e. Altså er enten f1 = 9, eller e1 = 4. e1 kan ikke være 9, fordi det ville udelukke begge muligheder."},{"full":{"val":{"a3":6,"e3":7,"g3":8,"e4":8,"h5":8,"e9":2},"cand":{"e1":"14","f1":"19","d2":"14"}},"pattern":["e1","d2"],"target":["f1"],"set":{"f1":9},"newv":["f1"],"text":"Eneste plads. Boks 2 mangler 9. d2 ser 9-tallet i d7. e1 mistede 9 i trin 1. Så kan 9 kun stå i f1: f1 = 9."}]},{"id":"hvis-saa-et-tal","level":8,"name":"Hvis-så med ét tal","rule":"Antag et tal og følg kun det tal. Ender det i en modstrid, er antagelsen forkert.","look":"Et tal med få pladser: antag det ét sted, og se om et hus mister alle sine pladser til tallet.","R":9,"C":9,"regions":["AAABBBCCC","AAABBBCCC","AAABBBCCC","DDDEEEFFF","DDDEEEFFF","DDDEEEFFF","GGGHHHIII","GGGHHHIII","GGGHHHIII"],"givens":{"f1":9,"h1":5,"i1":3,"b2":8,"c2":9,"f2":6,"i2":7,"a3":2,"d3":3,"c4":6,"e4":9,"h4":4,"a5":7,"b5":9,"e5":5,"c6":4,"d6":6,"g6":8,"a7":9,"g7":5,"h7":2,"i7":6,"b9":7,"e9":1,"h9":9},"base":{"val":{"c1":7,"a2":3,"d2":5,"h2":1,"c3":5,"g3":9,"i4":5,"i5":2,"i6":9,"d8":9,"e8":6,"i8":1,"a9":6,"f9":5},"cand":{}},"real":true,"code":"SD1-9X9-0RA95-Y1AB8-J80NC-2DDGA-04X9E-C0A8T-G0B20-R83G","source":null,"frames":[{"full":{"val":{"c1":7,"a2":3,"d2":5,"h2":1,"c3":5,"g3":9,"i4":5,"i5":2,"i6":9,"d8":9,"e8":6,"i8":1,"a9":6,"f9":5,"f3":1,"c5":1,"b7":1},"cand":{}},"pattern":[],"target":[],"hypo":["f3","c5","b7"],"bad":["a6","b6","e6","f6","h6"],"text":"Trin 1: Hvis-så med ét tal. Antag c5 = 1 (orange), og følg kun tallet 1. Så kan 1 kun stå i b7 i boks 7. Så kan 1 kun stå i f3 i række 3. Nu er der ikke plads til 1 i række 6. Det er en modstrid, så c5 kan ikke være 1."},{"full":{"val":{"c1":7,"a2":3,"d2":5,"h2":1,"c3":5,"g3":9,"i4":5,"i5":2,"i6":9,"d8":9,"e8":6,"i8":1,"a9":6,"f9":5},"cand":{"c5":"138"}},"pattern":[],"target":["c5"],"strike":{"c5":"1"},"text":"Trin 1: konklusion. Antagelsen førte til en modstrid, så c5 kan ikke være 1."},{"full":{"val":{"c1":7,"a2":3,"d2":5,"h2":1,"c3":5,"g3":9,"i4":5,"i5":2,"i6":9,"d8":9,"e8":6,"i8":1,"a9":6,"f9":5},"cand":{"c5":"38","c7":"138","c8":"238","c9":"238"}},"pattern":["c5","c8","c9"],"target":["c7"],"set":{"c7":1},"newv":["c7"],"text":"Eneste plads. Kolonne c mangler 1. c8 ser 1-tallet i i8. c9 ser 1-tallet i e9. c5 mistede 1 i trin 1. Så kan 1 kun stå i c7: c7 = 1."}]},{"id":"hvis-saa-kort","level":9,"name":"Hvis-så med enkle tal","rule":"Antag et tal og følg det med enkle træk, indtil der opstår en modstrid.","look":"Felter med to eller tre muligheder, hvor en antagelse hurtigt sætter flere tal.","R":9,"C":9,"regions":["AAABBBCCC","AAABBBCCC","AAABBBCCC","DDDEEEFFF","DDDEEEFFF","DDDEEEFFF","GGGHHHIII","GGGHHHIII","GGGHHHIII"],"givens":{"b1":5,"h1":1,"a2":7,"b2":1,"e2":6,"f2":8,"h2":4,"c3":8,"d3":3,"c4":9,"e4":1,"g4":7,"h4":8,"i4":2,"e5":7,"d6":6,"g6":4,"b7":4,"h7":7,"i7":1,"a8":3,"c8":2,"b9":8,"e9":9},"base":{"val":{"c1":6,"c2":3,"f3":1,"i3":7,"c5":4,"g5":1,"c7":5,"d8":1},"cand":{}},"real":true,"code":"SD1-9X9-A085M-1BEK2-Y80R8-5NW8B-02MK2-C2T29-20BK0-080","source":null,"frames":[{"full":{"val":{"c1":6,"c2":3,"f3":1,"i3":7,"c5":4,"g5":1,"c7":5,"d8":1,"e1":4,"d2":2,"e3":5,"d7":8},"cand":{}},"pattern":[],"target":[],"hypo":["e1","d2","e3","d7"],"bad":["e8"],"text":"Trin 1: Hvis-så med enkle tal. Antag d2 = 2 (orange). Følg konsekvenserne med eneste kandidat og eneste plads: efter 3 skridt ender det med, at e8 ikke har nogen mulige tal tilbage. Det er en modstrid, så d2 kan ikke være 2. Så kan 5 kun stå i e3 i boks 2. Så kan e1 kun være 4. Så kan d7 kun være 8."},{"full":{"val":{"c1":6,"c2":3,"f3":1,"i3":7,"c5":4,"g5":1,"c7":5,"d8":1},"cand":{"d2":"259"}},"pattern":[],"target":["d2"],"strike":{"d2":"2"},"text":"Trin 1: konklusion. Antagelsen førte til en modstrid, så d2 kan ikke være 2."},{"full":{"val":{"c1":6,"c2":3,"f3":1,"i3":7,"c5":4,"g5":1,"c7":5,"d8":1},"cand":{"d2":"59","g2":"259","i2":"59"}},"pattern":["d2","i2"],"target":["g2"],"set":{"g2":2},"newv":["g2"],"text":"Eneste plads. Række 2 mangler 2. i2 ser 2-tallet i i4. d2 mistede 2 i trin 1. Så kan 2 kun stå i g2: g2 = 2."}]},{"id":"begge-veje","level":10,"name":"Begge veje","rule":"Prøv begge muligheder: det, der sker i begge tilfælde, er sandt.","look":"Et felt med to muligheder eller et tal med to pladser, hvor begge veje fører til samme konklusion.","R":9,"C":9,"regions":["AAABBBCCC","AAABBBCCC","AAABBBCCC","DDDEEEFFF","DDDEEEFFF","DDDEEEFFF","GGGHHHIII","GGGHHHIII","GGGHHHIII"],"givens":{"c1":8,"h1":3,"d2":2,"e2":4,"h2":9,"a3":4,"d3":7,"f3":6,"g3":2,"a4":8,"f4":3,"d5":6,"f5":7,"b6":3,"c6":2,"e6":5,"i6":7,"b7":1,"c7":5,"f7":4,"d8":1,"g8":6,"h8":7,"d9":9,"i9":5},"base":{"val":{"d1":5,"f2":8,"e3":3,"d4":4,"d6":8,"d7":3,"e8":8,"f8":5,"b9":8,"f9":2},"cand":{}},"real":true,"code":"SD1-9X9-5R90H-K62CP-ARJW4-G2NC2-A585J-2GK08-2PR60-ACBG","source":null,"frames":[{"full":{"val":{"d1":5,"f2":8,"e3":3,"d4":4,"d6":8,"d7":3,"e8":8,"f8":5,"b9":8,"f9":2,"i1":4,"g6":4},"cand":{}},"pattern":[],"target":["i1"],"hypo":["i1","g6"],"text":"Trin 1: Begge veje · vej 1. I række 6 kan 4 kun stå i g6 eller h6. Prøv begge veje. Vej 1: hvis g6 = 4, så 4 kan kun stå i i1 i boks 3. Det giver i1 = 4."},{"full":{"val":{"d1":5,"f2":8,"e3":3,"d4":4,"d6":8,"d7":3,"e8":8,"f8":5,"b9":8,"f9":2,"i1":4,"h4":6,"a6":6,"h6":4,"c9":6,"g9":4},"cand":{}},"pattern":[],"target":["i1"],"hypo":["i1","h4","a6","h6","c9","g9"],"text":"Trin 1: Begge veje · vej 2. Vej 2: hvis h6 = 4, så 6 kan kun stå i h4 i kolonne h, så 6 kan kun stå i a6 i boks 4, så 6 kan kun stå i c9 i boks 7, så 4 kan kun stå i g9 i række 9, så 4 kan kun stå i i1 i boks 3. Det giver i1 = 4."},{"full":{"val":{"d1":5,"f2":8,"e3":3,"d4":4,"d6":8,"d7":3,"e8":8,"f8":5,"b9":8,"f9":2},"cand":{"i1":"146"}},"pattern":["g6","h6"],"target":["i1"],"strike":{"i1":"16"},"text":"Trin 1: Begge veje · konklusion. Begge veje giver i1 = 4. Så er det sandt, uanset hvilken vej der er den rigtige."},{"full":{"val":{"d1":5,"f2":8,"e3":3,"d4":4,"d6":8,"d7":3,"e8":8,"f8":5,"b9":8,"f9":2},"cand":{"g1":"147","i1":"4","g2":"157","i2":"16","h3":"158","i3":"18"}},"pattern":["g1","i1","g2","h3","i3"],"target":["i2"],"set":{"i2":6},"newv":["i2"],"text":"Eneste plads. Boks 3 mangler 6. g1 og g2 ser 6-tallet i g8. h3 og i3 ser 6-tallet i f3. i1 mistede 6 i trin 1. Så kan 6 kun stå i i2: i2 = 6."}]},{"id":"hvis-saa-dyb","level":11,"name":"Hvis-så med teknikker","rule":"Lange antagelser, hvor også de svære teknikker bruges undervejs.","look":"Den sidste udvej: antag et tal og brug alle teknikker, indtil der opstår en modstrid.","R":9,"C":9,"regions":["AAABBBCCC","AAABBBCCC","AAABBBCCC","DDDEEEFFF","DDDEEEFFF","DDDEEEFFF","GGGHHHIII","GGGHHHIII","GGGHHHIII"],"givens":{"e1":9,"h1":3,"i1":5,"a2":9,"d2":7,"e2":6,"f2":1,"c3":2,"d4":6,"e4":7,"h4":2,"i4":1,"e5":1,"g5":3,"b6":3,"d6":2,"g6":9,"c8":4,"e8":2,"g8":7,"a9":7,"c9":6,"d9":1,"f9":5,"h9":4},"base":{"val":{"f1":2,"b2":5,"c2":3,"h2":8,"f4":3,"f5":9,"f7":7,"f8":6},"cand":{}},"real":true,"code":"SD1-9X9-1G9AC-2TP02-405DH-30214-4J4R0-02D2P-5JP18-K5G0","source":null,"frames":[{"full":{"val":{"f1":2,"b2":5,"c2":3,"h2":8,"f4":3,"f5":9,"f7":7,"f8":6,"h3":7,"i3":9,"c4":9,"g7":5,"a8":5,"b9":9},"cand":{}},"pattern":[],"target":[],"hypo":["h3","i3","c4","g7","a8","b9"],"bad":["a4","b4","g4"],"text":"Trin 1: Hvis-så med teknikker. Antag i3 = 9 (orange). Følg konsekvenserne med alle teknikker op til hvis-så med ét tal: efter 6 skridt (5 af dem sætter et tal) ender det med, at der ikke er plads til 5 i række 4. Det er en modstrid, så i3 kan ikke være 9. Så kan 7 kun stå i h3 i boks 3. Så kan 9 kun stå i b9 i række 9. Så kan 9 kun stå i c4 i boks 4. Nøgent par i h5 og h6 fjerner 5 fra g4, 6 fra i5, 6 fra i6, 5 og 6 fra h7 og 5 fra h8. Så kan 5 kun stå i g7 i boks 9. Så kan 5 kun stå i a8 i boks 7."},{"full":{"val":{"f1":2,"b2":5,"c2":3,"h2":8,"f4":3,"f5":9,"f7":7,"f8":6},"cand":{"i3":"4679"}},"pattern":[],"target":["i3"],"strike":{"i3":"9"},"text":"Trin 1: konklusion. Antagelsen førte til en modstrid, så i3 kan ikke være 9."},{"full":{"val":{"f1":2,"b2":5,"c2":3,"h2":8,"f4":3,"f5":9,"f7":7,"f8":6},"cand":{"g1":"146","g2":"24","i2":"24","g3":"146","h3":"1679","i3":"467"}},"pattern":["g1","g2","i2","g3","i3"],"target":["h3"],"set":{"h3":9},"newv":["h3"],"text":"Eneste plads. Boks 3 mangler 9. g1 ser 9-tallet i e1. g2 og i2 ser 9-tallet i a2. g3 ser 9-tallet i g6. i3 mistede 9 i trin 1. Så kan 9 kun stå i h3: h3 = 9."}]}];
+const LEVELS = ["", "Let", "Middel", "Svær", "Meget svær", "Kæde: ét tal", "Kæde: to muligheder", "Kæde: blandet", "Hvis-så: ét tal", "Hvis-så: enkle tal", "Begge veje", "Hvis-så: teknikker"];
+const NS = "http://www.w3.org/2000/svg";
+const NOTE = { 1: [22, 24], 2: [50, 24], 3: [78, 24], 4: [22, 52], 5: [50, 52], 6: [78, 52], 7: [22, 80], 8: [50, 80], 9: [78, 80] };
+const COLS = "abcdefghi";
+const pos = {};
+
+function idx(name, C) { return COLS.indexOf(name[0]) + (parseInt(name.slice(1), 10) - 1) * C; }
+function el(tag, attrs, parent, text) {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (text !== undefined) e.textContent = text;
+  if (parent) parent.appendChild(e);
+  return e;
+}
+// State after frame k (cumulative)
+function stateAt(ex, k) {
+  let val = { ...ex.base.val }, cand = { ...ex.base.cand };
+  for (let i = 0; i <= k; i++) {
+    const f = ex.frames[i];
+    if (f.back) { val = { ...ex.base.val }; cand = { ...ex.base.cand }; }
+    if (f.full) { val = { ...f.full.val }; cand = { ...f.full.cand }; }
+    if (f.cand) Object.assign(cand, f.cand);
+    if (f.set) for (const n in f.set) { val[n] = f.set[n]; delete cand[n]; }
+  }
+  return { val, cand };
+}
+
+function draw(svg, ex, k) {
+  const { R, C } = ex, S = 100, M = 30;
+  const f = ex.frames[k];
+  const { val, cand } = stateAt(ex, k);
+  const reg = ex.regions.join("");
+  const set = arr => new Set((arr || []).map(n => idx(n, C)));
+  const pat = set(f.pattern), tgt = set(f.target), hyp = set(f.hypo), bad = set(f.bad), newv = set(f.newv);
+  const strike = {};
+  for (const n in (f.strike || {})) strike[idx(n, C)] = f.strike[n];
+  svg.setAttribute("viewBox", `${-M} ${-M} ${C * S + M + 6} ${R * S + M + 6}`);
+  svg.innerHTML = "";
+  const g = el("g", {}, svg), t = el("g", {}, svg);
+  for (let c = 0; c < C; c++) el("text", { x: c * S + 50, y: -12, "text-anchor": "middle", "font-size": 22, fill: "var(--mute)", "font-family": "Zen Kaku Gothic New, sans-serif" }, t, COLS[c]);
+  for (let r = 0; r < R; r++) el("text", { x: -14, y: r * S + 58, "text-anchor": "middle", "font-size": 22, fill: "var(--mute)", "font-family": "Zen Kaku Gothic New, sans-serif" }, t, r + 1);
+  for (let i = 0; i < R * C; i++) {
+    const x = (i % C) * S, y = Math.floor(i / C) * S;
+    const name = COLS[i % C] + (Math.floor(i / C) + 1);
+    let fill = reg[i] === "." ? "var(--off)" : "var(--cell)";
+    if (pat.has(i)) fill = "var(--pat)";
+    if (tgt.has(i)) fill = "var(--tgt)";
+    if (bad.has(i)) fill = "var(--badbg)";
+    el("rect", { x, y, width: S, height: S, fill }, g);
+    const given = ex.givens[name];
+    const v = given || val[name];
+    const mid = { x: x + 50, y: y + 53, "text-anchor": "middle", "dominant-baseline": "central" };
+    if (given) {
+      el("text", { ...mid, "font-family": "Shippori Mincho B1, Georgia, serif", "font-weight": 800, "font-size": 60, fill: "var(--ink)" }, t, v);
+    } else if (v) {
+      const color = hyp.has(i) ? "var(--hypo)" : newv.has(i) ? "var(--indigo)" : "var(--mute)";
+      el("text", { ...mid, "font-family": "Zen Kaku Gothic New, sans-serif", "font-weight": hyp.has(i) || newv.has(i) ? 700 : 500, "font-size": 54, fill: color }, t, v);
+      if (hyp.has(i)) el("circle", { cx: x + 50, cy: y + 50, r: 38, fill: "none", stroke: "var(--hypo)", "stroke-width": 3, "stroke-dasharray": "5 6" }, t);
+    } else if (cand[name] !== undefined) {
+      for (const d of cand[name]) {
+        const p = NOTE[d], struck = strike[i] && strike[i].includes(d);
+        el("text", { x: x + p[0], y: y + p[1] + 1, "text-anchor": "middle", "dominant-baseline": "central", "font-family": "Zen Kaku Gothic New, sans-serif",
+          "font-weight": struck ? 700 : 500, "font-size": struck ? 26 : 23, fill: struck ? "var(--bad)" : "var(--mute)" }, t, d);
+        if (struck) el("line", { x1: x + p[0] - 13, y1: y + p[1] + 11, x2: x + p[0] + 13, y2: y + p[1] - 11, stroke: "var(--bad)", "stroke-width": 3.5, "stroke-linecap": "round" }, t);
+      }
+      if (!cand[name].length) el("text", { ...mid, "font-size": 40, "font-weight": 700, fill: "var(--bad)" }, t, "∅");
+    }
+  }
+  // Lines: thin within regions, thick between regions. Crops ('.') get thin edges.
+  let thin = "", thick = "";
+  const same = (a, b) => reg[a] === reg[b];
+  for (let r = 0; r < R; r++) for (let c = 0; c < C; c++) {
+    const i = r * C + c;
+    if (c + 1 < C) { const s = `M${(c + 1) * S} ${r * S}V${(r + 1) * S}`; same(i, i + 1) ? (thin += s) : (thick += s); }
+    if (r + 1 < R) { const s = `M${c * S} ${(r + 1) * S}H${(c + 1) * S}`; same(i, i + C) ? (thin += s) : (thick += s); }
+    const edge = (cond, s) => { if (cond) (reg[i] === "." ? (thin += s) : (thick += s)); };
+    edge(r === 0, `M${c * S} 0H${(c + 1) * S}`);
+    edge(r === R - 1, `M${c * S} ${R * S}H${(c + 1) * S}`);
+    edge(c === 0, `M0 ${r * S}V${(r + 1) * S}`);
+    edge(c === C - 1, `M${C * S} ${r * S}V${(r + 1) * S}`);
+  }
+  el("path", { d: thin, stroke: "var(--grid)", "stroke-width": 2, fill: "none" }, svg);
+  el("path", { d: thick, stroke: "var(--ink)", "stroke-width": 7, "stroke-linecap": "square", fill: "none" }, svg);
+}
+
+function render(ex) {
+  const a = document.getElementById(ex.id);
+  const k = pos[ex.id];
+  draw(a.querySelector("svg"), ex, k);
+  a.querySelector(".caption").textContent = ex.frames[k].text;
+  a.querySelector(".prev").disabled = k === 0;
+  a.querySelector(".next").textContent = k === ex.frames.length - 1 ? "Forfra" : "Næste";
+  a.querySelectorAll(".progress i").forEach((d, i) => d.classList.toggle("on", i <= k));
+}
+function go(ex, delta) {
+  const n = ex.frames.length;
+  pos[ex.id] = delta > 0 && pos[ex.id] === n - 1 ? 0 : Math.max(0, Math.min(n - 1, pos[ex.id] + delta));
+  render(ex);
+}
+
+function build(saved) {
+  const toc = document.getElementById("toc"), cards = document.getElementById("cards");
+  EXAMPLES.forEach((ex, i) => {
+    pos[ex.id] = saved && saved[ex.id] !== undefined ? Math.min(saved[ex.id], ex.frames.length - 1) : 0;
+    const link = document.createElement("a");
+    link.href = "#" + ex.id;
+    link.innerHTML = `<b>${ex.level}</b>${ex.name}`;
+    toc.appendChild(link);
+    const dots = Array.from({ length: 11 }, (_, j) => `<i class="${j < ex.level ? "on" : ""}"></i>`).join("");
+    const a = document.createElement("article");
+    a.id = ex.id;
+    a.innerHTML = `
+      ${i ? "<hr>" : ""}
+      <div class="kicker"><span class="dots" aria-hidden="true">${dots}</span>Niveau ${ex.level} · ${LEVELS[ex.level]}${ex.real ? '<span class="real">' + (ex.source ? ex.source : 'Fra en rigtig opgave') + '</span>' : ""}</div>
+      <h2>${ex.name}</h2>
+      <p class="rule">${ex.rule}</p>
+      <figure>
+        <svg role="img" aria-label="Eksempel på ${ex.name}"></svg>
+        <div class="stepper">
+          <button type="button" class="prev" id="${ex.id}-prev">Forrige</button>
+          <div class="progress" aria-hidden="true">${ex.frames.map(() => "<i></i>").join("")}</div>
+          <button type="button" class="next" id="${ex.id}-next">Næste</button>
+        </div>
+        <figcaption class="caption" aria-live="polite"></figcaption>
+      </figure>
+      <p class="look"><b>Se efter:</b> ${ex.look}</p>`;
+    cards.appendChild(a);
+    a.querySelector(".prev").onclick = () => go(ex, -1);
+    a.querySelector(".next").onclick = () => go(ex, 1);
+    a.querySelector("svg").onclick = () => go(ex, 1);
+    render(ex);
+  });
+}
+
+window.claude?.hot?.snapshot?.(() => ({ pos: { ...pos } }));
+function start(data) { build(data && data.pos); }
+window.claude?.hot?.ready ? window.claude.hot.ready(start) : start(window.claude?.hot?.data ?? {});
+</script>
+</body>
+</html>

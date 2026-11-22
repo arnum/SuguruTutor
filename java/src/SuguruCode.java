@@ -1,13 +1,13 @@
 import java.util.*;
 
 /**
- * Opgavekode "SU1": selve opgaven (regionernes vægge + givne tal) pakket i tegn, der er nemme at skrive af.
- * Uafhængig af generatorens version og identisk med web-versionens format, så en opgave fra et trykt hæfte
- * kan læses ind i spillet (med hints) og omvendt.
+ * Puzzle code "SU1": the puzzle itself (the regions' walls + the given numbers) packed into characters that are easy to copy.
+ * Independent of the generator's version and identical to the web version's format, so a puzzle from a printed booklet
+ * can be read into the game (with hints) and the other way round.
  *
- * Format: SU1-<bredde>X<højde>-<data i grupper á 5 tegn>
- * Data (bit for bit): vægge til højre for hvert felt, vægge under hvert felt, for hvert felt 1 bit "givet?"
- * + 3 bit (tal-1) hvis givet, til sidst 10 bit kontrol (FNV-1a). Tegnsæt: Crockford base32.
+ * Format: SU1-<width>X<height>-<data in groups of 5 characters>
+ * Data (bit by bit): walls to the right of each cell, walls below each cell, for each cell 1 bit "given?"
+ * + 3 bits (number-1) if given, and finally a 10-bit check (FNV-1a). Character set: Crockford base32.
  */
 public final class SuguruCode {
 
@@ -49,24 +49,24 @@ public final class SuguruCode {
 
     public static String encode(SuguruEngine.Puzzle p) { return encode(p.rows, p.cols, p.region, p.givens); }
 
-    /** Afkod en kode. Kaster IllegalArgumentException med en dansk forklaring ved fejl. */
+    /** Decode a code. Throws IllegalArgumentException with an explanation (in the chosen language) on errors. */
     public static Decoded decode(String text) {
         String t = text.toUpperCase().replace("#", "").trim().replaceAll("\\s+", "-").replaceAll("-+", "-").replace('×', 'X');
         java.util.regex.Matcher m = java.util.regex.Pattern.compile("^SU1-(\\d{1,2})X(\\d{1,2})-([0-9A-Z-]+)$").matcher(t);
         if (!m.matches()) m = java.util.regex.Pattern.compile("^SU1(\\d{1,2})X(\\d{1,2})-?([0-9A-Z-]+)$").matcher(t);
-        if (!m.matches()) throw new IllegalArgumentException("Koden skal se sådan ud: SU1-6X6-...");
+        if (!m.matches()) throw new IllegalArgumentException(SuguruText.t("The code should look like this: SU1-6X6-..."));
         int cols = Integer.parseInt(m.group(1)), rows = Integer.parseInt(m.group(2));
-        if (cols < 2 || rows < 2 || cols > 12 || rows > 12) throw new IllegalArgumentException("Størrelsen i koden giver ikke mening.");
+        if (cols < 2 || rows < 2 || cols > 12 || rows > 12) throw new IllegalArgumentException(SuguruText.t("The size in the code does not make sense."));
         String body = m.group(3).replace("-", "").replace('O', '0').replace('I', '1').replace('L', '1');
         List<Integer> bits = new ArrayList<>();
         for (char ch : body.toCharArray()) {
             int v = ALPHA.indexOf(ch);
-            if (v < 0) throw new IllegalArgumentException("Ukendt tegn i koden: " + ch);
+            if (v < 0) throw new IllegalArgumentException(SuguruText.f("Unknown character in the code: %s", ch));
             for (int k = 4; k >= 0; k--) bits.add((v >> k) & 1);
         }
         int[] pos = {0};
         java.util.function.IntSupplier take = () -> {
-            if (pos[0] >= bits.size()) throw new IllegalArgumentException("Koden er for kort. Mangler der et stykke?");
+            if (pos[0] >= bits.size()) throw new IllegalArgumentException(SuguruText.t("The code is too short. Is a part missing?"));
             return bits.get(pos[0]++);
         };
         int[] right = new int[rows * (cols - 1)], down = new int[(rows - 1) * cols];
@@ -78,8 +78,8 @@ public final class SuguruCode {
         for (int k = 0; k < 10; k++) chk = (chk << 1) | take.getAsInt();
         boolean trailing = false;
         for (int i = pos[0]; i < bits.size(); i++) if (bits.get(i) != 0) trailing = true;
-        if (bits.size() - pos[0] >= 5 || trailing) throw new IllegalArgumentException("Koden er for lang eller har en tastefejl.");
-        if (chk != checksum(bits.subList(0, dataEnd), rows, cols)) throw new IllegalArgumentException("Kontrollen passer ikke. Der er sandsynligvis en tastefejl i koden.");
+        if (bits.size() - pos[0] >= 5 || trailing) throw new IllegalArgumentException(SuguruText.t("The code is too long or has a typo."));
+        if (chk != checksum(bits.subList(0, dataEnd), rows, cols)) throw new IllegalArgumentException(SuguruText.t("The check does not match. There is probably a typo in the code."));
         int[] region = new int[rows * cols];
         Arrays.fill(region, -1);
         int next = 0;
@@ -100,19 +100,19 @@ public final class SuguruCode {
         }
         int[] size = new int[next];
         for (int r : region) size[r]++;
-        for (int z : size) if (z > 6) throw new IllegalArgumentException("Koden giver en region med mere end 6 felter.");
-        for (int i = 0; i < rows * cols; i++) if (givens[i] > size[region[i]]) throw new IllegalArgumentException("Koden har et tal, der er større end sin region.");
+        for (int z : size) if (z > 6) throw new IllegalArgumentException(SuguruText.t("The code gives a region with more than 6 cells."));
+        for (int i = 0; i < rows * cols; i++) if (givens[i] > size[region[i]]) throw new IllegalArgumentException(SuguruText.t("The code has a number larger than its region."));
         return new Decoded(rows, cols, region, givens);
     }
 
-    /** Byg en fuld opgave (løsning, vurdering, decimal) ud fra en kode. */
+    /** Build a full puzzle (solution, rating, decimal) from a code. */
     public static SuguruEngine.Puzzle toPuzzle(String code) {
         Decoded d = decode(code);
         SuguruEngine.Geometry G = new SuguruEngine.Geometry(d.rows, d.cols);
         SuguruEngine.Solver solver = new SuguruEngine.Solver(G, d.region);
         int k = solver.count(d.givens, 2, 2_000_000, null);
-        if (k == 0) throw new IllegalArgumentException("Koden giver en opgave uden løsning.");
-        if (k != 1) throw new IllegalArgumentException("Koden giver en opgave med mere end én løsning.");
+        if (k == 0) throw new IllegalArgumentException(SuguruText.t("The code gives a puzzle with no solution."));
+        if (k != 1) throw new IllegalArgumentException(SuguruText.t("The code gives a puzzle with more than one solution."));
         int[] solution = solver.first.clone();
         SuguruEngine.Rating rating = new SuguruEngine.Rater(G, d.region).rate(d.givens);
         int maxRegion = 0;

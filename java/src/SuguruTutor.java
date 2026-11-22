@@ -1,10 +1,10 @@
 import java.util.*;
 
 /**
- * Finder det letteste næste tal fra en stilling – som en menneskelig løser – og hvilke støtteskridt
- * (usynlige fakta) der skal til. Bruges til decimal-vurderingen (hukommelse, tidspunkt, mængde).
+ * Finds the easiest next number from a position – like a human solver – and which support steps
+ * (invisible facts) it takes. Used for the decimal rating (memory, timing, load).
  *
- * Tro port af web-versionens hint-motor (uden forklaringstekster).
+ * A faithful port of the web version's hint engine (without the explanation texts).
  */
 public final class SuguruTutor {
 
@@ -17,7 +17,7 @@ public final class SuguruTutor {
     final int[][] RC, peers;
     final boolean[] peerM;
 
-    // ------------------------------------------------------------------ datatyper
+    // ------------------------------------------------------------------ data types
     static final class Broken { final int kind, cell, region, v; Broken(int kind, int cell, int region, int v) { this.kind = kind; this.cell = cell; this.region = region; this.v = v; } }
     static final class St {
         int[] cand, val; Broken broken;
@@ -29,7 +29,7 @@ public final class SuguruTutor {
     static final class Target { final int cell, mask; Target(int cell, int mask) { this.cell = cell; this.mask = mask; } }
     static final class App {
         int tech, region = -1, v, mask, cell = -1, goal = -1, relCount, memPeak;
-        /** Bitmaske over teknikker brugt inde i et hvis-så (kun skridt, der bærer modstriden). */
+        /** Bit mask of the techniques used inside a what-if (only steps that carry the contradiction). */
         int innerMask;
         int[] spots, cells, nodes, rootA, rootB;
         List<Target> targets = new ArrayList<>();
@@ -43,35 +43,35 @@ public final class SuguruTutor {
     static final class Step { final boolean place; final Single single; final App app;
         Step(Single s) { place = true; single = s; app = null; } Step(App a) { place = false; single = null; app = a; } }
 
-    /** Resultat: det letteste næste tal og dets støtte. */
+    /** Result: the easiest next number and its support. */
     public static final class Hint {
         public final int cell, v, hardest, hardestLevel, opts, mem, len; public final int[] support;
-        /** Teknikker inde i det sværeste hvis-så (bitmaske over teknik-numre; 0 = kun enkle tal). */
+        /** Techniques inside the hardest what-if (bit mask over technique numbers; 0 = only singles). */
         public int innerMask;
-        /** Felter, som det sværeste skridt stryger i, og som stadig har flere muligheder bagefter (uden blyant skal de huskes). */
+        /** Cells that the hardest step eliminates in and that still have several options afterwards (without pencil they must be remembered). */
         public int multi;
-        /** Hvis-så fra et felt med 3+ muligheder (0/1): modstriden stryger kun ét tal, som skal huskes uden blyant. */
+        /** What-if from a cell with 3+ options (0/1): the contradiction eliminates only one number, which must be remembered without pencil. */
         public int trial;
-        /** Felter i det sværeste mønster, hvis muligheder bygger på tidligere strygninger (ikke kun de placerede tal). */
+        /** Cells in the hardest pattern whose options build on earlier eliminations (not only on the placed numbers). */
         public int built;
-        /** Delvis tripel (0/1): ikke alle tre felter/tal har alle tre muligheder. */
+        /** Partial triple (0/1): not all three cells/numbers have all three options. */
         public int partial;
-        /** Mønstrets identitet (teknik og felter), til at se om samme mønster bruges igen. */
+        /** The pattern's identity (technique and cells), to see whether the same pattern is used again. */
         public String sig;
-        /** Hvor synligt det sværeste skridt er: [antal felter i mønstret, 1 hvis det bøjer, andel udfyldte felter omkring, tomme felter man skal kende]. Kan være null. */
+        /** How visible the hardest step is: [number of cells in the pattern, 1 if it bends, share of filled cells around it, empty cells you need to know]. Can be null. */
         public double[] vis;
         Hint(int cell, int v, int hardest, int opts, int[] support, int mem, int len) {
             this.cell = cell; this.v = v; this.hardest = hardest; this.hardestLevel = TECH_LEVEL[hardest]; this.opts = opts; this.support = support;
             this.mem = mem; this.len = len;
         }
     }
-    /** Resultat af et sporet hvis-så-forløb: relevante skridt og arbejdshukommelse. */
+    /** Result of a traced what-if: the relevant steps and the working memory. */
     static final class TrialResult { final int relCount, memPeak; int innerMask; TrialResult(int r, int m) { relCount = r; memPeak = m; } }
 
     /**
-     * Arbejdshukommelse: hvor mange fakta der er "levende" (skal bruges senere) på samme tid.
-     * Som registerallokering i en compiler: et faktum lever fra det findes, til det sidst bruges.
-     * Antagelsen (node 0) skal huskes helt til konklusionen.
+     * Working memory: how many facts are "alive" (needed later) at the same time.
+     * Like register allocation in a compiler: a fact lives from when it is found until it is last used.
+     * The assumption (node 0) must be remembered all the way to the conclusion.
      */
     static int peakLive(List<Set<Integer>> nodes, Set<Integer> rel, Set<Integer> rootDeps) {
         List<Integer> ids = new ArrayList<>(rel);
@@ -117,7 +117,7 @@ public final class SuguruTutor {
     static int ctz(int x) { return Integer.numberOfTrailingZeros(x); }
     static int[] bitsOf(int m) { int k = 0; int[] t = new int[6]; for (int v = 1; v <= 6; v++) if ((m & (1 << v)) != 0) t[k++] = v; return Arrays.copyOf(t, k); }
 
-    // ------------------------------------------------------------------ tilstand
+    // ------------------------------------------------------------------ state
     St fresh() { St s = new St(); s.cand = new int[n]; s.val = new int[n]; for (int c = 0; c < n; c++) s.cand[c] = (1 << (size[c] + 1)) - 2; return s; }
     boolean solved(St s) { for (int v : s.val) if (v == 0) return false; return true; }
     void place(St s, int c, int v) {
@@ -178,7 +178,7 @@ public final class SuguruTutor {
         return -1;
     }
 
-    // ------------------------------------------------------------------ teknikker
+    // ------------------------------------------------------------------ techniques
     List<App> neighborApps(St s, boolean first) {
         List<App> out = new ArrayList<>();
         for (int r = 0; r < nr; r++) {
@@ -261,7 +261,7 @@ public final class SuguruTutor {
         return out;
     }
 
-    // ---- kæder: mode 'x' (ét tal), 'y' (to-mulighedsfelter), 'a' (blandet)
+    // ---- chains: mode 'x' (one number), 'y' (two-option cells), 'a' (mixed)
     Map<Integer, List<Integer>> strongLinks(St s, char mode) {
         Map<Integer, List<Integer>> strong = new LinkedHashMap<>();
         if (mode != 'x') for (int c = 0; c < n; c++) if (s.val[c] == 0 && pc(s.cand[c]) == 2) { int[] b = bitsOf(s.cand[c]); addS(strong, c * 8 + b[0], c * 8 + b[1]); }
@@ -364,7 +364,7 @@ public final class SuguruTutor {
     }
     List<App> chainApps(St s, boolean first, char mode) { return new ChainSearch(s, mode, first).run(); }
 
-    // ---- hvis-så med ét tal (returnerer antal relevante skridt, eller -1 hvis ingen modstrid)
+    // ---- single-number what-if (returns the number of relevant steps, or -1 if there is no contradiction)
     TrialResult nishioRun(St s, int c0, int x) {
         boolean[] has = new boolean[n];
         Map<Integer, Integer> placedBy = new HashMap<>(), removedBy = new HashMap<>();
@@ -436,11 +436,11 @@ public final class SuguruTutor {
         return out;
     }
 
-    // ---- sporet forløb (hvis-så og begge veje)
+    // ---- traced run (what-if and both ways)
     final class Run {
         final St t; final Map<Integer, Integer> removedBy = new HashMap<>(), placedBy = new HashMap<>();
         final List<Set<Integer>> nodes = new ArrayList<>(); int chainLen = 0; final St s0;
-        /** Teknik for hvert skridt (-1 = et sat tal eller antagelsen). */
+        /** Technique for each step (-1 = a placed number or the assumption). */
         final List<Integer> nodeTech = new ArrayList<>();
         Run(St s) { s0 = s; t = s.copy(); nodes.add(new HashSet<>()); nodeTech.add(-1); }
         void record(St b, St after, int node) {
@@ -463,8 +463,21 @@ public final class SuguruTutor {
         int relevantCount(Set<Integer> rel) { int k = 0; for (int i = 0; i < chainLen; i++) if (rel.contains(i + 1)) k++; return k; }
     }
 
-    /** Ét skridt i en hvis-så-kæde (simpleste først). Returnerer null hvis intet skridt, eller Step med app==null&&single==null ved stop. */
-    Step chainStep(St s, int maxLevel) {
+    /** One step in a what-if chain (simplest first). Returns null if there is no step, or a Step with app==null&&single==null on stop. */
+    Step chainStep(St s, int maxLevel) { return chainStep(s, maxLevel, false); }
+    Step chainStep(St s, int maxLevel, boolean early) {
+        // What-if with techniques: if a neighbour elimination, a pair or a triple gives a contradiction straight away, it is taken first
+        // (the same as tutor.js), so the short reasoning is found. Only in the first steps (early).
+        if (maxLevel >= 2 && early) {
+            List<List<App>> quick = new ArrayList<>();
+            quick.add(neighborApps(s, false));
+            if (maxLevel >= 3) { quick.add(nakedApps(s, 2, false)); quick.add(hiddenApps(s, 2, false)); }
+            if (maxLevel >= 4) { quick.add(nakedApps(s, 3, false)); quick.add(hiddenApps(s, 3, false)); }
+            for (List<App> l : quick) for (App a : l) {
+                St T = s.copy(); apply(T, a);
+                if (T.broken != null) return elimStep(s, a);
+            }
+        }
         List<Single> sg = singles(s);
         if (!sg.isEmpty()) { Single x = sg.get(0); place(s, x.cell, x.v); return new Step(x); }
         for (int r = 0; r < nr; r++) {
@@ -488,16 +501,17 @@ public final class SuguruTutor {
     }
     Step elimStep(St s, App a) { apply(s, a); return new Step(a); }
 
-    /** Hvis-så med sporing. Returnerer relevante skridt og hukommelse, eller null uden modstrid. */
-    TrialResult runTrial(St s, int cell, int v, int inner) {
+    /** What-if with tracing. Returns the relevant steps and memory, or null without a contradiction. */
+    TrialResult runTrial(St s, int cell, int v, int inner) { return runTrial(s, cell, v, inner, 400); }
+    TrialResult runTrial(St s, int cell, int v, int inner, int maxSteps) {
         Run R = new Run(s);
         St b = R.t.copy();
         place(R.t, cell, v);
         R.record(b, R.t, 0);
         int guard = 0;
-        while (R.t.broken == null && !solved(R.t) && guard++ < 400) {
+        while (R.t.broken == null && !solved(R.t) && guard++ < maxSteps) {
             b = R.t.copy();
-            Step st = chainStep(R.t, inner);
+            Step st = chainStep(R.t, inner, guard <= 3);
             if (st == null) break;
             if (st.single == null && st.app == null) break;
             int id = R.nodes.size();
@@ -527,12 +541,13 @@ public final class SuguruTutor {
         for (int x : rel) { int tq = R.nodeTech.get(x); if (tq >= 0) res.innerMask |= 1 << tq; }
         return res;
     }
-    List<App> trialApps(St s, int inner, boolean first) {
+    List<App> trialApps(St s, int inner, boolean first) { return trialApps(s, inner, first, 400); }
+    List<App> trialApps(St s, int inner, boolean first, int maxSteps) {
         List<App> out = new ArrayList<>();
         for (int sz = 2; sz <= 5; sz++) for (int c = 0; c < n; c++) {
             if (s.val[c] != 0 || pc(s.cand[c]) != sz) continue;
             for (int v : bitsOf(s.cand[c])) {
-                TrialResult rc = runTrial(s, c, v, inner);
+                TrialResult rc = runTrial(s, c, v, inner, maxSteps);
                 if (rc != null) {
                     App a = new App(); a.tech = inner == 1 ? 11 : 13; a.cell = c; a.v = v; a.cells = new int[]{c}; a.relCount = rc.relCount; a.memPeak = rc.memPeak; a.innerMask = rc.innerMask;
                     a.targets.add(new Target(c, 1 << v));
@@ -543,7 +558,7 @@ public final class SuguruTutor {
         return out;
     }
 
-    // ---- begge veje
+    // ---- both ways
     final class Branch {
         final Run R; Branch(Run R) { this.R = R; }
         int relFor(int g, int m) {
@@ -619,6 +634,77 @@ public final class SuguruTutor {
         return out;
     }
 
+    // ------------------------------------------------------------------ the what-if family (as in tutor.js)
+    // Levels 8-11 are compared on effort (the grade's "as you used to play"), not on kind: a short what-if with a pair is easier
+    // than a long one with singles. len = support steps + the assumption + the chain's relevant steps.
+    static final int WHATIF_L = 8;
+    static double whatIfCost(App a, int len) {
+        int T = a.tech;
+        double innerR = 0;
+        for (int t = 0; t < SuguruGrade.RECOG.length; t++) if ((a.innerMask & (1 << t)) != 0) innerR = Math.max(innerR, SuguruGrade.RECOG[t]);
+        double lg = SuguruGrade.log2(Math.max(1, len));
+        double c = SuguruGrade.RECOG[T] + SuguruGrade.W_len * lg + SuguruGrade.W_inner * innerR
+            + SuguruGrade.P_mem[2][T] * SuguruGrade.log2(1 + a.memPeak) + SuguruGrade.P_len[2][T] * lg;
+        return Math.round(c * 1e6) / 1e6;
+    }
+    static final class WhatIf { final App a; final Single x; final boolean fromS0; final int len; final double key;
+        WhatIf(App a, Single x, boolean fromS0, int len, double key) { this.a = a; this.x = x; this.fromS0 = fromS0; this.len = len; this.key = key; } }
+    List<App> whatIfBase(St s) {
+        List<App> l = nishioApps(s, false);
+        l.addAll(trialApps(s, 1, false));
+        l.addAll(bothWaysApps(s, false));
+        return l;
+    }
+    static final class Raw { final App a; final Single x; final boolean fromS0; final int rel, ub; final double lb;
+        Raw(App a, Single x, boolean fromS0, int rel, double lb, int ub) { this.a = a; this.x = x; this.fromS0 = fromS0; this.rel = rel; this.lb = lb; this.ub = ub; } }
+    void whatIfConsider(List<App> steps, St St, App a, boolean fromS0, List<Raw> raw) {
+        St T = St.copy(); apply(T, a);
+        if (T.broken != null) return;
+        List<Single> xs = singles(T);
+        if (xs.isEmpty()) return;
+        Single x = xs.get(0);
+        int rel = a.relCount;
+        raw.add(new Raw(a, x, fromS0, rel, whatIfCost(a, 1 + rel) + x.score * 0.1, fromS0 ? 1 + rel : steps.size() + 1 + rel));
+    }
+    int whatIfSupport(St S0, List<App> steps, Raw r) {
+        if (r.fromS0 || steps.isEmpty()) return 0;
+        List<App> kept = new ArrayList<>(steps); kept.add(r.a);
+        Replay res = replay(S0, kept, r.x.cell, r.x.v);
+        if (res != null)
+            for (int i = steps.size() - 1; i >= 0; i--) {
+                List<App> t = new ArrayList<>(kept.subList(0, i)); t.addAll(kept.subList(i + 1, kept.size()));
+                Replay r2 = replay(S0, t, r.x.cell, r.x.v);
+                if (r2 != null && !r2.steps.isEmpty() && r2.steps.get(r2.steps.size() - 1).tech == r.a.tech) { kept = t; res = r2; }
+            }
+        return res != null ? res.steps.size() - 1 : steps.size();
+    }
+    /** The what-if with the least effort that gives a number: searched in S (after the support steps) and in S0 (without). null if nothing gives a number. */
+    WhatIf whatIfBest(St S0, St S, List<App> steps) {
+        List<Raw> raw = new ArrayList<>();
+        for (App a : whatIfBase(S)) whatIfConsider(steps, S, a, false, raw);
+        if (!steps.isEmpty()) for (App a : whatIfBase(S0)) whatIfConsider(steps, S0, a, true, raw);
+        if (raw.isEmpty()) return null;
+        int lim = Integer.MAX_VALUE;
+        for (Raw r : raw) lim = Math.min(lim, r.ub);
+        lim -= 1;
+        if (lim > 0) {
+            St[] states = steps.isEmpty() ? new St[]{S} : new St[]{S0, S};
+            boolean[] from = steps.isEmpty() ? new boolean[]{false} : new boolean[]{true, false};
+            for (int k = 0; k < states.length; k++)
+                for (App a : trialApps(states[k], 4, false, Math.max(2, 2 * lim + 2)))
+                    if (a.relCount < lim) whatIfConsider(steps, states[k], a, from[k], raw);
+        }
+        raw.sort((p, q) -> Double.compare(p.lb, q.lb));
+        WhatIf best = null;
+        for (Raw r : raw) {
+            if (best != null && r.lb >= best.key) break;
+            int len = whatIfSupport(S0, steps, r) + 1 + r.rel;
+            double key = whatIfCost(r.a, len) + r.x.score * 0.1;
+            if (best == null || key < best.key) best = new WhatIf(r.a, r.x, r.fromS0, len, key);
+        }
+        return best;
+    }
+
     List<App> levelApps(St s, int L) {
         switch (L) {
             case 2: return neighborApps(s, false);
@@ -635,7 +721,7 @@ public final class SuguruTutor {
         }
     }
 
-    // ------------------------------------------------------------------ genafspilning
+    // ------------------------------------------------------------------ replay
     App refresh(St T, App a) {
         if (a.tech == 2) {
             int bit = 1 << a.v;
@@ -714,7 +800,7 @@ public final class SuguruTutor {
         return kind >= 0 ? new Replay(out, kind) : null;
     }
 
-    // ------------------------------------------------------------------ det letteste næste tal
+    // ------------------------------------------------------------------ the easiest next number
     public Hint easiest(int[] known) {
         St S0 = fromKnown(known);
         if (S0.broken != null || solved(S0)) return null;
@@ -727,6 +813,14 @@ public final class SuguruTutor {
             if (!ready.isEmpty()) return finish(S0, S, steps, ready.get(0).cell, ready.get(0).v);
             boolean progressed = false;
             for (int L = 2; L <= 11 && !progressed; L++) {
+                if (L == WHATIF_L) {
+                    WhatIf w = whatIfBest(S0, S, steps);
+                    if (w != null) {
+                        if (w.fromS0) { steps.clear(); S = S0.copy(); }
+                        steps.add(w.a); apply(S, w.a);
+                        return finish(S0, S, steps, w.x.cell, w.x.v);
+                    }
+                }
                 List<App> apps = levelApps(S, L);
                 if (apps.isEmpty()) continue;
                 App bestApp = null; Single bestSingle = null; double bestKey = 0;
@@ -764,8 +858,8 @@ public final class SuguruTutor {
         return build(S0, res.steps, res.kind, cell, v);
     }
     /**
-     * Arbejdshukommelse for hele vejen til ét tal. Et skridt afhænger direkte af et tidligere faktum, hvis
-     * skridtets præmis ikke længere holder, når netop det faktum fjernes (alle andre fakta bevares).
+     * Working memory for the whole way to one number. A step depends directly on an earlier fact if
+     * the step's premise no longer holds when exactly that fact is removed (all other facts are kept).
      */
     int outerPeak(St S0, List<App> steps, int cell, int v) {
         int k = steps.size();
@@ -801,7 +895,7 @@ public final class SuguruTutor {
                 if (a.tech == hardest) for (Target t : a.targets) if (t.cell != cell && Tm.val[t.cell] == 0 && pc(Tm.cand[t.cell]) >= 2) h.multi++;
             }
         }
-        // Træk ved det første skridt med den sværeste teknik, målt lige før det (samme som web/js/tutor.js)
+        // Features at the first step with the hardest technique, measured just before it (the same as web/shared/js/tutor.js)
         {
             int i = -1;
             for (int j = 0; j < steps.size(); j++) if (steps.get(j).tech == hardest) { i = j; break; }

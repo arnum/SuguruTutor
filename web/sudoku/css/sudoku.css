@@ -1,0 +1,12 @@
+/* Sudoku: the same look as Suguru (shared/css/app.css); only the stamp colour differs, so the two apps can be told apart. */
+:root {
+  --stamp: #2d3a8c;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --stamp: #8fa3ee;
+  }
+}
+:root[data-theme="dark"] {
+  --stamp: #8fa3ee;
+}

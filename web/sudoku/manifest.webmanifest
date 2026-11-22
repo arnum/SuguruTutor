@@ -1,0 +1,19 @@
+{
+  "id": "./",
+  "name": "Sudoku",
+  "short_name": "Sudoku",
+  "description": "Sudoku with real difficulty, guided hints, route analysis and statistics.",
+  "lang": "en",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f3f4ef",
+  "theme_color": "#f3f4ef",
+  "categories": ["games", "education"],
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

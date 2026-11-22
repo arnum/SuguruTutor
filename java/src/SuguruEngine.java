@@ -1,44 +1,44 @@
 import java.util.*;
 
 /**
- * Suguru-motor: regionsgenerator, backtracking-løser, menneskelig sværhedsvurdering (14 teknikker,
- * 11 niveauer) og generering mod et målniveau.
+ * Suguru engine: region generator, backtracking solver, human difficulty rating (14 techniques,
+ * 11 levels) and generation towards a target level.
  *
- * Tro port af motoren i web-versionen: samme algoritmer og samme tilfældighedsgenerator (mulberry32),
- * så samme seed giver samme opgave i Java og i browseren.
+ * A faithful port of the engine in the web version: the same algorithms and the same random generator (mulberry32),
+ * so the same seed gives the same puzzle in Java and in the browser.
  *
- * Regler: en region med n felter har tallene 1..n; ens tal må ikke røre hinanden (heller ikke diagonalt).
+ * Rules: a region of n cells holds the numbers 1..n; equal numbers may not touch (not even diagonally).
  */
 public final class SuguruEngine {
 
     public static final int MAX_VALUE = 6;
 
-    /** Teknikker i stigende sværhed. Indeks bruges overalt (vurdering, hints, profil). */
+    /** Techniques in increasing difficulty. The index is used everywhere (rating, hints, profile). */
     public static final String[] TECH_LABEL = {
-        "Eneste kandidat", "Eneste plads i region", "Nabo-eliminering", "Nøgent par", "Skjult par",
-        "Nøgen trippel", "Skjult trippel", "Kæde med ét tal", "Kæde med to-mulighedsfelter", "Blandet kæde",
-        "Hvis-så med ét tal", "Hvis-så med enkle tal", "Begge veje", "Hvis-så med teknikker"
+        "Naked single", "Hidden single", "Neighbour elimination", "Naked pair", "Hidden pair",
+        "Naked triple", "Hidden triple", "Single-number chain", "Bivalue chain", "Mixed chain",
+        "Single-number what-if", "What-if with singles", "Both ways", "What-if with techniques"
     };
     public static final String[] TECH_DESC = {
-        "Cellen har kun ét muligt tal tilbage.",
-        "Et tal kan kun stå ét sted i sin region.",
-        "Alle mulige pladser for et tal i en region rører samme celle udenfor. Den celle kan ikke have tallet.",
-        "To celler, der ser hinanden, har tilsammen kun to mulige tal. Celler, der ser begge, kan ikke have dem.",
-        "To tal i en region kan kun stå i de samme to celler. De celler kan ikke have andre tal.",
-        "Som nøgent par, men med tre celler og tre tal.",
-        "Som skjult par, men med tre tal og tre celler.",
-        "Følg ét tal: står det ikke her, må det stå dér, og så kan det ikke stå omkring. Felter der ser begge ender, kan ikke have tallet.",
-        "Felter med kun to muligheder i en kæde: er første felt ikke a, tvinges resten, indtil sidste felt bliver a.",
-        "En kæde der blander felter med to muligheder og tal med to pladser i en region.",
-        "Antag at et felt er x, og følg kun tallet x. Mangler en region plads til x, var antagelsen forkert.",
-        "Antag et tal og følg enkle træk med alle tal. Ender det i en modstrid, var antagelsen forkert.",
-        "Prøv begge muligheder i et felt (eller begge pladser for et tal). Det begge veje giver, er sandt.",
-        "Som hvis-så med enkle tal, men vejen til modstriden kræver sværere teknikker undervejs, fx par eller kæder."
+        "The cell has only one possible number left.",
+        "A number can only go in one place in its region.",
+        "Every possible place for a number in a region touches the same cell outside it. That cell cannot hold the number.",
+        "Two cells that see each other have only two possible numbers between them. Cells that see both cannot hold them.",
+        "Two numbers in a region can only go in the same two cells. Those cells cannot hold any other number.",
+        "Like a naked pair, but with three cells and three numbers.",
+        "Like a hidden pair, but with three numbers and three cells.",
+        "Follow one number: if it is not here, it must be there, and then it cannot be around it. Cells that see both ends cannot hold the number.",
+        "A chain of cells with only two options: if the first cell is not a, the rest are forced until the last cell becomes a.",
+        "A chain that mixes cells with two options and numbers with two places in a region.",
+        "Assume a cell is x and follow only the number x. If a region has no room left for x, the assumption was wrong.",
+        "Assume a number and follow simple moves with all numbers. If it ends in a contradiction, the assumption was wrong.",
+        "Try both options in a cell (or both places for a number). Whatever both ways give is true.",
+        "Like the what-if with singles, but the path to the contradiction needs harder techniques along the way, such as pairs or chains."
     };
     public static final int[] TECH_LEVEL = {1, 1, 2, 3, 3, 4, 4, 5, 6, 7, 8, 9, 10, 11};
     public static final int[] TECH_WEIGHT = {1, 1, 4, 8, 10, 15, 18, 20, 22, 24, 26, 30, 40, 60};
-    public static final String[] LEVELS = {"", "Let", "Middel", "Svær", "Meget svær", "Kæde: ét tal",
-        "Kæde: to muligheder", "Kæde: blandet", "Hvis-så: ét tal", "Hvis-så: enkle tal", "Begge veje", "Hvis-så: teknikker", "Kræver gæt"};
+    public static final String[] LEVELS = {"", "Easy", "Medium", "Hard", "Very hard", "Chain: one number",
+        "Chain: two options", "Chain: mixed", "What-if: one number", "What-if: singles", "Both ways", "What-if: techniques", "Needs guessing"};
     public static final int TOP_LEVEL = 11;
 
     private static final int[][] TARGET_SIZES = new int[7][];
@@ -50,9 +50,9 @@ public final class SuguruEngine {
 
     private SuguruEngine() {}
 
-    // =================================================================== hjælpere
+    // =================================================================== helpers
 
-    /** mulberry32 – identisk med JavaScript-versionen. */
+    /** mulberry32 – identical to the JavaScript version. */
     public static final class Rand {
         private int a;
         public Rand(long seed) { this.a = (int) seed; }
@@ -106,7 +106,7 @@ public final class SuguruEngine {
         return out;
     }
 
-    // =================================================================== regioner
+    // =================================================================== regions
 
     static final class RegionMaker {
         final Geometry G; final Rand rand; final int maxRegion; final int[] sizes;
@@ -183,7 +183,7 @@ public final class SuguruEngine {
             for (int c = 0; c < G.n; c++) { if (!map.containsKey(reg[c])) map.put(reg[c], map.size()); out[c] = map.get(reg[c]); }
             return out;
         }
-        /** Opdeling med lokal reparation: 2x2-blokke (Hall) og 3x3-vinduer løst isoleret. */
+        /** Partition with local repair: 2x2 blocks (Hall) and 3x3 windows solved in isolation. */
         int[] generate() {
             int rows = G.rows, cols = G.cols, n = G.n;
             int[] reg = new int[n];
@@ -218,7 +218,7 @@ public final class SuguruEngine {
         }
     }
 
-    // =================================================================== backtracking-løser
+    // =================================================================== backtracking solver
 
     public static final class Solver {
         private static final class Limit extends RuntimeException { Limit() { super(null, null, false, false); } }
@@ -289,7 +289,7 @@ public final class SuguruEngine {
             }
             return total;
         }
-        /** Antal løsninger (afskåret ved limit); -1 hvis node-grænsen nås. */
+        /** Number of solutions (cut off at limit); -1 if the node limit is reached. */
         public int count(int[] givens, int limit, long nl, Rand rnd) {
             nodes = 0; nodeLimit = nl; order = rnd; first = null;
             int[] dom = new int[n], val = new int[n];
@@ -302,7 +302,7 @@ public final class SuguruEngine {
         }
     }
 
-    // =================================================================== menneskelig løser / vurdering
+    // =================================================================== human solver / rating
 
     public static final class Rating {
         public final int level, score; public final boolean solved; public final int[] uses;
@@ -446,7 +446,7 @@ public final class SuguruEngine {
             return false;
         }
 
-        // ---- kæder (mode: 'x' = ét tal, 'y' = to-mulighedsfelter, 'a' = blandet)
+        // ---- chains (mode: 'x' = one number, 'y' = two-option cells, 'a' = mixed)
         private Map<Integer, List<Integer>> strong;
         private Set<Integer> onPath;
         private int budget;
@@ -518,7 +518,7 @@ public final class SuguruEngine {
             }
         }
 
-        // ---- hvis-så med ét tal
+        // ---- single-number what-if
         boolean nishioFails(S s, int c0, int x) {
             boolean[] has = new boolean[n], placed = new boolean[n];
             for (int c = 0; c < n; c++) has[c] = s.val[c] == 0 && (s.cand[c] & (1 << x)) != 0;
@@ -551,7 +551,7 @@ public final class SuguruEngine {
             return false;
         }
 
-        // ---- begge veje
+        // ---- both ways
         void singlesOnly(S t) {
             while (!t.broken && !isSolved(t)) { if (nakedSingles(t) > 0) continue; if (hiddenSingles(t) > 0) continue; break; }
         }
@@ -583,7 +583,7 @@ public final class SuguruEngine {
             return false;
         }
 
-        // ---- hvis-så (modstrid)
+        // ---- what-if (contradiction)
         boolean contradiction(S s, int innerLevel) {
             for (int size = 2; size <= MAX_VALUE; size++) {
                 for (int c = 0; c < n; c++) {
@@ -621,7 +621,7 @@ public final class SuguruEngine {
 
         public Rating rate(int[] givens) { return rate(givens, TOP_LEVEL); }
 
-        /** Løs med teknikker op til maxLevel. solved=false: kunne ikke løses inden for niveauet. */
+        /** Solve with techniques up to maxLevel. solved=false: could not be solved within the level. */
         public Rating rate(int[] givens, int maxLevel) {
             S s = newState();
             for (int c = 0; c < n; c++) if (givens[c] != 0) place(s, c, givens[c]);
@@ -638,13 +638,13 @@ public final class SuguruEngine {
         }
     }
 
-    // =================================================================== generering
+    // =================================================================== generation
 
     public static final class Puzzle {
         public final int rows, cols, maxRegion; public final long seed;
         public final int[] region, solution, givens;
         public final Rating rating; public int target; public final int tries;
-        public SuguruGrade.Grade grade; // sættes af SuguruGrade
+        public SuguruGrade.Grade grade; // set by SuguruGrade
         Puzzle(int rows, int cols, int[] region, int[] solution, int[] givens, Rating rating, int target, long seed, int tries, int maxRegion) {
             this.rows = rows; this.cols = cols; this.region = region; this.solution = solution; this.givens = givens;
             this.rating = rating; this.target = target; this.seed = seed; this.tries = tries; this.maxRegion = maxRegion;
@@ -652,7 +652,7 @@ public final class SuguruEngine {
         public int clueCount() { int k = 0; for (int g : givens) if (g != 0) k++; return k; }
     }
 
-    /** Generér en opgave på målniveauet (eller den nærmeste inden for tidsbudgettet). */
+    /** Generate a puzzle at the target level (or the nearest within the time budget). */
     public static Puzzle generate(int rows, int cols, int target, long seed, long budgetMs, int maxRegion) {
         long t0 = System.currentTimeMillis();
         Geometry G = new Geometry(rows, cols);
@@ -687,7 +687,7 @@ public final class SuguruEngine {
         }
     }
 
-    // =================================================================== konsol
+    // =================================================================== console
 
     public static String ascii(Puzzle p, boolean showSolution) {
         int[] v = showSolution ? p.solution : p.givens;
@@ -711,8 +711,8 @@ public final class SuguruEngine {
 
 
     /**
-     * Sikrer at æ, ø og å vises rigtigt i terminalen: brug konsollens tegnsæt
-     * (på Windows sætter Java-launcheren sun.stdout.encoding, fx cp850).
+     * Makes sure æ, ø and å show correctly in the terminal: use the console's character set
+     * (on Windows the Java launcher sets sun.stdout.encoding, e.g. cp850).
      */
     static void fixConsoleEncoding() {
         String enc = System.getProperty("stdout.encoding");
@@ -720,10 +720,10 @@ public final class SuguruEngine {
         if (enc == null) return;
         try {
             System.setOut(new java.io.PrintStream(new java.io.FileOutputStream(java.io.FileDescriptor.out), true, enc));
-        } catch (java.io.UnsupportedEncodingException ignored) { /* behold standard */ }
+        } catch (java.io.UnsupportedEncodingException ignored) { /* keep the default */ }
     }
 
-    /** java SuguruEngine [rækker] [kolonner] [niveau 1-11] [maks regionsstørrelse 4-6] [seed] */
+    /** java SuguruEngine [rows] [columns] [level 1-11] [max region size 4-6] [seed] */
     public static void main(String[] args) {
         fixConsoleEncoding();
         int rows = args.length > 0 ? Integer.parseInt(args[0]) : 6;
@@ -734,7 +734,7 @@ public final class SuguruEngine {
         long t0 = System.currentTimeMillis();
         Puzzle p = generate(rows, cols, level, seed, 20000, maxRegion);
         SuguruGrade.attach(p);
-        System.out.printf("Suguru %dx%d · maks %d · seed %d · %d ms%n", cols, rows, maxRegion, seed, System.currentTimeMillis() - t0);
+        System.out.printf("Suguru %dx%d · max %d · seed %d · %d ms%n", cols, rows, maxRegion, seed, System.currentTimeMillis() - t0);
         System.out.println(SuguruGrade.describe(p));
         System.out.println(ascii(p, false));
         System.out.println(ascii(p, true));
