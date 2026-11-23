@@ -3,6 +3,14 @@
 Newest first. The project has no version history, so the dates up to 20 November are worked out from the timestamps
 of work files and screenshots. A change may be a day older than shown, and those days list only the main changes.
 
+## 23 November 2026 (3) · Suguru offline v51, Sudoku v17, build 2026-11-23c
+
+### Added
+- A temporary practice log: every practice board with the time of each tap since the board appeared (and in Cascade
+  how many easy numbers there were to choose from, in Quick call whether a claim was the first on a new board). The
+  last 600 boards are kept on the device and included in the export. It is there to measure how long the first look
+  at a new board takes (see TODO.md) and will be removed afterwards.
+
 ## 23 November 2026 (2) · Suguru offline v50, Sudoku v16, build 2026-11-23b
 
 ### Changed

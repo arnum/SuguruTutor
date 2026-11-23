@@ -1,7 +1,7 @@
 // Service worker for Sudoku (sudoku/): makes the app available offline. Built the same way as the other app's sw.js.
 // Its own files are fetched from the network first (at most 3 seconds), so a new version takes effect at once; without a network the stored copy is used.
 // So there is no version number to change when the files are updated.
-const CACHE = "sudoku-v16";
+const CACHE = "sudoku-v17";
 const FONTS = "sudoku-fonts";
 const SHELL = [
   "./",

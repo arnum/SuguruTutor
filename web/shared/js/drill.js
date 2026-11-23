@@ -133,6 +133,7 @@ function drillBoard(b, lv) {
 }
 // a wrong tap: the cells flash red for a moment and it costs a quarter of the expected time
 function drillFlash(c, cells) {
+  plog(c, "wrong");
   c.wrong++;
   c.flash = cells;
   renderDrill();
@@ -150,6 +151,7 @@ document.addEventListener("visibilitychange", () => {
 function drillTap(cell) {
   const c = D && D.cur;
   if (!c || !c.phase || c.phase === "done") return;
+  plog(c, "tap", cell);
   if (isGame(D.L)) return PG[D.L].tap(c, cell);
   if (c.known[cell]) return;
   const flash = (cells) => drillFlash(c, cells);
@@ -169,6 +171,7 @@ function drillTap(cell) {
     if (useful) {
       c.app = useful;
       c.phase = "use";
+      plog(c, "found");
       c.pop = true;
       renderDrill();
       return;
@@ -225,6 +228,8 @@ function drillShow() {
 function drillSkip() {
   const c = D && D.cur;
   if (!c || !c.phase || c.phase === "done") return;
+  plog(c, "skip");
+  plogSave(c, null, "skip");
   D.res.push({ verdict: "skip" });
   if (D.res.length >= roundLen(D.L)) D.over = true;
   D.over ? renderDrill() : drillNext();
@@ -254,6 +259,7 @@ function drillFinish(miss) {
   s.log = (s.log || []).concat([{ d: day, lv: c.lv, s: Math.round(sec * 10) / 10, w: c.wrong, r: verdict }]).slice(-400);
   drillPut(D.L, s);
   D.res.push({ verdict, sec, exp, wrong: c.wrong, lv: c.lv, board: c });
+  plogSave(c, { sec, exp }, verdict);
   renderDrill();
 }
 
@@ -677,3 +683,32 @@ fastTap($("drillBody"), (e) => {
   lastFast = performance.now();
   drillTap(cell);
 });
+
+// ---------- Temporary practice log (TODO.md: "Practice expects game speed on boards you have never seen")
+// Every practice board with the time of each tap since the board appeared, to measure the first look at a new board:
+// time to the first find against the later ones. Kept on this device, included in the export, the last 600 boards.
+// Remove when the analysis is done.
+const PLOG_MAX = 600;
+function plog(c, kind, ...data) {
+  if (!c || !c.t0) return;
+  (c.ev = c.ev || []).push([Math.round(performance.now() - c.t0 - (c.hiddenMs || 0)), kind, ...data]);
+}
+function plogSave(c, times, verdict) {
+  try {
+    const log = store.get("practicelog", []);
+    log.push({
+      d: new Date().toISOString(),
+      k: D.L,
+      lv: c.lv,
+      size: c.b.rows + "x" + c.b.cols,
+      empty: c.b.empty != null ? Math.round(c.b.empty * 100) / 100 : null,
+      pen: !!(c.spec && c.spec.pencil),
+      sec: times ? Math.round(times.sec * 10) / 10 : null,
+      exp: times ? Math.round(times.exp * 10) / 10 : null,
+      w: c.wrong,
+      r: verdict,
+      ev: c.ev || [],
+    });
+    store.set("practicelog", log.slice(-PLOG_MAX));
+  } catch (e) {}
+}

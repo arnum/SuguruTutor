@@ -241,7 +241,7 @@ function storageSheet() {
   );
 }
 function exportData() {
-  const data = JSON.stringify({ app: APP.id, v: 1, exported: new Date().toISOString(), history: games, drills: store.get("drills", {}) });
+  const data = JSON.stringify({ app: APP.id, v: 1, exported: new Date().toISOString(), history: games, drills: store.get("drills", {}), practiceLog: store.get("practicelog", []) });
   openSheet(
     `<h2>${tr("Export statistics")}</h2><p>${tr("Copy the text and paste it under “Import” on the other device or version.")}</p>` +
       `<textarea class="io" id="ioText" readonly></textarea><div class="actions row2"><button class="primary" type="button" id="ioCopy">${tr("Copy")}</button>` +

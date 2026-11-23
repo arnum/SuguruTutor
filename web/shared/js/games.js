@@ -63,7 +63,9 @@ const PG = {
       if (c.P2.sol[cell] !== v) return drillFlash(c, [cell]);
       // entering the number is finger work, not seeing: up to a second per number is not counted
       c.inputMs = (c.inputMs || 0) + Math.min(CASCADE_ENTRY_MS, performance.now() - (c.selAt || performance.now()));
-      c.exp += easyU(Math.max(1, c.tu.easyList(c.known).length));
+      const opts = c.tu.easyList(c.known).length;
+      plog(c, "num", cell, opts);
+      c.exp += easyU(Math.max(1, opts));
       c.known[cell] = v;
       c.placed.push(cell);
       c.sel = null;
@@ -75,6 +77,7 @@ const PG = {
     show(c) {
       const h = c.tu.easiest(c.known);
       if (!h) return;
+      plog(c, "show", h.cell);
       c.known[h.cell] = h.v;
       c.helped.push(h.cell);
       c.sel = null;
@@ -267,6 +270,7 @@ const PG = {
     tap() {},
     // one answer per board; a wrong count shows them all and counts as a miss
     padTap(c, k) {
+      plog(c, "count", k, c.easy.length);
       c.answer = k;
       drillFinish(k !== c.easy.length);
     },
@@ -351,6 +355,9 @@ function quickClaims(pos, types) {
       F.push({ cells: [c], text: tr("{cell} = {v} is an easy number.", { cell: nm(c), v: pick([a, a2]) }), why: tr("{cell} can still be {a} or {b}.", { cell: nm(c), a, b: a2 }) });
     }
   }
+  // the kind of each claim (1 easy number, 2 pair, 3 only places), for the practice log
+  const mark = (k) => T.concat(F).forEach((x) => x.kind == null && (x.kind = k));
+  mark(1);
   if (types.includes(2)) {
     const two = empty.filter((i) => bits(cand[i]).length === 2);
     const pairs = [],
@@ -384,6 +391,7 @@ function quickClaims(pos, types) {
       F.push({ cells: [a, c], text: tr("{a} and {b} are a pair.", { a: nm(a), b: nm(c) }), why: tr("{cell} can also be {v}.", { cell: nm(c), v: extra }) });
     }
   }
+  mark(2);
   if (types.includes(3)) {
     const order = tu.houses.map((h, u) => u).sort(() => Math.random() - 0.5);
     let gotT = false,
@@ -421,13 +429,15 @@ function quickClaims(pos, types) {
       }
     }
   }
+  mark(3);
   // about half true; up to four claims per board, shuffled
   const out = [];
   T.sort(() => Math.random() - 0.5);
   F.sort(() => Math.random() - 0.5);
   while (out.length < 4 && (T.length || F.length)) {
     const takeTrue = T.length && (!F.length || Math.random() < 0.5);
-    out.push(Object.assign({ truth: !!takeTrue, pos }, takeTrue ? T.shift() : F.shift()));
+    const one = takeTrue ? T.shift() : F.shift();
+    out.push(Object.assign({ truth: !!takeTrue, pos }, one));
   }
   return out;
 }
@@ -479,6 +489,8 @@ PG.quick = {
     const cl = c.claims[c.at];
     if (!cl) return;
     const right = yes === cl.truth;
+    const prev = c.ans.length ? c.ans[c.ans.length - 1].claim : null;
+    plog(c, "claim", cl.kind, right ? 1 : 0, !prev || prev.pos !== cl.pos ? 1 : 0, cl.pos.b.rows + "x" + cl.pos.b.cols);
     c.ans.push({ claim: cl, yes, right });
     if (!right) {
       c.deadline -= QUICK_COST * 1000;

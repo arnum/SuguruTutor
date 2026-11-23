@@ -63,6 +63,32 @@ Not now (23 November 2026).
 - Applies to the hints, the practice texts, the moments after the game, the route analysis and the guide. It
   touches many texts in both languages, so it goes best together with the statistics and solved-page rework above.
 
+### One version, by build
+- **Today:** there are three numbers. Each app's offline cache has its own version (`suguru-v50` and `sudoku-v16` in
+  the `sw.js` files), and the shared build id `APP_BUILD` sits in `debug.js`. The changelog headings list all three.
+  The build only shows up in debug notes, not in the settings.
+- **Goal:** a single version for both apps, the build (like `2026-11-23b`), set in one place. The offline caches
+  take their names from it, the changelog headings show only the build, and the settings show it in both apps.
+- Bump it once per release instead of three numbers by hand. That also removes the risk of a forgotten cache bump
+  leaving old files on a phone.
+
+### Practice expects game speed on boards you have never seen
+- **The problem:** every practice board is new, and so is each new board in Quick call. Before you can find anything,
+  you have to read the board: the regions, what is placed, where the gaps are. Your curve comes from real games, where
+  you have already spent minutes on the board, so it has no time for that first look. The practice expectations are
+  therefore too strict, most of all where a board is short: the technique drills (one find per board), What changed?,
+  Sweep, Count them and Quick call. In Cascade it mostly hits the first number of each board.
+- **Ideas:**
+  - Add a "first look" allowance per new board to the expected time.
+  - Measure that allowance from your own play rather than guessing it: the first number on a Cascade board against
+    the later ones, and the first claim on a new Quick call board against the next claims on the same board.
+  - The allowance may grow with board size and with how full the board is, which should be checked.
+- **Check afterwards:** at your comfortable level, the level should hover around where it is instead of drifting
+  down.
+- **Data:** a temporary practice log has been collecting since 23 November: every board, with the time of each tap
+  since the board appeared. It is in the export as `practiceLog`. Play some rounds of each game, export, and
+  analyse; then remove the log (`plog` in `drill.js`).
+
 ## Open questions from earlier
 - **Grading:** rank chains and what-ifs by their length too, not only by their kind.
 - **Pencil setting "with pencil":** should the heading show the without-pencil grade until the pencil is used? Today the
