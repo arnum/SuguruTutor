@@ -4,7 +4,7 @@
 
 To logikspil med sværhedsgrad målt som indsats, guidede hints, ruteanalyse og statistik.
 De deler det meste af koden, men er to selvstændige apps: hver sit navn, ikon, data og offline-lager,
-og de lægges på hjemmeskærmen hver for sig. Hvad der er kommet til, står i [CHANGELOG.da.md](CHANGELOG.da.md).
+og de lægges på hjemmeskærmen hver for sig. Hvad der er kommet til, står i [CHANGELOG.md](CHANGELOG.md), og hvad der er planlagt, i [TODO.md](TODO.md) (begge på engelsk).
 
 - **`web/suguru/`** er Suguru, **`web/sudoku/`** er Sudoku, og **`web/shared/`** er koden, de deler.
   **`web/index.html`** er forsiden med de to spil.
@@ -33,6 +33,8 @@ web/
     js/tutor.js    det letteste næste tal med forklaring (hints); virker for begge spil via boardModel
     js/grade.js    sværhedsgrad: indsats pr. skridt, top og mængde
     js/route.js    ruteanalyse af spillerens træk
+    js/drillgen.js finder træningspositioner (kører i workeren); js/drill.js træningsskærmene;
+                   js/games.js træningsspillene (Kaskade, Hvad ændrede sig?, Ryd op, Tæl dem, Lynsvar)
     js/…           sprog, lagring, skærme, statistik, indstillinger, opstart
 ```
 

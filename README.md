@@ -4,7 +4,7 @@
 
 Two logic puzzles with difficulty measured as effort, guided hints, route analysis and statistics.
 They share most of the code but are two separate apps: each has its own name, icon, data and offline storage,
-and each is added to the home screen on its own. What has been added over time is in [CHANGELOG.md](CHANGELOG.md).
+and each is added to the home screen on its own. What has been added over time is in [CHANGELOG.md](CHANGELOG.md); what is planned is in [TODO.md](TODO.md).
 
 - **`web/suguru/`** is Suguru, **`web/sudoku/`** is Sudoku, and **`web/shared/`** is the code they share.
   **`web/index.html`** is the front page with the two games.
@@ -33,6 +33,8 @@ web/
     js/tutor.js    the easiest next number with an explanation (hints); works for both games via boardModel
     js/grade.js    difficulty: effort per step, peak and load
     js/route.js    route analysis of the player's moves
+    js/drillgen.js finding practice positions (runs in the worker); js/drill.js the practice screens;
+                   js/games.js the practice games (Cascade, What changed?, Sweep, Count them, Quick call)
     js/…           language, storage, screens, statistics, settings, startup
 ```
 

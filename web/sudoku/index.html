@@ -50,6 +50,8 @@
   <button class="primary big" id="homeNew" type="button">
     <svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>New game</button>
 
+  <div class="practiceslot" id="practiceSlot"></div>
+
   <div class="tiles">
     <button class="tile" id="homeStats" type="button">
       <svg class="i" viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg><span>Statistics</span><small id="homeStatsSub"></small></button>
@@ -138,6 +140,12 @@
   <iframe id="guideFrame" title="Sudoku strategies"></iframe>
 </section>
 
+<!-- ============ PRACTICE ============ -->
+<section class="view" id="v-drill" aria-label="Practice">
+  <div class="bar"><button class="iconbtn" type="button" id="drillBack" aria-label="Back"><svg class="i" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg></button><h2 id="drillTitle">Practice</h2><span class="drillcount" id="drillCount"></span></div>
+  <div id="drillBody"></div>
+</section>
+
 <div class="sheet" id="sheet" hidden><div class="backdrop" id="sheetBackdrop"></div>
   <div class="panel" role="dialog" aria-modal="true"><div class="grab" aria-hidden="true"></div><div id="sheetBody"></div></div></div>
 <div class="busy" id="busy" hidden><div class="busycard"><div class="spinner" aria-hidden="true">独</div><p id="busyText">Making a puzzle …</p>
@@ -168,6 +176,9 @@
 <script src="../shared/js/analysis.js"></script>
 <script src="../shared/js/takeaway.js"></script>
 <script src="../shared/js/progress.js"></script>
+<script src="../shared/js/drillgen.js"></script>
+<script src="../shared/js/games.js"></script>
+<script src="../shared/js/drill.js"></script>
 <script src="../shared/js/debug.js"></script>
 <script src="../shared/js/settings.js"></script>
 <script src="../shared/js/main.js"></script>

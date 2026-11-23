@@ -241,7 +241,7 @@ function storageSheet() {
   );
 }
 function exportData() {
-  const data = JSON.stringify({ app: APP.id, v: 1, exported: new Date().toISOString(), history: games });
+  const data = JSON.stringify({ app: APP.id, v: 1, exported: new Date().toISOString(), history: games, drills: store.get("drills", {}) });
   openSheet(
     `<h2>${tr("Export statistics")}</h2><p>${tr("Copy the text and paste it under “Import” on the other device or version.")}</p>` +
       `<textarea class="io" id="ioText" readonly></textarea><div class="actions row2"><button class="primary" type="button" id="ioCopy">${tr("Copy")}</button>` +
@@ -294,6 +294,7 @@ function importData() {
         games = games.concat(add).sort((a, b2) => (a.end < b2.end ? -1 : 1));
         ARCH_N = 0; // the order may have changed: rewrite all of it
         saveGames(true);
+        if (d.drills && typeof d.drills === "object") mergeDrills(d.drills);
         closeSheet();
         renderSettings();
         toast(add.length ? tr("{n} games imported", { n: add.length }) : tr("No new games to import"));
@@ -301,4 +302,30 @@ function importData() {
       b.querySelector("#ioClose").onclick = closeSheet;
     },
   );
+}
+// Practice levels from another device: the logs are joined, and the level is taken from the device that practised last
+function mergeDrills(other) {
+  const all = Object.assign({}, store.get("drills", {}));
+  for (const L of Object.keys(other)) {
+    const a = all[L],
+      b = other[L];
+    if (!b || !Array.isArray(b.log)) continue;
+    if (!a) {
+      all[L] = b;
+      continue;
+    }
+    const last = (x) => (x.log && x.log.length ? x.log[x.log.length - 1].d : "");
+    const seen = new Set(),
+      log = (a.log || [])
+        .concat(b.log)
+        .filter((x) => {
+          const k = JSON.stringify(x);
+          return seen.has(k) ? false : seen.add(k);
+        })
+        .sort((x, y) => (x.d < y.d ? -1 : x.d > y.d ? 1 : 0))
+        .slice(-400);
+    const newer = last(b) > last(a) ? b : a;
+    all[L] = { lv: newer.lv, days: Object.assign({}, b.days, a.days, newer.days), log };
+  }
+  store.set("drills", all);
 }

@@ -290,7 +290,7 @@ function syncClock() {
 }
 
 // ---------- Navigation between screens
-const ORDER = { home: 0, new: 1, stats: 1, settings: 1, guide: 2, game: 2 };
+const ORDER = { home: 0, new: 1, stats: 1, settings: 1, guide: 2, game: 2, drill: 3 };
 let backTo = "home";
 function go(v, opts = {}) {
   const prev = view;

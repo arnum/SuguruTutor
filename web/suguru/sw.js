@@ -1,7 +1,7 @@
 // Service worker: makes the app available offline.
 // Its own files are fetched from the network first (at most 3 seconds), so a new version takes effect at once; without a network the stored copy is used.
 // So there is no version number to change when the files are updated.
-const CACHE = "suguru-v37";
+const CACHE = "suguru-v50";
 const FONTS = "suguru-fonts";
 const SHELL = [
   "./",
@@ -34,6 +34,9 @@ const SHELL = [
   "../shared/js/analysis.js",
   "../shared/js/takeaway.js",
   "../shared/js/progress.js",
+  "../shared/js/drillgen.js",
+  "../shared/js/games.js",
+  "../shared/js/drill.js",
   "../shared/js/debug.js",
   "../shared/js/settings.js",
   "../shared/js/main.js",

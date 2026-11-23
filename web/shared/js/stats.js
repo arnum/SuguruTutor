@@ -50,7 +50,7 @@ function renderStats() {
   </div>`;
   html += progressLine();
   html += TAB("fremgang") + progressPanel();
-  html += TAB("teknik") + focusPanel() + TAB("overblik");
+  html += TAB("teknik") + focusPanel() + drillPanel() + TAB("overblik");
   // Per level
   const per = [];
   for (let l = 1; l <= 9; l++) {
@@ -132,6 +132,7 @@ function renderStats() {
     tabs.map(([k, t]) => `<button type="button" role="tab" data-k="${k}" aria-pressed="${k === ui.statsTab}">${t}</button>`).join("") +
     `</div>` +
     chunks[ui.statsTab];
+  foldLong(body);
   body.querySelectorAll("#statTabs button").forEach(
     (b) =>
       (b.onclick = () => {
@@ -152,6 +153,7 @@ function renderStats() {
       }
     };
   bindFocus(body);
+  bindDrillPanel(body);
   const tp = $("toProgress");
   if (tp)
     tp.onclick = () => {
@@ -326,4 +328,63 @@ function trendChart(list) {
   });
   s += `</svg><div class="legendrow"><i style="background:var(--indigo);border-radius:50%"></i> ${tr("without hints")} &nbsp; <i style="box-shadow:inset 0 0 0 2px var(--indigo);border-radius:50%"></i> ${tr("with hints")}</div>`;
   return s;
+}
+// Long explanations fold away, so the numbers and findings come first:
+// - notes on how something is measured (.caveat; neighbouring notes together) go behind "How it's measured"
+// - a long introduction keeps its first sentence; the rest is behind "More"
+// Short texts, findings and empty-state notes stay as they are. Works on the finished DOM, so it covers every panel and
+// both languages; the elements are moved, not copied, so ids and handlers keep working.
+const FOLD_AT = 110;
+function foldLong(root) {
+  const len = (el) => el.textContent.trim().length;
+  // the notes on method
+  const done = new Set();
+  root.querySelectorAll("p.caveat").forEach((p) => {
+    if (done.has(p)) return;
+    const group = [p];
+    let n = p.nextElementSibling;
+    while (n && n.matches("p.caveat")) group.push(n), (n = n.nextElementSibling);
+    group.forEach((x) => done.add(x));
+    if (group.reduce((a, x) => a + len(x), 0) <= FOLD_AT) return;
+    const d = document.createElement("details");
+    d.className = "fold how";
+    d.innerHTML = `<summary>${tr("How it's measured")}</summary>`;
+    p.parentNode.insertBefore(d, p);
+    group.forEach((x) => d.appendChild(x));
+  });
+  // long introductions: the first sentence stays
+  root.querySelectorAll(".panelcard > p:not([class])").forEach((p) => {
+    if (len(p) <= FOLD_AT) return;
+    const re = /[.!?](\s+)(?=[A-ZÆØÅ“"+–])/; // not before a digit: "pr. 100" is no sentence end
+    let at = null;
+    for (const node of p.childNodes) {
+      if (node.nodeType !== 3) continue;
+      const m = re.exec(node.textContent);
+      if (m) {
+        at = { node, i: m.index + 1 };
+        break;
+      }
+    }
+    if (!at) return;
+    const rest = at.node.splitText(at.i);
+    rest.textContent = rest.textContent.replace(/^\s+/, "");
+    const lead = [];
+    for (const node of [...p.childNodes]) {
+      if (node === rest) break;
+      lead.push(node);
+    }
+    if (lead.reduce((a, x) => a + x.textContent.length, 0) > 140) {
+      p.normalize();
+      return;
+    }
+    const d = document.createElement("details"),
+      sum = document.createElement("summary"),
+      body = document.createElement("p");
+    d.className = "fold lead";
+    lead.forEach((x) => sum.appendChild(x));
+    sum.insertAdjacentHTML("beforeend", ` <span class="more">${tr("More")}</span>`);
+    while (p.firstChild) body.appendChild(p.firstChild);
+    d.append(sum, body);
+    p.replaceWith(d);
+  });
 }

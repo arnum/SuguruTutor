@@ -130,6 +130,76 @@ const GAME = {
   digitTip: tr("Numbers that are almost complete have few places left: check them first."),
   stuckTip: tr("When you are stuck, go through the boxes one at a time and ask: which number is missing, and where can it go?"),
   checkTip: CHECK_TIP,
+  // Practice drills (drill.js, drillgen.js): six levels per drill. Always 9×9: whether pencil marks are shown, the share of
+  // empty cells in the position, and for singles how many easy numbers there may be at most
+  drillLevels: [
+    { size: [9, 9], pencil: true, empty: [0.3, 0.5] },
+    { size: [9, 9], pencil: true, empty: [0.45, 0.65] },
+    { size: [9, 9], pencil: false, empty: [0.3, 0.5] },
+    { size: [9, 9], pencil: false, empty: [0.45, 0.6] },
+    { size: [9, 9], pencil: false, empty: [0.5, 0.7] },
+    { size: [9, 9], pencil: false, empty: [0.55, 0.8] },
+  ],
+  drillSingles: [
+    { size: [9, 9], empty: [0.25, 0.45] },
+    { size: [9, 9], empty: [0.4, 0.55] },
+    { size: [9, 9], empty: [0.5, 0.65], opts: 4 },
+    { size: [9, 9], empty: [0.55, 0.7], opts: 3 },
+    { size: [9, 9], empty: [0.6, 0.75], opts: 2 },
+    { size: [9, 9], empty: [0.6, 0.8], opts: 1 },
+  ],
+  // what to look for in each drill: the heading and one line
+  drillFind: {
+    1: [tr("Find an easy number"), tr("Tap a cell whose number you can see.")],
+    2: [tr("Find locked candidates"), tr("Find a number that in a box can only go in one row or column, or in a line only in one box. Tap those places.")],
+    3: [tr("Find a pair"), tr("Two cells in a house with the same two options, or two numbers with only the same two places in a house. Tap the two cells.")],
+    4: [tr("Find a triple"), tr("Three cells and three numbers locked to each other in a house. Tap the three cells.")],
+  },
+  // Practice games (games.js): six levels each, like the drills (see Suguru's game.js)
+  games: {
+    cascade: [
+      { size: [9, 9], pencil: true, empty: [0.35, 0.5], n: 8 },
+      { size: [9, 9], pencil: false, empty: [0.35, 0.5], n: 8 },
+      { size: [9, 9], pencil: false, empty: [0.45, 0.6], n: 10 },
+      { size: [9, 9], pencil: false, empty: [0.5, 0.65], n: 10 },
+      { size: [9, 9], pencil: false, empty: [0.55, 0.7], n: 12 },
+      { size: [9, 9], pencil: false, empty: [0.6, 0.75], n: 12 },
+    ],
+    changed: [
+      { size: [9, 9], pencil: true, empty: [0.35, 0.5], fresh: [1, 2] },
+      { size: [9, 9], pencil: false, empty: [0.35, 0.5], fresh: [1, 2] },
+      { size: [9, 9], pencil: false, empty: [0.45, 0.6], fresh: [1, 3] },
+      { size: [9, 9], pencil: false, empty: [0.5, 0.65], fresh: [2, 3] },
+      { size: [9, 9], pencil: false, empty: [0.55, 0.7], fresh: [2, 4] },
+      { size: [9, 9], pencil: false, empty: [0.6, 0.75], fresh: [2, 4] },
+    ],
+    sweep: [
+      { size: [9, 9], pencil: true, empty: [0.4, 0.55], techs: [2], minT: 2 },
+      { size: [9, 9], pencil: true, empty: [0.4, 0.6], techs: [3], minT: 2 },
+      { size: [9, 9], pencil: true, empty: [0.45, 0.65], techs: [2, 3, 4], minT: 3 },
+      { size: [9, 9], pencil: false, empty: [0.4, 0.55], techs: [2], minT: 2 },
+      { size: [9, 9], pencil: false, empty: [0.45, 0.6], techs: [2, 3], minT: 3 },
+      { size: [9, 9], pencil: false, empty: [0.5, 0.65], techs: [3, 4], minT: 3 },
+    ],
+    count: [
+      { size: [9, 9], pencil: true, empty: [0.3, 0.45], count: [1, 3] },
+      { size: [9, 9], pencil: false, empty: [0.35, 0.5], count: [2, 4] },
+      { size: [9, 9], pencil: false, empty: [0.4, 0.55], count: [3, 5] },
+      { size: [9, 9], pencil: false, empty: [0.45, 0.6], count: [3, 6] },
+      { size: [9, 9], pencil: false, empty: [0.5, 0.65], count: [4, 7] },
+      { size: [9, 9], pencil: false, empty: [0.55, 0.7], count: [5, 9] },
+    ],
+    quick: [
+      { size: [9, 9], pencil: true, empty: [0.35, 0.55], types: [1], batch: 10 },
+      { size: [9, 9], pencil: true, empty: [0.4, 0.6], types: [1, 2], batch: 10 },
+      { size: [9, 9], pencil: true, empty: [0.45, 0.65], types: [1, 2, 3], batch: 10 },
+      { size: [9, 9], pencil: false, empty: [0.4, 0.55], types: [1, 3], batch: 10 },
+      { size: [9, 9], pencil: false, empty: [0.45, 0.6], types: [1, 2, 3], batch: 10 },
+      { size: [9, 9], pencil: false, empty: [0.5, 0.65], types: [1, 2, 3], batch: 10 },
+    ],
+  },
+  countLine: tr("An easy number is the only option in a cell, or the only place for a number in a row, column or box."),
+
   rareNote: tr("The technique is rare, so finding a puzzle can take a while."),
   cellRange: (n) => tr("The cell can be 1–{n}.", { n }),
   // Did the number v in cell c break a rule on the board vis? The text, otherwise null.

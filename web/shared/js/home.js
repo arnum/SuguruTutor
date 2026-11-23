@@ -74,6 +74,9 @@ function renderHome() {
     ? focus || tr("{n} solved", { n }) + (st.current ? " · " + tr("{n} in a row", { n: st.current }) : "")
     : tr("No games yet");
   $("installCard").hidden = !(IOS && !STANDALONE && !FRAMED && !settings.installHidden);
+  // practice shows up once you have played a game
+  if (games.length) renderPracticeCard();
+  else $("practiceSlot").innerHTML = "";
 }
 $("installX").onclick = () => {
   settings.installHidden = true;

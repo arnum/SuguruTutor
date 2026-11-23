@@ -86,7 +86,7 @@ function startRoute(rec) {
     g.conc = concOf(g, baseline(g.id));
     rec.conc = g.conc;
     const cl = document.getElementById("concLine");
-    if (cl) cl.innerHTML = concLineHtml(g);
+    if (cl) cl.innerHTML = concWarnHtml(g);
     rec.route = g.route;
     rec.moves = g.moves;
     // Keep the details for the latest games (default 40); older ones keep only the summary
@@ -96,8 +96,10 @@ function startRoute(rec) {
     if (el2) el2.innerHTML = routeLineHtml(g);
     const tk = document.getElementById("takeaway");
     if (tk) {
-      tk.innerHTML = takeawayHtml(g);
-      bindTakeaway(tk, g);
+      tk.innerHTML = afterGameHtml(g);
+      bindAfterGame(tk, g);
+      const sh = tk.closest(".solved");
+      if (sh) fillPractice(sh, g);
     }
   });
 }
@@ -434,7 +436,14 @@ function spotTip(g, e, i) {
   const houses = d.hidden.length ? d.hidden : M.unitsOf[e.c];
   const free = (u) => M.RC[u].filter((x) => !known[x]).length;
   const u = houses.reduce((a, b) => (free(b) < free(a) ? b : a));
-  if (free(u) <= 3) return tr("{house} had only {k} empty cells.", { house: cap(M.unitName(u, nm, list2)), k: free(u) }) + " " + GAME.fullTip;
+  if (free(u) <= 3)
+    return (
+      (free(u) === 1
+        ? tr("{house} had only one empty cell.", { house: cap(M.unitName(u, nm, list2)) })
+        : tr("{house} had only {k} empty cells.", { house: cap(M.unitName(u, nm, list2)), k: free(u) })) +
+      " " +
+      GAME.fullTip
+    );
   // 4. how it could be seen
   if (d.naked) return tr("{cell} could only be {v}: all other numbers were already around it.", { cell: nm(e.c), v: e.v }) + " " + GAME.nakedTip;
   return tr("In {house}, {v} could only go in {cell}.", { house: M.unitName(u, nm, list2), v: e.v, cell: nm(e.c) }) + " " + GAME.hiddenTip;
@@ -1514,13 +1523,13 @@ function focusPanel() {
   }
   return (
     `<div class="panelcard focus"><h3>${tr("Focus area")}</h3><p>${tr("Based on your last {n} games. Your base speed is {time} per easy move.", { n: fd.games, time: fmtS(fd.base) })}${fd.filtered ? " " + tr("Games late in a long session or at night are left out, so fatigue doesn't look like a weak technique.") : ""}</p>` +
-    `<p class="curve">${tr("Your curve, when the move is the only one on the board:")} ${rows
-      .filter((f) => f.nT >= 3)
-      .map((f) => `${esc(LEVEL_TECH[f.L])} <b>${fmtS(f.expected)}</b>`)
-      .join(" · ")}.</p>` +
     (weak ? card(weak, true) : `<p>${tr("No clear weakness right now. All techniques are close to your curve.")}</p>`) +
     (strong ? card(strong, false) : "") +
     (chart ? `<h4 style="margin:12px 0 4px;font-size:13px">${tr("Speed per technique compared with your curve")}</h4>${chart}` : "") +
+    `<p class="caveat curve">${tr("Your curve, when the move is the only one on the board:")} ${rows
+      .filter((f) => f.nT >= 3)
+      .map((f) => `${esc(LEVEL_TECH[f.L])} <b>${fmtS(f.expected)}</b>`)
+      .join(" · ")}.</p>` +
     `<p class="caveat">${tr("“Your curve” is fitted to your own moves: one smooth curve for all techniques, where harder techniques take longer and more possible places make it faster. Weaknesses and strengths are the techniques that sit above or below the curve. It says nothing about whether you are fast or slow compared with others.")} ` +
     `${tr("The focus area weighs three things: speed, whether you find the technique when it is the easiest move, and how many hints you have used for it.")}</p></div>`
   );
@@ -1529,7 +1538,10 @@ function bindFocus(root) {
   root.querySelectorAll("[data-train]").forEach(
     (b) =>
       (b.onclick = () => {
-        ui.must = +b.dataset.train;
+        const L = +b.dataset.train;
+        // singles to triples have drills; harder techniques are practised in a puzzle that needs them
+        if (L >= 1 && L <= 4) return startDrill(L);
+        ui.must = L;
         saveUi();
         go("new");
         toast(tr("Technique selected: {tech}", { tech: LEVEL_TECH[ui.must] }));

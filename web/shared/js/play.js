@@ -123,17 +123,6 @@ function afterChange() {
   clearTimeout(saveT);
   saveT = setTimeout(saveCurrent, 600);
 }
-// Fast taps: we react to pointerdown, not click. A click needs the finger to be lifted on the same element,
-// and both the number buttons and the grid are redrawn after every tap, so fast taps got lost.
-function fastTap(node, fn) {
-  node.addEventListener("pointerdown", (e) => {
-    if (e.button) return;
-    fn(e);
-  });
-  node.addEventListener("click", (e) => {
-    if (e.detail === 0) fn(e);
-  }); // keyboard and screen reader
-}
 fastTap($("pad"), (e) => {
   const b = e.target.closest && e.target.closest("button");
   if (b && !b.disabled && b.dataset.d) input(+b.dataset.d);
@@ -143,12 +132,7 @@ function cellAt(e) {
     const a = e.target.getAttribute && e.target.getAttribute("data-i");
     return a == null ? -1 : +a;
   }
-  const r = svg.getBoundingClientRect(),
-    vw = G.cols * 100 + 40,
-    vh = G.rows * 100 + 40;
-  const c = Math.floor((((e.clientX - r.left) / r.width) * vw - 34) / 100),
-    row = Math.floor((((e.clientY - r.top) / r.height) * vh - 34) / 100);
-  return c < 0 || row < 0 || c >= G.cols || row >= G.rows ? -1 : row * G.cols + c;
+  return svgCellAt(svg, G.cols, G.rows, e);
 }
 fastTap(svg, (e) => {
   if (!P) return;
@@ -164,7 +148,7 @@ fastTap(svg, (e) => {
 });
 document.addEventListener("keydown", (e) => {
   if (view !== "game" || !P || !$("sheet").hidden || e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return;
-  if (e.key >= "1" && e.key <= "6") {
+  if (e.key >= "1" && e.key <= "9" && +e.key <= (P.maxRegion || 5)) {
     input(+e.key);
     e.preventDefault();
   } else if (e.key === "Backspace" || e.key === "Delete" || e.key === "0") {
@@ -735,23 +719,38 @@ function showSolved(rec) {
     else if (!prev.length)
       record = `<span class="record">${tr("First solve on {size}, grade {g} without hints", { size: rec.cols + "×" + rec.rows, g: gBand(rec) })}</span>`;
   }
+  const facts = [
+    esc(BAND[gBand(rec)]) + " " + dec(gradeFor(rec)),
+    rec.cols + "×" + rec.rows,
+    rec.daily ? tr("Daily puzzle") : "",
+    fmt(rec.ms),
+    rec.hints ? (rec.hints === 1 ? tr("1 hint") : tr("{n} hints", { n: rec.hints })) : tr("no hints"),
+    st.current > 1 ? tr("{n} days in a row", { n: st.current }) : "",
+  ].filter(Boolean);
   openSheet(
-    `<div class="solved"><div class="bigstamp" aria-hidden="true">解</div><h2>${rec.solved ? tr("Solved!") : tr("Filled in")}</h2>` +
-      `<p class="sub">${esc(BAND[gBand(rec)])} ${dec(gradeFor(rec))} · ${rec.cols}×${rec.rows}${rec.daily ? " · " + tr("Daily puzzle") : ""}${rec.peak != null ? "<br>" + plText(rec) : ""}</p>` +
-      `<div class="kpis three"><div class="kpi"><b>${fmt(rec.ms)}</b><span>${tr("Time")}</span></div><div class="kpi"><b>${rec.hints}</b><span>${rec.hints === 1 ? tr("Hint") : tr("Hints")}</span></div>` +
-      `<div class="kpi"><b>${st.current}</b><span>${st.current === 1 ? tr("Day in a row") : tr("Days in a row")}</span></div></div>${record}` +
+    `<div class="solved v2"><div class="shead"><div class="smallstamp" aria-hidden="true">解</div>` +
+      `<div><h2>${rec.solved ? tr("Solved!") : tr("Filled in")}</h2><p class="sub">${facts.join(" · ")}</p></div></div>${record}` +
       (rec.est && rec.solved ? `<p class="sub estcmp">${tr("Your estimate was {t}.", { t: estFmt(rec.est) })} ${estCompare(rec.ms, rec.est)}</p>` : "") +
-      (rec.solved ? "" : `<p class="sub" style="margin-top:10px">${tr("The solution was shown along the way, so it doesn't count as solved.")}</p>`) +
-      `<div id="takeaway">${gNow && gNow.moves && !gNow.routePending ? takeawayHtml(gNow) : ""}</div>` +
+      (rec.solved ? "" : `<p class="sub">${tr("The solution was shown along the way, so it doesn't count as solved.")}</p>`) +
+      `<div id="takeaway">${
+        gNow && gNow.moves && !gNow.routePending
+          ? afterGameHtml(gNow)
+          : gNow && gNow.routePending
+            ? `<p class="sub mwait">${tr("Finding the moments worth a second look …")}</p>`
+            : ""
+      }</div>` +
+      `<div class="actions sbtns"><span id="sPractice"></span><button class="primary big" type="button" id="sNew">${tr("New puzzle")} · ${esc(BAND[ui.level])}</button></div>` +
       `<button class="routeline" type="button" id="routeLine">${routeLineHtml(rec)}</button>` +
-      `<div id="concLine">${concLineHtml(rec)}</div>` +
+      `<div id="concLine">${concWarnHtml(rec)}</div>` +
       `<p class="feltq">${tr("How did it feel compared with {v}?", { v: dec(gradeFor(rec)) })}</p><div class="seg felt" id="feltSeg">` +
       FELT.map((t, i) => `<button type="button" data-f="${i - 2}" aria-pressed="${feltNow === i - 2}">${t}</button>`).join("") +
       `</div>` +
-      `<div class="actions"><button class="primary big" type="button" id="sNew">${tr("New puzzle")} · ${esc(BAND[ui.level])}</button>` +
-      `<div class="actions row2" style="margin:0"><button class="secondary" type="button" id="sFinal">${tr("See board")}</button><button class="secondary" type="button" id="sStats">${tr("Statistics")}</button><button class="secondary" type="button" id="sHome">${tr("Home")}</button></div></div></div>`,
+      `<div class="actions row2"><button class="secondary" type="button" id="sFinal">${tr("See board")}</button><button class="secondary" type="button" id="sStats">${tr("Statistics")}</button><button class="secondary" type="button" id="sHome">${tr("Home")}</button></div></div>`,
     (b) => {
-      if (gNow && gNow.moves) bindTakeaway(b, gNow);
+      if (gNow && gNow.moves && !gNow.routePending) {
+        bindAfterGame(b, gNow);
+        fillPractice(b, gNow);
+      }
       b.querySelector("#sNew").onclick = () => {
         closeSheet();
         generateFromUi();
@@ -787,4 +786,27 @@ function showSolved(rec) {
       };
     },
   );
+}
+// "Practise {technique}" after the game: the technique of the first moment that has a drill
+function fillPractice(root, g) {
+  const slot = root.querySelector("#sPractice");
+  if (!slot) return;
+  let L = null;
+  try {
+    const t = takeaway(g);
+    const m = t && t.moments.find((x) => x.L >= 1 && x.L <= 4);
+    if (m) L = m.L;
+  } catch (e) {}
+  slot.innerHTML = L ? `<button class="secondary big" type="button" id="sPractise">${tr("Practise {tech}", { tech: LEVEL_TECH[L] })}</button>` : "";
+  const b = slot.querySelector("#sPractise");
+  if (b)
+    b.onclick = () => {
+      closeSheet();
+      setTimeout(() => startDrill(L), 280);
+    };
+}
+// The concentration line after the game only when something was off
+function concWarnHtml(g) {
+  const h = concLineHtml(g);
+  return h.includes("insight warn") ? h : "";
 }

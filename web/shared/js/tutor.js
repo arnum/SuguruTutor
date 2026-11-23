@@ -121,7 +121,8 @@ function createTutor(G, region) {
   }
 
   // ---------- applications of techniques (all, or only the first)
-  function neighborApps(s, first) {
+  // all: also patterns that remove nothing (the practice drills accept every real pattern; grading never asks for these)
+  function neighborApps(s, first, all) {
     const out = [];
     for (let r = 0; r < nr; r++) {
       const cells = RC[r];
@@ -135,7 +136,7 @@ function createTutor(G, region) {
           if (s.val[x] || !(s.cand[x] & bit) || spots.includes(x)) continue;
           if (spots.every((sp) => peer(x, sp))) targets.push({ cell: x, mask: bit });
         }
-        if (targets.length) {
+        if (targets.length || (all && seenByOne(spots, r))) {
           out.push({ tech: 2, region: r, v, spots, targets });
           if (first) return out;
         }
@@ -143,7 +144,9 @@ function createTutor(G, region) {
     }
     return out;
   }
-  function nakedApps(s, k, first) {
+  // the places all see one cell outside their house (the pattern exists even if that cell has nothing to lose)
+  const seenByOne = (spots, r) => peers[spots[0]].some((x) => !RC[r].includes(x) && spots.every((sp) => peer(x, sp)));
+  function nakedApps(s, k, first, all) {
     const out = [],
       cs = [];
     for (let c = 0; c < n; c++) {
@@ -159,7 +162,7 @@ function createTutor(G, region) {
           if (s.val[p] || ch.includes(p) || !(s.cand[p] & m)) continue;
           if (ch.every((q) => peer(p, q))) targets.push({ cell: p, mask: s.cand[p] & m });
         }
-        if (targets.length) {
+        if (targets.length || all) {
           out.push({ tech: k === 2 ? 3 : 5, cells: ch.slice(), mask: m, targets });
           return first;
         }
@@ -184,14 +187,14 @@ function createTutor(G, region) {
     rec(0, 0, 0);
     return out;
   }
-  function hiddenApps(s, k, first) {
+  function hiddenApps(s, k, first, all) {
     const out = [];
     for (let r = 0; r < nr; r++) {
       const cells = RC[r];
       let placed = 0;
       for (const c of cells) if (s.val[c]) placed |= 1 << s.val[c];
       const open = ((1 << (cells.length + 1)) - 2) & ~placed;
-      if (pc(open) <= k) continue;
+      if (pc(open) < k || (pc(open) === k && !all)) continue;
       for (let m = open; m > 0; m = (m - 1) & open) {
         if (pc(m) !== k) continue;
         const spots = cells.filter((c) => !s.val[c] && s.cand[c] & m);
@@ -201,7 +204,7 @@ function createTutor(G, region) {
           const extra = s.cand[c] & ~m;
           if (extra) targets.push({ cell: c, mask: extra });
         }
-        if (targets.length) {
+        if (targets.length || all) {
           out.push({ tech: k === 2 ? 4 : 6, region: r, mask: m, cells: spots, targets });
           if (first) return out;
         }
@@ -1672,6 +1675,128 @@ function createTutor(G, region) {
     if (S0.broken) return [];
     return singles(S0).map((x) => [x.cell, x.v]);
   }
+  // Practice drills (drill.js): every pattern at technique level L (2 neighbour elimination or locked candidates, 3 pairs,
+  // 4 triples) in the position, with its cells and the numbers it makes directly visible. A pattern that gives nothing new
+  // is still a correct find, just not a useful one here.
+  // What the pattern is, without what it removes (the Sweep game asks for that part)
+  function premiseText(apps) {
+    const a0 = apps[0];
+    if (apps.every((a) => a.tech === 2 && a.region === a0.region)) {
+      const sp = list(a0.spots.map(nm));
+      return apps.length > 1
+        ? tr("In {region}, {vals} can only go in {cells}.", {
+            region: regionName(a0.region),
+            vals: list(apps.map((a) => a.v).sort((x, y) => x - y).map(String)),
+            cells: sp,
+          }) +
+            " " +
+            tr("We don't know where, but each of them lands in one of those cells.")
+        : tr("In {region}, {v} can only go in {spots}. We don't know where, but {v} lands in one of them.", { region: regionName(a0.region), v: a0.v, spots: sp });
+    }
+    return apps
+      .map((a) => {
+        if (a.tech === 2)
+          return tr("In {region}, {v} can only go in {spots}. We don't know where, but {v} lands in one of them.", {
+            region: regionName(a.region),
+            v: a.v,
+            spots: list(a.spots.map(nm)),
+          });
+        const cs = list((a.cells || []).map(nm));
+        if (a.tech === 3 || a.tech === 5) {
+          const kk = a.cells.length;
+          const shared = a.cells.reduce((acc, c) => acc.filter((u) => unitsOf[c].includes(u)), unitsOf[a.cells[0]]);
+          return (
+            (shared.length
+              ? KING
+                ? tr("{cells} are in the same region and between them can only be {vals}.", { cells: cs, vals: vals(a.mask) })
+                : tr("{cells} lie in {unit} and between them can only be {vals}.", { cells: cs, unit: regionName(shared[0]), vals: vals(a.mask) })
+              : tr("{cells} see each other and between them can only be {vals}.", { cells: cs, vals: vals(a.mask) })) +
+            " " +
+            (kk === 2 ? tr("So those two numbers are used up by exactly those two cells.") : tr("So those three numbers are used up by exactly those three cells."))
+          );
+        }
+        if (a.tech === 4 || a.tech === 6)
+          return (
+            tr("In {region}, {vals} can only go in {cells}.", { region: regionName(a.region), vals: vals(a.mask), cells: cs }) +
+            " " +
+            (a.cells.length === 2
+              ? tr("So those two cells are taken by those numbers, even though they have other options.")
+              : tr("So those three cells are taken by those numbers, even though they have other options."))
+          );
+        return "";
+      })
+      .join(" ");
+  }
+  // Several numbers locked to the same places in the same region: one text for all of them
+  function joinedText(apps, S) {
+    const a0 = apps[0];
+    if (apps.length < 2 || !apps.every((a) => a.tech === 2 && a.region === a0.region)) return apps.map((a) => stepText(a, S)).join(" ");
+    const masks = new Map();
+    apps.forEach((a) => a.targets.forEach((t) => masks.set(t.cell, (masks.get(t.cell) || 0) | t.mask)));
+    const all = a0.spots.length === 2 ? tr("both cells") : tr("all {n} cells", { n: a0.spots.length });
+    return (
+      tr("In {region}, {vals} can only go in {cells}.", {
+        region: regionName(a0.region),
+        vals: list(apps.map((a) => a.v).sort((x, y) => x - y).map(String)),
+        cells: list(a0.spots.map(nm)),
+      }) +
+      " " +
+      tr("We don't know where, but each of them lands in one of those cells.") +
+      " " +
+      groupByMask([...masks].map(([cell, mask]) => ({ cell, mask })))
+        .map(([m, cs]) => {
+          const o = { cells: list(cs.map(nm)), all, cannot: cannot(m) };
+          return KING
+            ? cs.length > 1
+              ? tr("{cells} touch {all}, so they {cannot}.", o)
+              : tr("{cells} touches {all}, so it {cannot}.", o)
+            : cs.length > 1
+              ? tr("{cells} see {all}, so they {cannot}.", o)
+              : tr("{cells} sees {all}, so it {cannot}.", o);
+        })
+        .join(" ")
+    );
+  }
+  // Patterns on exactly the same cells count as one find (two numbers locked to the same two places, say): their
+  // eliminations are joined, and so are their texts, so the board and the text show everything those cells do.
+  function drillApps(known, L) {
+    const S = fromKnown(known);
+    if (S.broken || L < 2 || L > 4) return [];
+    const before = new Set(singles(S).map((x) => x.cell * 16 + x.v));
+    const groups = new Map();
+    const every =
+      L === 2 ? neighborApps(S, false, true) : nakedApps(S, L === 3 ? 2 : 3, false, true).concat(hiddenApps(S, L === 3 ? 2 : 3, false, true));
+    for (const a of every) {
+      const cells = (a.tech === 2 ? a.spots : a.cells || []).filter((c) => c >= 0),
+        key = cells.slice().sort((x, y) => x - y).join(",");
+      if (!groups.has(key)) groups.set(key, { cells, apps: [] });
+      groups.get(key).apps.push(a);
+    }
+    return [...groups.values()].map(({ cells, apps }) => {
+      const T = clone(S);
+      apps.forEach((a) => apply(T, a));
+      const gives = T.broken ? [] : singles(T).filter((x) => !before.has(x.cell * 16 + x.v));
+      const masks = new Map();
+      apps.forEach((a) => a.targets.forEach((t) => masks.set(t.cell, (masks.get(t.cell) || 0) | t.mask)));
+      // the pattern that gives a number is explained first
+      const useful = (a) => {
+        const U = clone(S);
+        apply(U, a);
+        return !U.broken && singles(U).some((x) => !before.has(x.cell * 16 + x.v));
+      };
+      // the text is about what the pattern removes; a pattern that removes nothing only joins it when it is alone
+      const acts = apps.filter((a) => a.targets.length).length ? apps.filter((a) => a.targets.length) : apps;
+      const order = acts.length > 1 ? acts.filter(useful).concat(acts.filter((a) => !useful(a))) : acts;
+      return {
+        tech: apps[0].tech,
+        cells,
+        targets: [...masks].map(([cell, mask]) => ({ cell, mask })),
+        gives: gives.map((x) => ({ cell: x.cell, v: x.v })),
+        text: joinedText(order, S),
+        premise: premiseText(order),
+      };
+    });
+  }
   function explainMove(known, cell, v) {
     const S0 = fromKnown(known);
     if (S0.broken || S0.val[cell] || !(S0.cand[cell] & (1 << v))) return null;
@@ -1785,6 +1910,12 @@ function createTutor(G, region) {
     routeMove,
     explainMove,
     easyList,
+    drillApps,
+    // for the Quick call game (games.js): the houses, whether two cells see each other, and a house's short name
+    houses: RC,
+    peer,
+    houseName: (u) => regionName(u),
+    king: KING,
     chainsAt: (cand, val, mode) => chainApps(st(cand, val), false, mode || "all"),
     bothAt: (cand, val) => bothWaysApps(st(cand, val), false),
   };

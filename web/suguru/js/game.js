@@ -123,6 +123,78 @@ const GAME = {
   digitTip: null, // the numbers do not repeat across the board, so "almost finished numbers" make no sense here
   stuckTip: tr("When you are stuck, go through the regions one at a time and ask: which number is missing, and where can it go?"),
   checkTip: CHECK_TIP,
+  // Practice drills (drill.js, drillgen.js): six levels per drill. size [rows, cols], the largest region, whether pencil marks
+  // are shown, the share of empty cells in the position, and for singles how many easy numbers there may be at most
+  drillLevels: [
+    { size: [6, 6], maxRegion: 5, pencil: true, empty: [0.2, 0.45] },
+    { size: [7, 7], maxRegion: 5, pencil: true, empty: [0.35, 0.6] },
+    { size: [6, 6], maxRegion: 5, pencil: false, empty: [0.2, 0.45] },
+    { size: [7, 7], maxRegion: 5, pencil: false, empty: [0.35, 0.6] },
+    { size: [8, 8], maxRegion: 5, pencil: false, empty: [0.4, 0.65] },
+    { size: [8, 8], maxRegion: 6, pencil: false, empty: [0.5, 0.8] },
+  ],
+  drillSingles: [
+    { size: [6, 6], maxRegion: 5, empty: [0.25, 0.45] },
+    { size: [7, 7], maxRegion: 5, empty: [0.3, 0.55] },
+    { size: [7, 7], maxRegion: 5, empty: [0.45, 0.7], opts: 3 },
+    { size: [8, 8], maxRegion: 5, empty: [0.45, 0.7], opts: 3 },
+    { size: [8, 8], maxRegion: 5, empty: [0.55, 0.8], opts: 2 },
+    { size: [8, 8], maxRegion: 6, empty: [0.6, 0.85], opts: 1 },
+  ],
+  // what to look for in each drill: the heading and one line
+  drillFind: {
+    1: [tr("Find an easy number"), tr("Tap a cell whose number you can see.")],
+    2: [tr("Find a neighbour elimination"), tr("Find a number whose places in a region all touch one cell outside it. Tap those places.")],
+    3: [tr("Find a pair"), tr("Two cells that see each other and share the same two options, or two numbers with only the same two places in a region. Tap the two cells.")],
+    4: [tr("Find a triple"), tr("Three cells and three numbers locked to each other. Tap the three cells.")],
+  },
+  // Practice games (games.js): six levels each, like the drills. cascade: how many numbers to place in a row; changed: how many
+  // new easy numbers the placed number makes; sweep: which techniques, and at least how many cells lose options; count: how
+  // many easy numbers there are on the board; quick: which kinds of claims (1 easy number, 2 pair, 3 only places)
+  games: {
+    cascade: [
+      { size: [6, 6], maxRegion: 5, pencil: true, empty: [0.35, 0.55], n: 8 },
+      { size: [6, 6], maxRegion: 5, pencil: false, empty: [0.35, 0.55], n: 8 },
+      { size: [7, 7], maxRegion: 5, pencil: false, empty: [0.4, 0.6], n: 10 },
+      { size: [7, 7], maxRegion: 5, pencil: false, empty: [0.5, 0.7], n: 10 },
+      { size: [8, 8], maxRegion: 5, pencil: false, empty: [0.5, 0.7], n: 12 },
+      { size: [8, 8], maxRegion: 6, pencil: false, empty: [0.6, 0.8], n: 12 },
+    ],
+    changed: [
+      { size: [6, 6], maxRegion: 5, pencil: true, empty: [0.3, 0.55], fresh: [1, 2] },
+      { size: [6, 6], maxRegion: 5, pencil: false, empty: [0.3, 0.55], fresh: [1, 2] },
+      { size: [7, 7], maxRegion: 5, pencil: false, empty: [0.4, 0.6], fresh: [1, 3] },
+      { size: [7, 7], maxRegion: 5, pencil: false, empty: [0.5, 0.7], fresh: [2, 3] },
+      { size: [8, 8], maxRegion: 5, pencil: false, empty: [0.5, 0.7], fresh: [2, 4] },
+      { size: [8, 8], maxRegion: 6, pencil: false, empty: [0.6, 0.8], fresh: [2, 4] },
+    ],
+    sweep: [
+      { size: [6, 6], maxRegion: 5, pencil: true, empty: [0.3, 0.55], techs: [2], minT: 2 },
+      { size: [6, 6], maxRegion: 5, pencil: true, empty: [0.3, 0.55], techs: [3], minT: 2 },
+      { size: [7, 7], maxRegion: 5, pencil: true, empty: [0.4, 0.65], techs: [2, 3, 4], minT: 3 },
+      { size: [7, 7], maxRegion: 5, pencil: false, empty: [0.4, 0.65], techs: [2, 3], minT: 2 },
+      { size: [8, 8], maxRegion: 5, pencil: false, empty: [0.45, 0.7], techs: [2, 3, 4], minT: 3 },
+      { size: [8, 8], maxRegion: 6, pencil: false, empty: [0.5, 0.8], techs: [3, 4], minT: 3 },
+    ],
+    count: [
+      { size: [6, 6], maxRegion: 5, pencil: true, empty: [0.3, 0.5], count: [1, 3] },
+      { size: [6, 6], maxRegion: 5, pencil: false, empty: [0.3, 0.55], count: [2, 4] },
+      { size: [7, 7], maxRegion: 5, pencil: false, empty: [0.4, 0.6], count: [2, 5] },
+      { size: [7, 7], maxRegion: 5, pencil: false, empty: [0.5, 0.7], count: [3, 6] },
+      { size: [8, 8], maxRegion: 5, pencil: false, empty: [0.5, 0.75], count: [3, 7] },
+      { size: [8, 8], maxRegion: 6, pencil: false, empty: [0.6, 0.85], count: [4, 9] },
+    ],
+    quick: [
+      { size: [6, 6], maxRegion: 5, pencil: true, empty: [0.3, 0.55], types: [1], batch: 10 },
+      { size: [6, 6], maxRegion: 5, pencil: true, empty: [0.3, 0.6], types: [1, 2], batch: 10 },
+      { size: [7, 7], maxRegion: 5, pencil: true, empty: [0.4, 0.65], types: [1, 2, 3], batch: 10 },
+      { size: [7, 7], maxRegion: 5, pencil: false, empty: [0.4, 0.65], types: [1, 2, 3], batch: 10 },
+      { size: [8, 8], maxRegion: 5, pencil: false, empty: [0.45, 0.7], types: [1, 2, 3], batch: 10 },
+      { size: [8, 8], maxRegion: 6, pencil: false, empty: [0.5, 0.8], types: [1, 2, 3], batch: 10 },
+    ],
+  },
+  countLine: tr("An easy number is the only option in a cell, or the only place for a number in a region."),
+
   rareNote: tr("This technique is rare and almost only appears on 8×8."),
   cellRange: (n) => tr("The region has {n} cells, so the cell can be 1–{n}.", { n }),
   // Did the number v in cell c break a rule on the board vis? The text, otherwise null.

@@ -2,7 +2,7 @@
 // "felt much harder than the grade". The note is stored in the game (field dbg) and comes along in the ordinary export.
 // A single game can also be copied as a "debug package" (game, moves, analysis, notes, version) that can be pasted into a
 // bug report. The buttons are small and grey, so they do not get in the way.
-const APP_BUILD = "2026-11-22b";
+const APP_BUILD = "2026-11-23b";
 const NOTE_AREAS = () => [
   ["route", tr("Route analysis")],
   ["grade", tr("Grading")],

@@ -34,6 +34,8 @@ function renderGrid() {
   const { rows, cols, n } = G,
     S = 100;
   svg.setAttribute("viewBox", `-34 -34 ${cols * S + 40} ${rows * S + 40}`);
+  // the board's aspect ratio, so the layout can size it to the screen (see "iPhone and iPad" in app.css)
+  svg.parentNode.style.setProperty("--ar", ((cols * S + 40) / (rows * S + 40)).toFixed(4));
   svg.innerHTML = "";
   const hv = hint && hint.data ? hint.data.views[hint.k] : null;
   const hPat = new Set(hv ? hv.pattern : []),
@@ -262,6 +264,7 @@ function renderPad() {
     top = P.maxRegion || 5;
   pad.innerHTML = "";
   pad.style.setProperty("--padn", top);
+  pad.style.setProperty("--padl", top > 6 ? Math.ceil(top / 2) : top); // in landscape 1-9 go in two rows (see app.css)
   pad.classList.toggle("notes", noteMode);
   const max = selected >= 0 ? digitMax(selected) : top,
     locked = selected < 0 || !!P.givens[selected] || solved;
@@ -345,4 +348,34 @@ function setMsg(text, kind) {
   const m = $("msg");
   m.textContent = text;
   m.className = "msg " + (kind || "");
+}
+
+// ---------- input, shared by the main game and the practice screens (drill.js, games.js)
+// Fast taps: we react to pointerdown, not click. A click needs the finger to be lifted on the same element,
+// and both the number buttons and the grid are redrawn after every tap, so fast taps got lost.
+function fastTap(node, fn) {
+  node.addEventListener("pointerdown", (e) => {
+    if (e.button) return;
+    fn(e);
+  });
+  node.addEventListener("click", (e) => {
+    if (e.detail === 0) fn(e);
+  }); // keyboard and screen reader
+}
+// The cell under a tap on a board drawing. Every board (the game's and the small ones) puts cell (0,0) at 0,0 with
+// 100 units per cell; the viewBox says where the margin is.
+function svgCellAt(svg, cols, rows, e) {
+  const r = svg.getBoundingClientRect(),
+    vb = svg.viewBox.baseVal;
+  const x = ((e.clientX - r.left) / r.width) * vb.width + vb.x,
+    y = ((e.clientY - r.top) / r.height) * vb.height + vb.y;
+  const c = Math.floor(x / 100),
+    row = Math.floor(y / 100);
+  return x < 0 || y < 0 || c >= cols || row >= rows ? -1 : row * cols + c;
+}
+// Number buttons as in the game: same look, same size on phone and tablet, data-d for the number
+function padButtonsHtml(top, disabled) {
+  let s = "";
+  for (let d = 1; d <= top; d++) s += `<button type="button" data-d="${d}"${disabled ? " disabled" : ""}>${d}</button>`;
+  return s;
 }
