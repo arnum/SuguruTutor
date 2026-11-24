@@ -749,7 +749,7 @@ function miniBoard(P2, known, hv, mark, head = {}, opts = {}) {
   for (let i = 0; i < rows * cols; i++) {
     const x = (i % cols) * S,
       y = Math.floor(i / cols) * S;
-    let fill = giv[i] ? "var(--given)" : "var(--cell)";
+    let fill = baseFill(i, region, rows, cols, giv[i]);
     if (pat.has(i)) fill = "var(--pat)";
     if (tgt.has(i)) fill = "var(--tgt)";
     if (bad.has(i)) fill = "var(--badbg)";

@@ -52,6 +52,7 @@ const TECH_NAMES_UI = [
   tr("what-if with techniques"),
 ];
 const SIZES = [
+  { r: 4, c: 4, t: tr("Micro") },
   { r: 5, c: 5, t: tr("Quick") },
   { r: 6, c: 6, t: tr("Classic") },
   { r: 7, c: 7, t: tr("Larger") },
@@ -108,6 +109,7 @@ const TECH_TIP = [
 const CHECK_TIP = tr("Check the eight neighbours before placing a number: the same number must not touch, not even diagonally.");
 const GAME = {
   guide: true, // the strategy guide: guide.html (English) / guide-da.html (Danish)
+  tintLabel: tr("Colour the regions"),
   peersLabel: tr("Highlight neighbours and region"),
   anyDigit: tr("Also numbers larger than the region. They count as rule breaks."),
   ruleText: tr("Rule breaks are equal numbers that touch, two equal numbers in a region, or a number larger than the region. Numbers that are only wrong compared with the solution are never shown on their own. “Check for errors” always shows all errors."),

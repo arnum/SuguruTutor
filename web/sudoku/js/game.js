@@ -107,6 +107,7 @@ const GAME = {
   // the technique level the generator starts with per difficulty band (with pencil: pairs ~4-5, X-chains ~5-6, XY ~6, mixed ~8)
   gradeStart: [0, 1, 2, 3, 3, 5, 6, 7, 8, 9],
   dailyMaxRegion: 9,
+  tintLabel: tr("Colour the boxes"),
   peersLabel: tr("Highlight row, column and box"),
   anyDigit: null, // all numbers 1-9 are legal in all cells
   ruleText: tr(

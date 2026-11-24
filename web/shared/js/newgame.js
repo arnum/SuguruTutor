@@ -122,7 +122,9 @@ function renderNew() {
   $("newNote").textContent = ui.must
     ? tr("The puzzle will require {tech}. The difficulty will be as close to {g} as possible.", { tech: LEVEL_TECH[ui.must], g: ui.level }) +
       (ui.must >= 10 ? " " + GAME.rareNote : "")
-    : ui.level >= 8
+    : s.r * s.c <= 16 && ui.maxRegion === 4 && ui.level > 4
+      ? tr("On 4×4 with regions of at most 4 cells, grade 4 is the highest. Allow bigger regions for more.")
+      : ui.level >= 8
       ? tr("The highest grades are rare, especially on small boards. It can take up to 20 seconds, and you get the closest one found.")
       : ui.level === 2
         ? tr("Grade 2 is a narrow band between the very simple puzzles and those with eliminations.")

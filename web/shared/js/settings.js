@@ -54,7 +54,8 @@ function renderSettings() {
     ]
       .map(([k, name]) => `<button type="button" data-t="${k}" aria-pressed="${settings.theme === k}">${name}</button>`)
       .join("") +
-    `</div></div>${sw("timer", tr("Show timer"), tr("Time is still measured for the statistics."))}</div>` +
+    `</div></div>${sw("timer", tr("Show timer"), tr("Time is still measured for the statistics."))}` +
+    `${sw("regionTint", GAME.tintLabel, tr("A faint colour for each, so they are easier to tell apart."))}</div>` +
     `<h3 class="sec">${tr("Help while playing")}</h3><div class="group">${sw("same", tr("Highlight matching numbers"), tr("All cells with the selected number are coloured."))}` +
     `${sw("peers", GAME.peersLabel, tr("Cells that cannot hold the same number."))}` +
     `${sw("confirm", tr("Ask before overwriting a number"), tr("Tap a different number twice to change it."))}` +
@@ -114,6 +115,7 @@ function renderSettings() {
           settings[b.dataset.key] = !settings[b.dataset.key];
           saveSettings();
           if (b.dataset.key === "anyDigit" && P) renderPad();
+          if (b.dataset.key === "regionTint" && P) renderGrid();
           b.setAttribute("aria-checked", settings[b.dataset.key]);
         }),
     );

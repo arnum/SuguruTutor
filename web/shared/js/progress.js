@@ -1,66 +1,77 @@
-// Progress: have you got better over time?
-// The puzzles differ, so raw time does not say much. Each solved puzzle (without hints, not replayed) is therefore measured against
-// what its grade usually costs you per empty cell: log(sec. per cell) = a + b * grade, fitted to your whole history.
-// The deviation (the residual) is your form in that puzzle: negative = faster than normal for that grade.
-// Progress = your latest k puzzles against your first k. A permutation test says whether the difference is larger than the
-// normal variation (puzzles of the same grade vary a lot from one time to the next).
+// Progress: are you getting faster? The charts show it; they do not draw a conclusion.
+// Overall: puzzles differ, so each solved puzzle (without hints, not replayed) is measured against what its grade usually costs you
+// per empty cell: log(sec. per cell) = a + b * grade. The slope b is measured inside blocks of puzzles played at the same time,
+// so getting faster while moving to harder grades does not hide in the slope. The deviation (the residual) is your speed in that
+// puzzle; index 100 = your usual (median) speed for the grade over all your puzzles. New puzzles shift the whole line a little,
+// never its shape.
+// Each point is the median of a block, counted back from the newest, so the last point is always your latest block.
+// The faded band around a point says how sure the median is: ±1.4 standard errors of the median, from the spread inside the block.
+// Two bands that do not overlap therefore differ by more than chance (about 5 %).
+// Techniques: the same, per technique, with each move measured against your time curve (calib.js) fitted to all your moves.
+// Not the curve from your latest games: that one follows you, so a technique you get faster at would drift back to 100.
 
-const PROG_MIN = 12; // this many clean solutions before anything is said
+const PROG_MIN = 12; // this many clean solutions before the chart is drawn
+const SE_MED = 1.2533; // standard error of a median = 1.2533 * sd / sqrt(n)
+const BAND_Z = 1.4; // two such bands that do not overlap differ at about the 5 % level
+
+// Blocks of B, counted back from the newest. A left-over oldest block is kept if it holds at least half a block.
+// vals: residuals in log units (positive = slower), ends: the matching dates.
+function progBlocks(vals, ends, B) {
+  const n = vals.length,
+    out = [],
+    rest = n % B;
+  const make = (i0, i1) => {
+    const s = vals.slice(i0, i1),
+      k = s.length,
+      mu = s.reduce((a, x) => a + x, 0) / k,
+      sd = k > 1 ? Math.sqrt(s.reduce((a, x) => a + (x - mu) ** 2, 0) / (k - 1)) : 0;
+    out.push({ med: median(s), se: (SE_MED * sd) / Math.sqrt(k), n: k, from: ends[i0], to: ends[i1 - 1] });
+  };
+  if (rest && rest >= B / 2) make(0, rest);
+  for (let i = rest; i + B <= n; i += B) make(i, i + B);
+  return out;
+}
+// Residual (log units, positive = slower) to index (100 = your usual, above = faster)
+const progIdx = (r, mid) => 100 * Math.exp(-(r - mid));
+function progIndexBlocks(blocks, mid) {
+  return blocks.map((b) => ({ ...b, v: progIdx(b.med, mid), lo: progIdx(b.med + BAND_Z * b.se, mid), hi: progIdx(b.med - BAND_Z * b.se, mid) }));
+}
 
 function progressData(list = games) {
   const sg = list.filter((g) => g.solved && !g.hints && !g.replay && g.empty > 0 && g.ms > 0 && g.value);
   if (sg.length < PROG_MIN) return { few: sg.length };
-  const x = sg.map(gradeFor),
+  const n = sg.length,
+    x = sg.map(gradeFor),
     y = sg.map((g) => Math.log(g.ms / 1000 / g.empty));
-  const n = x.length,
-    mx = x.reduce((a, b) => a + b) / n,
-    my = y.reduce((a, b) => a + b) / n;
+  const B = n >= 60 ? Math.max(20, Math.ceil(n / 15)) : Math.max(4, Math.floor(n / 3));
+  // The grade slope within blocks: each block is compared with itself, so a change in speed over time does not enter it
+  const blockOf = (i) => Math.floor((i - (n % B)) / B);
+  const grp = {};
+  sg.forEach((_, i) => (grp[blockOf(i)] = grp[blockOf(i)] || []).push(i));
   let sxy = 0,
     sxx = 0;
-  for (let i = 0; i < n; i++) {
-    sxy += (x[i] - mx) * (y[i] - my);
-    sxx += (x[i] - mx) ** 2;
-  }
-  let b = sxx ? sxy / sxx : 0;
+  Object.values(grp).forEach((ix) => {
+    const mx = ix.reduce((a, i) => a + x[i], 0) / ix.length,
+      my = ix.reduce((a, i) => a + y[i], 0) / ix.length;
+    ix.forEach((i) => {
+      sxy += (x[i] - mx) * (y[i] - my);
+      sxx += (x[i] - mx) ** 2;
+    });
+  });
+  let b = sxx > 1e-9 ? sxy / sxx : 0;
   if (!(b > 0.1)) b = Math.log(1.5); // too little spread in the grades: use the typical 1.5x per grade
-  const a = my - b * mx;
+  const a = y.reduce((s, yy, i) => s + yy - b * x[i], 0) / n;
   const r = y.map((yy, i) => yy - (a + b * x[i]));
-  const k = Math.min(20, Math.floor(n / 3));
-  const early = r.slice(0, k),
-    recent = r.slice(-k);
-  const diff = median(early) - median(recent); // > 0: faster now
-  // Permutation test with a fixed seed, so the number does not jump each time the statistics are opened
-  let seed = 12345;
-  const rnd = () => ((seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648);
-  const pool = early.concat(recent);
-  let hits = 0;
-  const N = 400;
-  for (let t = 0; t < N; t++) {
-    const p = pool.slice();
-    for (let i = p.length - 1; i > 0; i--) {
-      const j = Math.floor(rnd() * (i + 1));
-      [p[i], p[j]] = [p[j], p[i]];
-    }
-    if (Math.abs(median(p.slice(0, k)) - median(p.slice(k))) >= Math.abs(diff) - 1e-12) hits++;
-  }
-  const pval = hits / N;
-  // Moving form: the median of the latest 9 puzzles (index 100 = your normal for the grade's time)
-  const roll = r.map((_, i) => (i < 4 ? null : median(r.slice(Math.max(0, i - 8), i + 1))));
-  return {
-    n,
-    k,
-    a,
-    b,
-    games: sg,
-    r,
-    roll,
-    diff,
-    pval,
-    pct: Math.round(100 * (Math.exp(diff) - 1)),
-    steps: diff / b,
-    from: sg[0].end,
-    fromRecent: sg[n - k].end,
-  };
+  const mid = median(r);
+  const blocks = progIndexBlocks(
+    progBlocks(
+      r,
+      sg.map((g) => g.end),
+      B,
+    ),
+    mid,
+  );
+  return { n, B, a, b, mid, r, games: sg, blocks, perGrade: Math.exp(b) };
 }
 
 // Week by week: games, speed relative to the grade, errors, hints and the hardest solved puzzle
@@ -88,164 +99,132 @@ function progressWeeks(list, pd) {
     .sort((p, q) => (p.k < q.k ? 1 : -1))
     .map((w) => ({
       ...w,
-      speed: w.r.length >= 2 ? Math.round(100 * Math.exp(-median(w.r))) : null,
+      speed: w.r.length >= 2 ? Math.round(progIdx(median(w.r), pd.mid)) : null,
       errRate: w.moves >= 20 ? (100 * w.err) / w.moves : null,
     }));
 }
 
-// Technique speed in context: each move is measured against your normal time for exactly that technique when there were just as many places
-// to find it (your personal time curve, calib.js). A pair that was the only move on the board is thus compared with
-// other pairs that were the only move. Index 100 = your normal; above 100 = faster. Singles and techniques are kept
-// apart, because singles would otherwise take up almost everything.
+// Technique speed: each move is measured against your usual time for exactly that technique when there were just as many places
+// to find it. A pair that was the only move on the board is thus compared with other pairs that were the only move.
+// The curve is fitted to all your moves; 100 = your usual (median) for the technique.
+let PROG_CAL = null;
 function progressMoves(list) {
-  const cal = myCal();
-  const mv = [];
+  const key = list.length + ":" + (list.length ? list[list.length - 1].id : "");
+  if (!PROG_CAL || PROG_CAL.key !== key) {
+    PROG_CAL = fitCalib(calibRows(list));
+    PROG_CAL.key = key;
+  }
+  const cal = PROG_CAL,
+    mv = {};
+  let withCtx = 0;
   list.forEach((g) => {
     if (!g.route || !g.route.ctx) return;
-    g.route.ctx.forEach(([L, ds, n]) => mv.push({ L, end: g.end, res: Math.log(Math.max(0.5, ds / 10)) - Math.log(calTime(cal, L, n, true)) }));
+    withCtx++;
+    g.route.ctx.forEach(([L, ds, n]) => {
+      if (L > 11 || !(ds > 0)) return;
+      (mv[L] = mv[L] || []).push({ r: Math.log(Math.max(0.5, ds / 10)) - Math.log(calTime(cal, L, n, false)), end: g.end });
+    });
   });
-  const part = (arr, B) => {
-    if (arr.length < 3 * B) return null;
-    const mid = median(arr.map((m) => m.res)); // your normal = 100
-    const blocks = [];
-    for (let i = 0; i + B <= arr.length; i += B) {
-      const bl = arr.slice(i, i + B);
-      blocks.push({ v: Math.round(100 * Math.exp(-(median(bl.map((m) => m.res)) - mid))), from: bl[0].end, to: bl[B - 1].end });
-    }
-    const k = Math.min(Math.floor(arr.length / 3), 4 * B);
-    const first = arr.slice(0, k).map((m) => m.res),
-      last = arr.slice(-k).map((m) => m.res);
-    const d = median(first) - median(last);
-    let seed = 99,
-      hits = 0;
-    const rnd = () => ((seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648);
-    const pool = first.concat(last);
-    for (let t = 0; t < 300; t++) {
-      const p = pool.slice();
-      for (let i = p.length - 1; i > 0; i--) {
-        const j = Math.floor(rnd() * (i + 1));
-        [p[i], p[j]] = [p[j], p[i]];
-      }
-      if (Math.abs(median(p.slice(0, k)) - median(p.slice(k))) >= Math.abs(d) - 1e-12) hits++;
-    }
-    return { n: arr.length, B, k, blocks, pct: Math.round(100 * (Math.exp(d) - 1)), p: hits / 300, mid };
-  };
-  const tech = mv.filter((m) => m.L >= 2),
-    one = mv.filter((m) => m.L === 1);
-  const T = part(tech, Math.max(15, Math.ceil(tech.length / 12)));
-  // Per technique: your latest moves with the technique against your earlier ones (only with at least 10 in each half)
-  const per = [];
-  if (T)
-    for (let L = 2; L <= 11; L++) {
-      const a = tech.filter((m) => m.L === L);
-      if (a.length < 20) continue;
-      const h = Math.floor(a.length / 2);
-      const i1 = Math.round(100 * Math.exp(-(median(a.slice(0, h).map((m) => m.res)) - T.mid))),
-        i2 = Math.round(100 * Math.exp(-(median(a.slice(h).map((m) => m.res)) - T.mid)));
-      per.push({ L, n: a.length, i1, i2 });
-    }
-  return { tech: T, one: part(one, Math.max(100, Math.ceil(one.length / 10))), per, games: list.filter((g) => g.route && g.route.ctx).length };
+  const rows = [],
+    few = [];
+  Object.keys(mv)
+    .map(Number)
+    .sort((p, q) => p - q)
+    .forEach((L) => {
+      const a = mv[L],
+        base = L === 1 ? 150 : 20,
+        min = L === 1 ? 50 : 10;
+      if (a.length < 2 * min) return few.push({ L, n: a.length, need: 2 * min });
+      const B = Math.max(min, Math.min(base, Math.floor(a.length / 3)), Math.ceil(a.length / 15));
+      const res = a.map((m) => m.r),
+        mid = median(res);
+      rows.push({
+        L,
+        n: a.length,
+        B,
+        blocks: progIndexBlocks(
+          progBlocks(
+            res,
+            a.map((m) => m.end),
+            B,
+          ),
+          mid,
+        ),
+      });
+    });
+  return { rows, few, games: withCtx };
 }
-function verdictTxt(x) {
-  if (!x || x.p >= 0.15 || Math.abs(x.pct) < 5) return tr("no clear change");
-  return x.pct > 0 ? tr("{p}% faster than at the start", { p: x.pct }) : tr("{p}% slower than at the start", { p: -x.pct });
-}
-function blockChart(x) {
+
+// The chart: one point per block, a faded band for how sure it is, a dashed line at 100. Log scale, so 50 and 200 are as far from 100.
+function bandChart(blocks, o) {
   const W = 320,
-    H = 120,
+    H = o.small ? 92 : 150,
     L = 30,
-    R = 10,
+    R = 36,
     T = 8,
     B = 18;
-  const vals = x.blocks.map((b) => b.v);
-  const lo = Math.min(...vals) < 50 ? 25 : 50,
-    hi = Math.max(...vals) > 200 ? 400 : 200;
+  const lo = Math.max(20, Math.min(80, ...blocks.map((b) => b.lo)) * 0.95),
+    hi = Math.min(500, Math.max(125, ...blocks.map((b) => b.hi)) * 1.05);
   const ly = (v) => Math.log(Math.max(lo, Math.min(hi, v)));
-  const xx = (i) => L + (vals.length === 1 ? 0 : (i * (W - L - R)) / (vals.length - 1));
+  const xx = (i) => L + (blocks.length === 1 ? (W - L - R) / 2 : (i * (W - L - R)) / (blocks.length - 1));
   const y = (v) => T + (H - T - B) * (1 - (ly(v) - Math.log(lo)) / (Math.log(hi) - Math.log(lo)));
   const df = (s) => new Date(s).toLocaleDateString(LOCALE, { day: "numeric", month: "short" });
-  let s = `<svg class="trend" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(tr("Technique speed in context over time"))}">`;
-  [lo, 50, 100, 200, hi]
-    .filter((v, i, a) => a.indexOf(v) === i)
-    .forEach((v) => {
-      s +=
-        `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" stroke="${v === 100 ? "var(--mute)" : "var(--grid)"}" stroke-width="1"${v === 100 ? ' stroke-dasharray="4 3"' : ""}/>` +
-        `<text x="${L - 6}" y="${y(v) + 4}" font-size="10" text-anchor="end" fill="var(--mute)">${v}</text>`;
-    });
-  s += `<polyline points="${vals.map((v, i) => xx(i) + "," + y(v)).join(" ")}" fill="none" stroke="var(--indigo)" stroke-width="2.5" stroke-linejoin="round"/>`;
-  x.blocks.forEach((b, i) => {
-    s +=
-      `<circle cx="${xx(i)}" cy="${y(b.v)}" r="3.5" fill="var(--indigo)"/>` +
-      `<circle cx="${xx(i)}" cy="${y(b.v)}" r="10" fill="transparent" data-tip="${esc(tr("{n} moves, {a} to {b}: index {v}", { n: x.B, a: df(b.from), b: df(b.to), v: b.v }))}"/>`;
-  });
-  s += `<text x="${L}" y="${H - 3}" font-size="10" fill="var(--mute)">${df(x.blocks[0].from)}</text><text x="${W - R}" y="${H - 3}" font-size="10" text-anchor="end" fill="var(--mute)">${df(x.blocks[x.blocks.length - 1].to)}</text></svg>`;
-  return s;
-}
-
-function progressHeadline(pd) {
-  if (pd.few !== undefined)
-    return tr("After {n} puzzles solved without hints, the app can tell whether you are improving ({have} so far).", { n: PROG_MIN, have: pd.few });
-  const sure = pd.pval < 0.05 ? 2 : pd.pval < 0.15 ? 1 : 0;
-  const pct = Math.abs(pd.pct),
-    steps = dec(Math.abs(pd.steps));
-  if (!sure || pct < 5)
-    return tr("No clear change yet. The difference ({pct}%) is within the normal variation from puzzle to puzzle.", { pct: pd.pct > 0 ? "+" + pd.pct : pd.pct });
-  const certain = sure === 2 ? tr("That is clear.") : tr("That is likely, but not certain yet.");
-  return pd.diff > 0
-    ? tr("You have become about {pct}% faster on puzzles of the same difficulty. That is like handling puzzles about {steps} grade harder in the same time.", { pct, steps }) + " " + certain
-    : tr("You are about {pct}% slower than at the start on puzzles of the same difficulty.", { pct }) + " " + certain;
-}
-
-function progressChart(pd) {
-  const W = 320,
-    H = 150,
-    L = 30,
-    R = 10,
-    T = 10,
-    B = 20;
-  const idx = (r) => 100 * Math.exp(-r); // 100 = normal for the grade's time, 130 = 30 % faster
-  const vals = pd.r.map(idx);
-  const lo = Math.min(...vals) < 50 ? 25 : 50,
-    hi = Math.max(...vals) > 200 ? 400 : 200;
-  const ly = (v) => Math.log(Math.max(lo, Math.min(hi, v)));
-  const x = (i) => L + (pd.n === 1 ? 0 : (i * (W - L - R)) / (pd.n - 1));
-  const y = (v) => T + (H - T - B) * (1 - (ly(v) - Math.log(lo)) / (Math.log(hi) - Math.log(lo)));
-  let s = `<svg class="trend" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(tr("Your speed over time relative to difficulty"))}">`;
-  [lo, 50, 100, 200, hi].filter((v, i, a) => a.indexOf(v) === i).forEach((v) => {
+  let ticks = [25, 50, 67, 80, 100, 125, 150, 200, 300, 400].filter((v) => v >= lo && v <= hi);
+  if (ticks.length > (o.small ? 3 : 5)) ticks = [ticks[0], 100, ticks[ticks.length - 1]].filter((v, i, a) => a.indexOf(v) === i);
+  let s = `<svg class="trend" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(o.label)}">`;
+  ticks.forEach((v) => {
     s +=
       `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" stroke="${v === 100 ? "var(--mute)" : "var(--grid)"}" stroke-width="1"${v === 100 ? ' stroke-dasharray="4 3"' : ""}/>` +
       `<text x="${L - 6}" y="${y(v) + 4}" font-size="10" text-anchor="end" fill="var(--mute)">${v}</text>`;
   });
-  // The two periods being compared
-  s +=
-    `<rect x="${x(0)}" y="${T}" width="${x(pd.k - 1) - x(0)}" height="${H - T - B}" fill="var(--chip)" opacity="0.7"/>` +
-    `<rect x="${x(pd.n - pd.k)}" y="${T}" width="${x(pd.n - 1) - x(pd.n - pd.k)}" height="${H - T - B}" fill="var(--chip)" opacity="0.7"/>`;
-  const first = Math.max(0, pd.n - 300); // at most 300 dots; the moving line and the comparison use all of them
-  pd.games.forEach((g, i) => {
-    if (i < first) return;
-    const d = new Date(g.end).toLocaleDateString(LOCALE, { day: "numeric", month: "short" });
-    const tip = `${d}: ${BAND[gBand(g)]} ${dec(gradeFor(g))} · ${fmt(g.ms)} · ${tr("index {v}", { v: Math.round(vals[i]) })}`;
-    s +=
-      `<circle cx="${x(i)}" cy="${y(vals[i])}" r="3" fill="var(--indigo)" opacity="0.35"/>` +
-      `<circle cx="${x(i)}" cy="${y(vals[i])}" r="9" fill="transparent" data-tip="${esc(tip)}"/>`;
+  // The band: through the upper ends, back through the lower ends
+  const half = blocks.length === 1 ? 10 : 0;
+  const up = blocks.map((b, i) => xx(i) - half + "," + y(b.hi)),
+    down = blocks.map((b, i) => xx(i) + half + "," + y(b.lo)).reverse();
+  if (half) up.push(xx(0) + half + "," + y(blocks[0].hi)), down.push(xx(0) - half + "," + y(blocks[0].lo));
+  s += `<polygon class="band" points="${up.concat(down).join(" ")}" fill="var(--indigo)" opacity="0.14"/>`;
+  if (blocks.length > 1) s += `<polyline points="${blocks.map((b, i) => xx(i) + "," + y(b.v)).join(" ")}" fill="none" stroke="var(--indigo)" stroke-width="2" stroke-linejoin="round"/>`;
+  blocks.forEach((b, i) => {
+    const tip = tr("{n} {what}, {a} to {b}: index {v}, likely {lo}–{hi}", {
+      n: b.n,
+      what: o.unit,
+      a: df(b.from),
+      b: df(b.to),
+      v: Math.round(b.v),
+      lo: Math.round(b.lo),
+      hi: Math.round(b.hi),
+    });
+    s += `<circle cx="${xx(i)}" cy="${y(b.v)}" r="3.5" fill="var(--indigo)"/>` + `<circle cx="${xx(i)}" cy="${y(b.v)}" r="11" fill="transparent" data-tip="${esc(tip)}"/>`;
   });
-  const pts = pd.roll.map((v, i) => (v == null ? null : x(i) + "," + y(idx(v)))).filter(Boolean);
-  if (pts.length > 1) s += `<polyline points="${pts.join(" ")}" fill="none" stroke="var(--indigo)" stroke-width="2.5" stroke-linejoin="round"/>`;
-  const d0 = new Date(pd.games[0].end).toLocaleDateString(LOCALE, { day: "numeric", month: "short" }),
-    d1 = new Date(pd.games[pd.n - 1].end).toLocaleDateString(LOCALE, { day: "numeric", month: "short" });
-  s += `<text x="${L}" y="${H - 4}" font-size="10" fill="var(--mute)">${d0}</text><text x="${W - R}" y="${H - 4}" font-size="10" text-anchor="end" fill="var(--mute)">${d1}</text></svg>`;
-  s += `<div class="legendrow"><i style="background:var(--indigo);border-radius:2px;height:3px"></i> ${tr("rolling (9 puzzles)")} &nbsp; <i style="background:var(--chip)"></i> ${tr("periods compared")}</div>`;
+  const last = blocks[blocks.length - 1];
+  s += `<text class="lastv" x="${xx(blocks.length - 1) + 7}" y="${y(last.v) + 4}" font-size="11" font-weight="600" fill="var(--ink)">${Math.round(last.v)}</text>`;
+  s += `<text x="${L}" y="${H - 4}" font-size="10" fill="var(--mute)">${df(blocks[0].from)}</text><text x="${W - R}" y="${H - 4}" font-size="10" text-anchor="end" fill="var(--mute)">${df(last.to)}</text></svg>`;
   return s;
 }
+const bandLegend = (each) =>
+  `<div class="legendrow"><i style="background:var(--indigo);border-radius:2px;height:3px"></i> ${esc(each)} &nbsp; <i style="background:var(--indigo);opacity:.18"></i> ${tr("how sure")}</div>`;
+
+function progressChartHtml(pd) {
+  return (
+    `<p>${tr("Index 100 is your usual speed for a puzzle's grade. 110 is 10% faster, 90 is 10% slower.")}</p>` +
+    bandChart(pd.blocks, { unit: tr("puzzles"), label: tr("Your speed over time relative to difficulty") }) +
+    bandLegend(tr("each point: {n} puzzles", { n: pd.B }))
+  );
+}
+const progressFew = (pd) => `<p>${tr("After {n} puzzles solved without hints, the progress chart appears ({have} so far).", { n: PROG_MIN, have: pd.few })}</p>`;
 
 function progressPanel() {
   const pd = progressData();
-  let html = `<div class="panelcard progress"><h3>${tr("Progress")}</h3><p class="prohead">${progressHeadline(pd)}</p>`;
-  if (pd.few === undefined)
+  let html = `<div class="panelcard progress"><h3>${tr("Progress")}</h3>`;
+  if (pd.few !== undefined) html += progressFew(pd);
+  else
     html +=
-      `<p>${tr("Index 100 is your normal time for a puzzle's grade. Above 100 is faster, below 100 slower.")}</p>` +
-      progressChart(pd) +
-      `<p class="caveat">${tr("Compares your first {k} and latest {k} puzzles solved without hints. Each puzzle is measured against what its grade usually costs you per empty cell, so a harder puzzle does not look like slower play. Replayed puzzles are not counted.", { k: pd.k })}</p>`;
+      progressChartHtml(pd) +
+      `<p>${tr("Faded band: how sure each point is. Bands that do not overlap differ by more than chance.")}</p>` +
+      `<p class="caveat">${tr(
+        "Each puzzle solved without hints is measured against what its grade usually costs you per empty cell, fitted to all your puzzles. For you, one grade harder takes {x} times as long. That is measured within blocks of puzzles played at the same time, so getting faster does not hide in it. New puzzles move the whole line a little, never its shape. Replayed puzzles are not counted.",
+        { x: dec(pd.perGrade) },
+      )}</p>`;
   html += `</div>`;
 
   // Week by week
@@ -257,7 +236,7 @@ function progressPanel() {
       `<table class="data wk"><tr><th>${tr("Week of")}</th><th>${tr("Games")}</th><th>${tr("Speed")}</th><th>${tr("Errors/100")}</th><th>${tr("Hardest")}</th></tr>` +
       weeks
         .map((w) => {
-          const sp = w.speed == null ? "–" : `<b style="color:${w.speed >= 110 ? "var(--indigo)" : w.speed <= 90 ? "var(--bad)" : "var(--ink)"}">${w.speed}</b>`;
+          const sp = w.speed == null ? "–" : `<b>${w.speed}</b>`;
           return (
             `<tr><td>${dfmt(w.k)}</td><td>${w.won}${w.n > w.won ? `<small> / ${w.n}</small>` : ""}${w.hints ? `<br><small style="color:var(--mute)">${w.hints === 1 ? tr("1 with hints") : tr("{n} with hints", { n: w.hints })}</small>` : ""}</td>` +
             `<td>${sp}</td><td>${w.errRate == null ? "–" : dec(w.errRate)}</td><td>${w.top ? dec(w.top) : "–"}</td></tr>`
@@ -267,28 +246,30 @@ function progressPanel() {
       `</table><p class="caveat" style="margin-top:4px!important">${tr("Games: solved (/ played). Errors per 100 moves count only first errors, not follow-on errors or mistaps. – means too few games that week.")}</p></div>`;
   }
 
-  // Technique speed in context
+  // Technique speed
   const pm = progressMoves(games);
-  html += `<div class="panelcard"><h3>${tr("Technique speed in context")}</h3><p>${tr("Each move is measured against your normal time for the same technique when there were as many places to find it. So a pair that was the only move on the board does not count as slow just because it was hard to spot. 100 is your normal, above 100 is faster.")}</p>`;
-  if (!pm.tech)
-    html += `<p class="caveat">${tr("There are too few technique moves yet ({n} games with data). It will come as you play.", { n: pm.games })}</p>`;
+  html += `<div class="panelcard techprog"><h3>${tr("Technique speed")}</h3><p>${tr("Index 100 is your usual speed with each technique. Above 100 is faster.")}</p>`;
+  if (!pm.rows.length && !pm.few.length) html += `<p class="caveat">${tr("There are too few technique moves yet ({n} games with data). It will come as you play.", { n: pm.games })}</p>`;
   else {
-    html +=
-      `<p class="prohead">${tr("Techniques: {v}.", { v: verdictTxt(pm.tech) })}${pm.one ? " " + tr("Easy numbers: {v}.", { v: verdictTxt(pm.one) }) : ""}</p>` +
-      blockChart(pm.tech) +
-      `<div class="legendrow">${tr("each point: {n} technique moves", { n: pm.tech.B })}</div>`;
-    if (pm.per.length)
+    pm.rows.forEach((t) => {
       html +=
-        `<table class="data"><tr><th>${tr("Technique")}</th><th>${tr("Earlier")}</th><th>${tr("Latest")}</th></tr>` +
-        pm.per.map((r) => `<tr><td>${esc(LEVEL_TECH[r.L])}<br><small style="color:var(--mute)">${tr("{n} moves in total", { n: r.n })}</small></td><td>${r.i1}</td><td><b>${r.i2}</b></td></tr>`).join("") +
-        `</table>`;
-    html += `<p class="caveat">${tr("Based on {n} games that saved the context of each move. Techniques with fewer than 20 moves are not shown separately.", { n: pm.games })}</p>`;
+        `<div class="techrow"><div class="trh"><b>${esc(cap(LEVEL_TECH[t.L]))}</b><small>${tr("{n} moves, {b} per point", { n: t.n, b: t.B })}</small></div>` +
+        bandChart(t.blocks, { small: true, unit: tr("moves"), label: cap(LEVEL_TECH[t.L]) }) +
+        `</div>`;
+    });
+    if (pm.few.length)
+      html += `<p class="techfew">${tr("Too few moves for a line yet: {list}.", { list: pm.few.map((f) => tr("{tech} {n} of {need}", { tech: LEVEL_TECH[f.L], n: f.n, need: f.need })).join(", ") })}</p>`;
+    html += `<p class="caveat">${tr("Each move is measured against your usual time for the same technique when there were as many places to find it. The time curve is fitted to all your moves, so a technique you get faster at does not drift back to 100. Based on {n} games that saved the context of each move.", { n: pm.games })}</p>`;
   }
   html += `</div>`;
   return html;
 }
-// A line for Overview
+// The chart on Overview
 function progressLine() {
   const pd = progressData();
-  return `<div class="panelcard progress"><h3>${tr("Progress")}</h3><p class="prohead">${progressHeadline(pd)}</p>${pd.few === undefined ? `<button class="tablelink" type="button" id="toProgress">${tr("See all progress")}</button>` : ""}</div>`;
+  return (
+    `<div class="panelcard progress"><h3>${tr("Progress")}</h3>` +
+    (pd.few !== undefined ? progressFew(pd) : progressChartHtml(pd) + `<button class="tablelink" type="button" id="toProgress">${tr("See all progress")}</button>`) +
+    `</div>`
+  );
 }

@@ -3,6 +3,34 @@
 Newest first. The project has no version history, so the dates up to 20 November are worked out from the timestamps
 of work files and screenshots. A change may be a day older than shown, and those days list only the main changes.
 
+## 24 November 2026 (2) · Suguru offline v53, Sudoku v19, build 2026-11-24b
+
+### Changed
+- Progress is shown, not concluded. The chart has one point per block of 20 puzzles without hints, counted back from
+  the newest, so the last point is always your latest 20. A faded band around each point shows how sure it is, from
+  the spread inside the block: where two bands do not overlap, the difference is more than chance. The verdict
+  sentence, the first-against-latest comparison and its hidden test are gone. Overview shows the same chart.
+- The grade slope behind the index is measured within blocks of puzzles played at the same time, so getting faster
+  while moving to harder grades cannot hide in it. Index 100 is your usual speed for the grade over all your puzzles.
+- Technique speed: one small chart per technique with the same blocks and bands (150 moves per point for singles,
+  10–20 for the others), and a line listing the techniques with too few moves so far. Moves are now measured against
+  your time curve fitted to all your moves. Before, it was the curve from your latest 60 games, including your own
+  deviation per technique, so a technique you got faster at drifted back to 100.
+
+## 24 November 2026 · Suguru offline v52, Sudoku v18, build 2026-11-24a
+
+### Added
+- Suguru: 4×4 as a board size ("Micro"). With regions of at most 4 cells the highest grade is 4, and New game says so;
+  with bigger regions higher grades are possible but rare.
+- Region colours (Settings → Appearance, off by default): each region, or each box in Sudoku, gets a faint colour,
+  and neighbouring regions never share one. On the game board and the practice and after-game boards, in light and
+  dark mode, under every highlight.
+
+### Fixed
+- The page can no longer be zoomed by pinching or double-tapping.
+- Sheets, such as the solved page, always open at the top. Before, a sheet could open where the previous one had
+  been scrolled to, and the solved page stays at the top while its boards are drawn.
+
 ## 23 November 2026 (3) · Suguru offline v51, Sudoku v17, build 2026-11-23c
 
 ### Added

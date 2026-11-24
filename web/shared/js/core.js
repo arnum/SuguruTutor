@@ -114,6 +114,12 @@ const settings = Object.assign(
   store.get("settings", {}),
 );
 const ui = Object.assign({ sizeIdx: 1, level: 3, nuance: "alle", maxRegion: 5, must: 0, scale: 2, kind: "alle" }, GAME.ui || {}, store.get("ui", {}));
+// Suguru got a 4×4 size first in the list (24 November 2026): the stored choice moves one along, so it stays the same size
+if (SIZES[0].r === 4 && !ui.sizes4) {
+  ui.sizeIdx = (ui.sizeIdx == null ? 1 : ui.sizeIdx) + 1;
+  ui.sizes4 = 1;
+  store.set("ui", ui);
+}
 if (ui.scale !== 2) {
   ui.scale = 2;
   ui.level = 3;
@@ -319,6 +325,22 @@ let sheetToken = 0,
 function openSheet(html, bind, onClose) {
   sheetToken++;
   $("sheetBody").innerHTML = html;
+  // always open at the top (the panel kept the last sheet's scroll position), and stay there while the sheet fills in
+  // (the solved page draws its boards a moment later), until you scroll yourself
+  const panel = document.querySelector("#sheet .panel"),
+    tok = sheetToken;
+  panel.scrollTop = 0;
+  let touched = false;
+  const mine = () => (touched = true);
+  panel.addEventListener("touchstart", mine, { once: true, passive: true });
+  panel.addEventListener("wheel", mine, { once: true, passive: true });
+  panel.addEventListener("keydown", mine, { once: true });
+  const keep = (k) => {
+    if (tok !== sheetToken || touched) return;
+    panel.scrollTop = 0;
+    if (k < 30) setTimeout(() => keep(k + 1), 100);
+  };
+  requestAnimationFrame(() => keep(0));
   $("sheet").hidden = false;
   sheetOnClose = onClose || null;
   document.documentElement.classList.add("sheet-open");
@@ -448,3 +470,6 @@ function applyTheme() {
   requestAnimationFrame(() => $("themeColor").setAttribute("content", getComputedStyle(r).getPropertyValue("--paper").trim() || "#f3f4ef"));
 }
 if (window.matchMedia) matchMedia("(prefers-color-scheme: dark)").addEventListener?.("change", applyTheme);
+// No zooming the page (pinch or double tap): the viewport says so, and iOS Safari, which ignores that, gets the pinch
+// gesture blocked here and double tap turned off with touch-action in app.css
+document.addEventListener("gesturestart", (e) => e.preventDefault(), { passive: false });

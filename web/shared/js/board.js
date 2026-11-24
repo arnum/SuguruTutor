@@ -63,7 +63,7 @@ function renderGrid() {
   for (let i = 0; i < n; i++) {
     const x = (i % cols) * S,
       y = Math.floor(i / cols) * S;
-    let fill = P.givens[i] ? "var(--given)" : "var(--cell)";
+    let fill = baseFill(i, P.region, rows, cols, P.givens[i]);
     if (!hv && settings.peers && selected >= 0 && peerSets[selected].has(i) && !P.givens[i]) fill = "var(--peer)";
     if (!hv && settings.same && selVal && value(i) === selVal) fill = "var(--same)";
     if (i === selected) fill = "var(--sel)";
@@ -378,4 +378,51 @@ function padButtonsHtml(top, disabled) {
   let s = "";
   for (let d = 1; d <= top; d++) s += `<button type="button" data-d="${d}"${disabled ? " disabled" : ""}>${d}</button>`;
   return s;
+}
+
+// ---------- Region colours (setting "regionTint", off by default): every region gets one of six faint tints, and
+// regions that share an edge never get the same one (Sudoku's boxes end up in two alternating tints). Used by the game
+// board and the small boards (miniBoard). Colours are in app.css (--rt0..5, and --rtg0..5 for given cells).
+const tintCache = new Map();
+function regionTints(region, rows, cols) {
+  const key = rows + "x" + cols + ":" + Array.from(region).join(",");
+  if (tintCache.has(key)) return tintCache.get(key);
+  const nb = new Map(),
+    add = (a, b) => {
+      if (a === b) return;
+      if (!nb.has(a)) nb.set(a, new Set());
+      if (!nb.has(b)) nb.set(b, new Set());
+      nb.get(a).add(b);
+      nb.get(b).add(a);
+    };
+  for (let i = 0; i < rows * cols; i++) {
+    if (!nb.has(region[i])) nb.set(region[i], new Set());
+    if ((i % cols) + 1 < cols) add(region[i], region[i + 1]);
+    if (i + cols < rows * cols) add(region[i], region[i + cols]);
+  }
+  // DSatur: colour the region with the most differently coloured neighbours first, with the lowest free colour
+  const col = new Map();
+  while (col.size < nb.size) {
+    let best = null,
+      bs = -1,
+      bd = -1;
+    for (const [r, ns] of nb) {
+      if (col.has(r)) continue;
+      const sat = new Set([...ns].filter((x) => col.has(x)).map((x) => col.get(x))).size;
+      if (sat > bs || (sat === bs && ns.size > bd)) (best = r), (bs = sat), (bd = ns.size);
+    }
+    const used = new Set([...nb.get(best)].map((x) => col.get(x)));
+    let c = 0;
+    while (used.has(c) && c < 5) c++;
+    col.set(best, c);
+  }
+  tintCache.set(key, col);
+  if (tintCache.size > 50) tintCache.delete(tintCache.keys().next().value);
+  return col;
+}
+// The resting colour of a cell: the cell or given colour, or with region colours on, its region's tint
+function baseFill(i, region, rows, cols, given) {
+  if (!settings.regionTint || !region) return given ? "var(--given)" : "var(--cell)";
+  const t = regionTints(region, rows, cols).get(region[i]);
+  return `var(--rt${given ? "g" : ""}${t})`;
 }

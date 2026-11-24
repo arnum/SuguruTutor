@@ -5,7 +5,7 @@
 // - the old Suguru's offline storage (suguru-v1 … suguru-v34) is cleared; the new Suguru uses suguru-v35 and up
 // - the front page is stored, so the old app on the home screen can open without a network and forward to suguru/ (which has its own
 //   offline storage once it has been opened with a network)
-const CACHE = "front-v2";
+const CACHE = "front-v3";
 const OLD_SUGURU = /^suguru-v(\d+)$/;
 
 self.addEventListener("install", (e) => {
