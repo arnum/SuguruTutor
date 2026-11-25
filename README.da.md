@@ -35,6 +35,7 @@ web/
     js/route.js    ruteanalyse af spillerens træk
     js/drillgen.js finder træningspositioner (kører i workeren); js/drill.js træningsskærmene;
                    js/games.js træningsspillene (Kaskade, Hvad ændrede sig?, Ryd op, Tæl dem, Lynsvar)
+    js/campaign.js kampagnen: ét trin per teknik, plader uden hints, holdt uden for statistikken
     js/…           sprog, lagring, skærme, statistik, indstillinger, opstart
 ```
 
@@ -42,14 +43,14 @@ Den fælles kode spørger kun spillet gennem `APP`, `GAME` og `boardModel(G, reg
 med de seks filer i `js/`, en `index.html`, en service worker og et manifest.
 
 **Hver sin app.** De to apps gemmer under hver sit præfiks (`suguru.*` og `sudoku.*`), har hver sin service worker
-(`suguru-v…` og `sudoku-v…`, som kun rydder deres egne lagre op) og hvert sit manifest med eget `id`. De ligger i hver
+(lager `suguru-<build>` og `sudoku-<build>`, som hver kun rydder sit eget op) og hvert sit manifest med eget `id`. De ligger i hver
 sin mappe ved siden af hinanden, så ingen af dem omfatter den anden: på Android åbner et link til det ene spil ikke i
 det andet spils app.
 
 **Flytningen (november 2026).** Indtil da lå Suguru i roden. En Suguru-app, der blev lagt på hjemmeskærmen dengang,
 åbner stadig roden; forsiden ser, at den kører som app, og sender videre til `suguru/`. Spil og statistik følger med,
 fordi de er gemt på samme adresse. Rodens `sw.js` erstatter den gamle Suguru-service-worker: den sletter det gamle
-offline-lager (`suguru-v1` … `suguru-v34`; den nye Suguru starter ved `suguru-v35`) og gemmer forsiden, så den gamle
+offline-lager (`suguru-v1` … `suguru-v34`; den nye Suguru brugte `suguru-v35` og op og er nu opkaldt efter buildet) og gemmer forsiden, så den gamle
 app også kan åbne uden net. Delte links til den gamle adresse (`…/#SU1-…`) sendes også videre.
 På en iPhone har hver app på hjemmeskærmen sit eget lager, så installerer man Suguru igen fra `suguru/`, starter den
 tom: flyt spillene med *Indstillinger → Eksportér/Importér*, eller behold det gamle ikon, som virker som før.
@@ -60,8 +61,13 @@ Der er intet byggetrin. Scripts indlæses i den rækkefølge, de står i `index.
 `http://localhost:8000/suguru/` eller `http://localhost:8000/sudoku/`.
 
 **Udgivelse:** `.github/workflows/pages.yml` udgiver `web/` til GitHub Pages ved hvert push til `main`.
-Det kræver én indstilling: *Settings → Pages → Source: GitHub Actions*. Ændres en fil, som en app skal have offline,
-skal versionen i den apps `sw.js` op (`CACHE = "suguru-v…"` eller `"sudoku-v…"`); ændringer i `shared/` gælder begge.
+Det kræver én indstilling: *Settings → Pages → Source: GitHub Actions*.
+
+**Version:** begge apps har én version, buildet: datoen og et bogstav pr. udgivelse den dag (`2026-11-24c`). Det sættes
+ét sted, `web/shared/js/build.js`; ret det én gang ved hver udgivelse. Hver app registrerer sin service worker som
+`sw.js?b=<build>` og opkalder sit offlinelager efter buildet, så et nyt build henter en frisk kopi af alle filer og
+sletter den gamle. Indstillingerne viser buildet, og changeloggens overskrifter bruger det. Forsiden har ingen version:
+dens service worker henter altid den nyeste forside.
 
 ## Sprog
 

@@ -4,55 +4,78 @@ Things that are agreed or suggested, but not started. Done items move to the cha
 
 ## Fixes
 
-### Practice expects game speed on boards you have never seen
-- **The problem:** every practice board is new, and so is each new board in Quick call. Before you can find anything,
-  you have to read the board: the regions, what is placed, where the gaps are. Your curve comes from real games, where
-  you have already spent minutes on the board, so it has no time for that first look. The practice expectations are
-  therefore too strict, most of all where a board is short: the technique drills (one find per board), What changed?,
-  Sweep, Count them and Quick call. In Cascade it mostly hits the first number of each board.
-- **Ideas:**
-  - Add a "first look" allowance per new board to the expected time.
-  - Measure that allowance from your own play rather than guessing it: the first number on a Cascade board against
-    the later ones, and the first claim on a new Quick call board against the next claims on the same board.
-  - The allowance may grow with board size and with how full the board is, which should be checked.
-- **Check afterwards:** at your comfortable level, the level should hover around where it is instead of drifting
-  down.
-- **Data:** a temporary practice log has been collecting since 23 November: every board, with the time of each tap
-  since the board appeared. It is in the export as `practiceLog`. Play some rounds of each game, export, and
-  analyse; then remove the log (`plog` in `drill.js`).
-
-### Small fixes
-- **What changed?:** the explanation afterwards covers only the first new number, not all of them.
-- **Sudoku triples drill:** finding a board takes 1.5–4 seconds (the first board of a round shows a spinner), and to
-  find any at all it accepts boards where a pair would also do.
+### Calibrate practice par and level steps
+- **Built 25 November (the principles):** practice is measured against a fixed par per game, not your game curve, and
+  the level is a rating: each board shows a level (the board's level, plus one per 25 % faster than par), and your level
+  moves part of the way towards it. The easiest boards are level 3, so 0–3 is room to get faster on them. See the
+  comment "Levels" in `drill.js`.
+- **Provisional, to calibrate:**
+  - Par per game (`PAR` in `drill.js`): from 77 logged boards at the lowest levels. Triples has no data, Quick call one
+    board, Cascade six. Sudoku's par is the Suguru par scaled by board size and `parScale` 1.8, a guess.
+  - 25 % per level, and that one step up the board ladder costs as much as one level of speed: check how much longer a
+    find takes per step up the ladder, per game.
+  - The board-size scaling (cells/36)^0.45, taken from the time curve.
+  - How far the level moves per board (half at first, a sixth after 20 boards) and the cap of 0.6.
+  - Where level 0 lies: about twice par. Check with a slower player if possible.
+- **Data:** the practice log keeps collecting (`practiceLog` in the export), and each drill's own log now also records
+  par and the level each board showed. About 30 boards per game and drill, at several levels, are needed; then set the
+  numbers and remove the temporary log.
+- **Check afterwards:** at your comfortable level, the level should hover where it is instead of drifting.
 
 ## Changes settled on
 
-### One version, by build
-- **Today:** there are three numbers. Each app's offline cache has its own version (`suguru-v50` and `sudoku-v16` in
-  the `sw.js` files), and the shared build id `APP_BUILD` sits in `debug.js`. The changelog headings list all three.
-  The build only shows up in debug notes, not in the settings.
-- **Goal:** a single version for both apps, the build (like `2026-11-23b`), set in one place. The offline caches
-  take their names from it, the changelog headings show only the build, and the settings show it in both apps.
-- Bump it once per release instead of three numbers by hand. That also removes the risk of a forgotten cache bump
-  leaving old files on a phone.
+### Show, don't tell in the explanations
+Settled 25 November: the explanations point with colours and markers on the board instead of cell names, and say the
+conclusion first. The one drawing code they need was built on 25 November (`draw.js`). The plan:
 
-### More human explanations everywhere
-- Cell references like "In the region with d5, d6, e6 and f6, 3 can only go in d5 and d6" are precise but hard to
-  read. Where the board can show the cells (a highlight, an arrow, a colour), the text can point to them instead:
-  "3 can only go in these two cells".
-- Keep references where they are really needed: when no board is shown, when the text names cells that are not
-  highlighted, or when two highlighted groups must be told apart.
-- Then edit the texts to read like a person explaining: shorter sentences, the conclusion first, fewer nested
-  clauses.
-- Applies to the hints, the practice texts, the moments after the game, the route analysis and the guide. It
-  touches many texts in both languages, so it goes best together with the statistics and solved-page rework below.
+- **1. What the board must be able to show** (new layers in `draw.js`, each optional, the same on every board):
+  - **Roles with fixed colours** instead of today's three highlights: the pattern (blue), the numbers that do the work
+    (a ring on them), the cells that change (yellow), a contradiction (red), the answer (circled). Each role also has a
+    shape (solid tint, outline, ring, cross), so colour is never the only cue, and the colours are checked for colour
+    blindness and in both themes.
+  - **Single options:** mark one option in a cell (the pair's two numbers in blue in both cells; the removed one struck;
+    the one left circled) instead of colouring the whole cell.
+  - **Region outlines:** a region drawn with a coloured border, instead of "the region with c3, d3, b4, c4 and d4".
+  - **Reach:** the cells a number rules out (its neighbours in Suguru, its row, column and box in Sudoku), lightly
+    shaded from the number that does it.
+  - **Arrows and order:** arrows between cells for chains and what-ifs (b3 = 3 → d2 = 3 → e4 = 3 → no room), and
+    small step numbers in the corners when the order matters.
+  - **Focus:** dim the cells that play no part, and an "only this number" view (all the 3s and the places 3 can go).
+  - **A legend line** under the board, built from the roles shown ("■ the pair ■ loses an option ○ the answer"), so the
+    colours are explained once and never in the sentences.
+- **2. What the explanations must hand over** (`tutor.js`): today a step has its text with cell names plus pattern,
+  target, options and an assumption. It must also say which placed numbers do the work, which options belong to the
+  pattern, which region it is about, and the links of a chain, as data the board draws.
+- **3. The texts:** conclusion first, then why in one or two short sentences, pointing at roles ("This cell is 2. The
+  orange 3 leaves no room for a 3 in the red region."). Cell names only where no board is shown, for the answer if it
+  helps, or to tell two groups apart. Every step keeps a full version with cell names for screen readers (the board's
+  label). Both languages.
+- **4. Order of work:** the drawing layers first, tested on fixed positions in both themes (the two screenshot cases from
+  23 November are the first examples); then the game's hints, where the step-through already is; then the boards after
+  the game and in the route analysis; then the practice texts and Quick call's claims (below); the guide last.
+- **Done 25 November:** steps 1–3 and in step 4 the hints, the boards after the game and in the route analysis, the
+  practice texts and Quick call's claims. Decided while building:
+  - the palette (blue pattern, yellow change, purple outline, green ring for the numbers that work, orange arrows;
+    checked for colour blindness in both themes); region tints stay on beneath it;
+  - cells that play no part are dimmed to about half, and only when the step uses at most 60 % of the board;
+  - arrows are slightly curved, so chains that cross stay readable;
+  - a setting brings the cell names back (off by default).
+- **Still to do:**
+  - **Reach:** the shading from a number to the cells it rules out. Today the ruled-out cells are only tinted.
+  - **Step numbers in the corners** where the order matters: drawn by `draw.js` (badges), but no explanation uses them yet.
+  - **The guide**, which still names cells in its examples.
+  - **Texts without a board stay with cell names:** the route analysis's lists, "Well done" after the game, and the
+    lesson heads in the route analysis, where the board is folded away.
+  - **Long what-ifs with techniques** (eight or more cells) give a tangle of arrows. Numbering the order or showing
+    the chain in a few steps may read better.
 
 ### Easier-to-read claims in Quick call
+- **Done 25 November:** the claims name no cells (unless the setting is on). Still open: the claim in big letters,
+  close to the board.
 - Show the claim in big letters, short and close to the board. It is read under time pressure, so every word costs.
 - Leave out cell names like "b2" when the board already shows which cell is meant. The highlighted cell plus
   "is 2" or "is easy" is enough; "a pair" over two highlighted cells needs no names at all.
-- This is the first case of the general change above (More human explanations).
+- This is the first case of the general change above (Show, don't tell in the explanations).
 
 ### Rework the statistics, the route analysis and the solved page
 - **Why:** these are the hardest places to give learning value consistently. Too often they show numbers or long
@@ -60,17 +83,15 @@ Things that are agreed or suggested, but not started. Done items move to the cha
 - **Scope:** the statistics tabs, the route analysis sheet, and the solved page with its moments.
 - **First step:** go through them screen by screen. For each, decide what you can learn from it, and cut or fold what
   doesn't help, in the spirit of the after-game board (show, don't tell; one thing at a time).
-
-### One drawing code for the game board and the practice boards
-Not now (23 November 2026).
-
-- **Today:** the game board is drawn by `renderGrid` in `board.js`. The practice boards and the boards after the game use
-  `miniBoard` in `analysis.js`. Input (fast taps, the cell under the finger, the number pad) has been shared since
-  23 November.
-- **Goal:** one drawing code that can show both the player's state (entries, notes, errors, selection) and the teaching
-  layers (pattern highlights, struck-out options, circled answers, dashed follow-ons). The look, and any fix, would then
-  be the same everywhere.
-- **Risk:** it rewrites the main game's board. It needs the full browser test suite and screenshots on all device sizes.
+- **Found so far:**
+  - **Statistics by grade ignore the board size:** "Solved by difficulty" shows best and average times per grade across
+    all sizes, but a grade 3 on 6×6 and on 9×9 are different puzzles. Split by size, or use time per empty cell. The
+    personal grade ("how a puzzle will probably feel to you", `personalModel` in `calib.js`) has no size in it either;
+    the time curve, the estimate and the progress index got it on 25 November.
+  - **The concentration chart cannot be read:** what it shows and what to do about it is not clear. Redesign it or
+    replace it with something shown on the board.
+  - **Difficulty over time has a "Show as table" button:** tapping a point already gives the details, so the table
+    adds little. Remove it, or say what it is for.
 
 ### Analyse the export and screenshots for improvements
 - Go through the latest export (games, moves, practice log) and the screenshots for things that can be improved:
@@ -81,16 +102,21 @@ Not now (23 November 2026).
 ## Open items and ideas for the future
 
 ### Open questions
-- **Grading:** rank chains and what-ifs by their length too, not only by their kind.
-- **Pencil setting "with pencil":** should the heading show the without-pencil grade until the pencil is used? Today the
-  heading and the solved sheet can show different numbers.
-- **Expected times in practice:** What changed?, Sweep and Count them still use first guesses (your easy-number time
-  times a factor). Check them against real rounds and adjust, as was done for Quick call and Cascade.
-- **Count them:** a count that is off by one counts as a miss. Maybe count it as slow instead.
-- **"Easy" one step later:** Count them and Quick call count only what the numbers on the board already show, so d3 = 3
-  after c3 = 2 does not count, even though it is obvious. The rule is now on screen and the follow-ons are dashed.
-  Decide whether to keep that rule, and keep an eye out for other cases where the game's definition and "obvious"
-  differ.
+- **Grading on 4×4:** the grade does not rank your 4×4 times (correlation 0.01 over 11 games, grades 4.2–5.7, about a
+  minute each). Find out what it gets wrong there, or whether 4×4 needs its own weights. 4×4 is a game of its own in
+  the statistics since 25 November, with its own curve, so its times no longer bend the others.
+- **Price per link by method:** the weights have a price per link for each method (`link` in weights.json), at 0
+  because the times so far do not support one (see CHANGELOG, 25 Nov.). Calibrate it from exports that carry each move's
+  length (the route summary stores it from 25 Nov.), especially short what-ifs against long chains.
+
+Closed 25 November: the grade with the setting "with pencil" counts from the start; Count them and Quick call keep the
+strict rule (only what the numbers on the board already show) and show the follow-ons afterwards; chains and what-ifs
+are compared by price.
+
+### Shapes you recognise at a glance
+- **Done 25 November:** a cell that touches every cell of a region one smaller than its own region is a single ("Region
+  shape"). Only shapes that give a number whatever the numbers on the board count.
+- Still open: other shapes of that kind (if any turn up), and training the shapes as shapes in practice.
 
 ### How do others grade puzzles?
 - Look at how other puzzle apps and solvers grade Sudoku and Suguru (by technique, by number of steps, by solving
@@ -133,64 +159,31 @@ Not now (23 November 2026).
   - Check every answer against a checker that is separate from the game's code.
 
 ### Campaign mode
-- **Purpose:** learning and practising, not playing for numbers. A clear progression through all the techniques in
-  order, from singles to the what-ifs, that makes you learn each one before you move on.
-- **Progression, not statistics:**
-  - The campaign shows where you are on the path and what comes next. That is its only measure.
-  - Campaign games and drills stay out of the normal statistics.
-  - Progress is shown plainly: no badges, stars or streaks.
-- **Semi-adaptive:**
-  - A step is passed by finding its technique on your own, several times, within your curve's time.
-  - Where you are quick, the step is short. Where you struggle, the step adds practice before you move on, with
-    boards that are a little easier at first.
-  - Earlier techniques come back now and then, so they are not forgotten.
-- **No hints:**
-  - The campaign makes you work for it: there are no hints and no "Show me" during a board.
-  - If you give up, the board is explained afterwards, as the lesson. The step then adds practice, and you meet the
-    technique again before you can move on.
-- **Switch between drills and real games:**
-  - A step alternates short drills with real games.
-  - A real game can start at the point where the technique is needed: you land in a real puzzle, part-solved, just
-    before the move, and play it to the end from there. The technique then shows up in its natural setting, not
-    only on a drill board.
-  - Such a starting point can be found the same way as the drill boards: walk the solution and stop where the
-    technique is the next step.
-- **Start of a step:** one example board, shown and not explained in words (show, don't tell).
-- **Today:** the technique drills already find boards where one technique is the next step, but only for levels 1–4
-  and with no path or order.
-- It is the natural frame for the training of the harder techniques above, and it needs that work first for levels
-  5–11.
+- **First version built 25 November** (campaign.js):
+  - one step per technique level (11 steps);
+  - a fast first board (within your usual time) passes the step, otherwise 3 boards in a row within 1.5 times it;
+  - the first 2 boards start where the technique is the next step;
+  - a board that does not go well sends you to practice outside the campaign (3 puzzles that need it, or 15 practice
+    boards), and then you try again;
+  - no hints, kept out of the statistics.
+- **To tune once played:**
+  - the bars (1.0 and 1.5 times your usual time), the number of boards, and how much practice;
+  - whether practice should show improvement (your time for the technique falling) rather than only an amount;
+  - the board size (today the size chosen in New game, never 4×4).
+- **Not built yet:**
+  - **A lesson after a failed board** beyond the moments and the route analysis (which the sheet shows, as after any
+    game): for example the step that was missed, explained on the board.
+  - **An example board** at the start of a step, shown and not explained in words.
+  - **Earlier techniques coming back** now and then.
+  - **The harder techniques' practice** (levels 5–11 have no drills yet, so their practice is normal games only; see
+    "Training for the harder techniques").
+  - **Region shapes** as a step of their own.
+- **Purpose (unchanged):** learning and practising, not playing for numbers. Progress is shown plainly: no badges,
+  stars or streaks.
 
-### Auto mode for the next game
-- **Idea:** in New game, choose what kind of playing you want, and the app picks the next puzzle for you after every
-  game. "New puzzle" on the solved page then follows that choice.
-- **Choices, for example:**
-  - **Relax:** a level you solve comfortably, no stretch.
-  - **Challenge:** a little above where you are, so you have to work for it.
-  - **Learn:** puzzles that need the technique you are working on (your focus area or the campaign step), using
-    the existing option to require a technique.
-  - Possibly **Mix**, which varies between them.
-- **How it works:**
-  - The choice stays until you change it. Manual, as today, is still possible.
-  - Before a game starts, one line says what was picked and why, for example "Challenge: Hard 4.6, a little above
-    your usual".
-- **To decide:**
-  - How each choice is worked out from your data: grade, size and technique, from your recent games and your curve.
-  - Whether it adapts after each game (one easier after a struggle, one harder after an easy one).
-
-### Guest mode
-- **Idea:** when someone else plays on your device, their games must not count as yours.
-- **What it does:**
-  - A guest's games count in neither your statistics nor your curve, nor in what is built on them: the route analysis
-    lessons, the focus area and the practice expectations.
-  - Practice done as a guest does not change your practice levels.
-  - A guest does not solve your daily puzzle for you or keep your days in a row going.
-  - Your game in progress is put aside, not replaced, and comes back when guest mode ends.
-- **How it works:**
-  - A switch on the home screen or in the settings.
-  - While it is on, it is clearly visible on every screen, so it is not left on by mistake.
-  - It could turn itself off after the guest's game, or after some time.
-- **To decide:** whether guest games are kept at all, for example in a separate history, or simply not saved.
+### Play modes: Mix, and more to decide
+- Relax, Challenge and Learn were built on 25 November. Still open: **Mix**, which varies between them from game to
+  game; whether Relax and Learn should also move after each game; and whether a mode should pick the board size too.
 
 ### Microgrids (4×4) for Sudoku, and as speed training
 - Suguru has 4×4 as a normal board size since 24 November. Still to do:
@@ -199,12 +192,8 @@ Not now (23 November 2026).
     expected time from your curve. A small board also means a short first look (see the item on new boards above).
 
 ### Timed trials
-- A puzzle with a maximum time per board, where every number you place is final: no undo, no erase, no correction.
-  It trains committing to a number only when you are sure, under time pressure.
-- **To decide:**
-  - What a wrong number does: the board is lost, or it costs time.
-  - Whether pencil marks are allowed.
-  - How the time limit is set: from your curve and the puzzle's grade, so it is tight but possible.
-  - Whether a trial counts in the normal statistics or is kept apart.
-  - Whether it is its own mode or a setting for a normal game.
-
+- **Built 25 November** (trial.js): soft and hardcore, 6×6, no pencil, a staircase on the grade (±0.25), a time limit and
+  an index from a fixed point (the time model's starting point; index 100 = grade 3.0), kept apart from the statistics.
+- **To tune once played:** the time limit (today the fixed time 1.0×, about 1.2 to 1.3 times your usual time), the step
+  sizes, and the index per grade (1.35). Whether the boards should vary in size, and whether Sudoku 9×9 trials need a
+  shorter format.

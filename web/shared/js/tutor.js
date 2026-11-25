@@ -1,5 +1,15 @@
 // Tutor: finds the easiest next number with an explanation (hints), and rates single moves (route analysis).
 
+// The kind of a house as a key (box/row/column/region), from the model's own word for it
+function houseKey(M, u) {
+  const k = M && M.unitKind ? M.unitKind(u) : "";
+  return k === tr("box") ? "box" : k === tr("row") ? "row" : k === tr("column") ? "column" : "region";
+}
+// "the row", "the region" …: a house named by its kind only, where the board shows which one
+function theHouse(M, u) {
+  return { box: tr("the box"), row: tr("the row"), column: tr("the column"), region: tr("the region") }[houseKey(M, u)];
+}
+
 // Finds the easiest next number from a position and explains the way there step by step.
 function createTutor(G, region) {
   const { n, cols } = G;
@@ -18,6 +28,18 @@ function createTutor(G, region) {
   peers.forEach((p, a) => p.forEach((b) => (peerM[a * n + b] = 1)));
   const touch = MODEL.touch || (() => false);
   const peer = (a, b) => peerM[a * n + b] === 1;
+  // Region shapes (Suguru): a cell that touches every cell of a region one smaller than its own region cannot be any of that
+  // region's numbers, so it is its own region's largest number, whatever else is on the board (a cell in the bend of a
+  // 4-cell L, in a region of 5: 5). Seen at a glance, so it counts as a single (decided 25 Nov. 2026). shapeVia: the region.
+  const shapeV = new Array(n).fill(0),
+    shapeVia = new Array(n).fill(-1);
+  if (KING)
+    for (let c = 0; c < n; c++)
+      for (let r = 0; r < nr && !shapeV[c]; r++)
+        if (RC[r].length === size[c] - 1 && !RC[r].includes(c) && RC[r].every((o) => touch(c, o))) {
+          shapeV[c] = size[c];
+          shapeVia[c] = r;
+        }
   // the houses two cells have in common
   const common = (a, b) => unitsOf[a].filter((u) => unitsOf[b].includes(u));
   const pc = (x) => {
@@ -92,6 +114,9 @@ function createTutor(G, region) {
       }
     }
     for (let c = 0; c < n; c++)
+      if (shapeV[c] && !s.val[c] && s.cand[c] & (1 << shapeV[c]))
+        add({ kind: "shape", cell: c, v: shapeV[c], region: unitsOf[c][0], via: shapeVia[c], score: 0.5 });
+    for (let c = 0; c < n; c++)
       if (!s.val[c] && pc(s.cand[c]) === 1)
         add({ kind: "naked", cell: c, v: ctz(s.cand[c]), region: unitsOf[c][0], score: 1.5 + size[c] / 10 });
     return [...best.values()].sort((a, b) => a.score - b.score || a.cell - b.cell);
@@ -102,6 +127,7 @@ function createTutor(G, region) {
       const empty = RC[r].filter((c) => !s.val[c]);
       if (empty.length === 1 && empty[0] === cell && s.cand[cell] & (1 << v)) return "last";
     }
+    if (shapeV[cell] === v && s.cand[cell] & (1 << v)) return "shape";
     for (const r of unitsOf[cell]) {
       const spots = RC[r].filter((c) => !s.val[c] && s.cand[c] & (1 << v));
       if (spots.length === 1 && spots[0] === cell && !RC[r].some((c) => s.val[c] === v)) return "hidden";
@@ -112,6 +138,7 @@ function createTutor(G, region) {
   // The house that makes a single visible: where the cell is the only empty one ("last"), or where the number has only one place
   // ("hidden"). For "naked" the first of the cell's houses.
   function holdUnit(s, cell, v, kind) {
+    if (kind === "shape") return shapeVia[cell]; // the region the cell touches all of
     for (const r of unitsOf[cell]) {
       const empty = RC[r].filter((c) => !s.val[c]);
       if (kind === "last" && empty.length === 1 && empty[0] === cell) return r;
@@ -421,7 +448,7 @@ function createTutor(G, region) {
 
   // Both ways: follow both options (a cell with two options / a number with two places) with simple moves
   // and trace which steps lead to the common result.
-  function runBranch(s, c0, v0) {
+  function runBranch(s, c0, v0, maxSteps = 400) {
     const t = clone(s),
       removedBy = new Map(),
       placedBy = new Map();
@@ -444,14 +471,15 @@ function createTutor(G, region) {
     place(t, c0, v0);
     record(b, t, 0);
     let guard = 0;
-    while (!t.broken && !solved(t) && guard++ < 400) {
+    while (!t.broken && !solved(t) && guard++ < maxSteps) {
       const sg = singles(t);
       if (!sg.length) break;
       const x = sg[0],
         deps = new Set();
       b = clone(t);
       if (x.kind === "naked") depsOfCell(x.cell, b, deps);
-      else
+      else if (x.kind !== "shape")
+        // a region shape builds on nothing on the board
         for (const o of RC[x.region])
           if (o !== x.cell && !s.val[o] && (x.kind === "last" || s.cand[o] & (1 << x.v))) {
             if (placedBy.has(o)) deps.add(placedBy.get(o));
@@ -503,7 +531,7 @@ function createTutor(G, region) {
     };
     return { t, chain, relFor, peakFor };
   }
-  function bothWaysApps(s, first) {
+  function bothWaysApps(s, first, maxSteps = 400) {
     const roots = [];
     for (let c = 0; c < n; c++)
       if (!s.val[c] && pc(s.cand[c]) === 2) {
@@ -520,9 +548,9 @@ function createTutor(G, region) {
     }
     const out = [];
     for (const root of roots) {
-      const A = runBranch(s, root.a[0], root.a[1]);
+      const A = runBranch(s, root.a[0], root.a[1], maxSteps);
       if (!A) continue;
-      const B = runBranch(s, root.b[0], root.b[1]);
+      const B = runBranch(s, root.b[0], root.b[1], maxSteps);
       if (!B) continue;
       for (let g = 0; g < n; g++) {
         if (s.val[g]) continue;
@@ -658,7 +686,7 @@ function createTutor(G, region) {
         const x = st.single,
           r = x.region;
         if (x.kind === "naked") depsOfCell(x.cell, b, deps);
-        else
+        else if (x.kind !== "shape")
           for (const o of RC[r])
             if (o !== x.cell && !s.val[o] && (x.kind === "last" || s.cand[o] & (1 << x.v))) {
               if (placedBy.has(o)) deps.add(placedBy.get(o));
@@ -738,11 +766,23 @@ function createTutor(G, region) {
     const c =
       W.recog[T] +
       W.len * lg +
+      (W.link ? W.link[T] : 0) * Math.max(0, Math.max(1, len) - 1) +
       W.inner * innerR +
       W.pencil.mem[2][T] * Math.log2(1 + (a.memPeak || 0)) +
       (W.pencil.len ? W.pencil.len[2][T] : 0) * lg;
     return Math.round(c * 1e6) / 1e6;
   }
+  // The lowest price a technique level can have: its easiest method at the shortest length (chains and what-ifs have at
+  // least one link after the start; a chain keeps 2 things in mind). A level whose floor is not below the cheapest way
+  // found cannot beat it, so it is not searched.
+  const floorOf = [];
+  const levelFloor = (L) => {
+    if (floorOf[L] !== undefined) return floorOf[L];
+    let m = Infinity;
+    for (let T = 0; T < TECH_LEVEL.length; T++)
+      if (TECH_LEVEL[T] === L) m = Math.min(m, T >= 7 ? whatIfCost({ tech: T, memPeak: isChain(T) ? 2 : 0 }, 2) : whatIfCost({ tech: T }, 1));
+    return (floorOf[L] = m);
+  };
   function levelApps(s, L) {
     if (L === 2) return neighborApps(s, false);
     if (L === 3) return nakedApps(s, 2, false).concat(hiddenApps(s, 2, false));
@@ -847,18 +887,31 @@ function createTutor(G, region) {
   // (support), the assumption and the relevant steps in the chain. Candidates are searched both in S (after the easier eliminations, steps) and
   // in S0 (without), so a short what-if that does not need the eliminations can beat a longer one that does.
   // want(T) gives the single that must come out of it, or null. Answer: { a, x, fromS0 } or null.
-  function whatIfBest(S0, S, steps, want) {
+  // cap: the price of the cheapest way found so far (Infinity: none). A kind of what-if that cannot get under it at its
+  // shortest is not searched, and the runs are cut at about twice the links it can afford.
+  function whatIfBest(S0, S, steps, want, cap = Infinity) {
     const raw = [];
+    // the most relevant links a what-if of kind T can have and still cost less than cap (-1: none)
+    const relMax = (T) => {
+      if (!(cap < Infinity)) return Infinity;
+      let r = -1;
+      while (r < 60 && whatIfCost({ tech: T }, 2 + r) < cap) r++;
+      return r;
+    };
+    const run = (T) => (relMax(T) === Infinity ? 400 : 2 * relMax(T) + 2);
     const consider = (St, a, fromS0) => {
       const T = clone(St);
       apply(T, a);
       if (T.broken) return;
       const x = want(T);
       if (!x) return;
-      const rel = a.relCount || 0;
-      raw.push({ a, x, fromS0, rel, lb: whatIfCost(a, 1 + rel) + (x.score || 0) * 0.1, ub: fromS0 ? 1 + rel : steps.length + 1 + rel });
+      const rel = a.relCount || 0,
+        lb = whatIfCost(a, 1 + rel) + (x.score || 0) * 0.1;
+      if (lb >= cap) return;
+      raw.push({ a, x, fromS0, rel, lb, ub: fromS0 ? 1 + rel : steps.length + 1 + rel });
     };
-    const base = (St) => nishioApps(St, false).concat(trialApps(St, 1, false), bothWaysApps(St, false));
+    const base = (St) =>
+      nishioApps(St, false).concat(relMax(11) >= 0 ? trialApps(St, 1, false, run(11)) : [], relMax(12) >= 0 ? bothWaysApps(St, false, run(12)) : []);
     for (const a of base(S)) consider(S, a, false);
     if (steps.length) for (const a of base(S0)) consider(S0, a, true);
     if (!raw.length) return null;
@@ -866,7 +919,7 @@ function createTutor(G, region) {
     // techniques up to triples inside the chain (a short what-if with a chain inside is not short). The same run as with all
     // techniques as long as it succeeds (the chains are only used when nothing up to triples can be used), so the replay
     // finds it again.
-    const lim = Math.min(...raw.map((r) => r.ub)) - 1; // relCount < lim
+    const lim = Math.min(...raw.map((r) => r.ub), relMax(13) + 1) - 1; // relCount < lim
     if (lim > 0)
       for (const [St, fromS0] of steps.length ? [[S0, true], [S, false]] : [[S, false]])
         for (const a of trialApps(St, 4, false, Math.max(2, 2 * lim + 2))) if ((a.relCount || 0) < lim) consider(St, a, fromS0);
@@ -898,44 +951,42 @@ function createTutor(G, region) {
     return best;
   }
   // ---------- the easiest next number
+  // The price of support steps that only remove options: the dearest of them (the grade takes the hardest step)
+  const stepsKey = (list) => list.reduce((m, a) => Math.max(m, whatIfCost(a, 1 + (a.relCount || 0))), 0);
   function easiest(known) {
     const S0 = fromKnown(known);
     if (S0.broken || solved(S0)) return null;
     const sg = singles(S0);
     if (sg.length) return build(S0, { steps: [], kind: sg[0].kind, after: S0 }, sg[0].cell, sg[0].v);
-    let S = clone(S0);
-    const steps = [];
-    const finish = (cell, v) => {
-      // prune steps that are not needed for exactly this number
-      let kept = steps.slice();
-      let res = replay(S0, kept, cell, v);
-      for (let i = kept.length - 1; i >= 0 && res; i--) {
-        const tryList = kept.slice(0, i).concat(kept.slice(i + 1));
-        const r2 = replay(S0, tryList, cell, v);
-        if (r2) {
-          kept = tryList;
-          res = r2;
-        }
-      }
-      if (!res) res = { steps: steps.map((a) => ({ app: a, before: null })), kind: singleHolds(S, cell, v) || "naked", after: S };
-      return build(S0, res, cell, v);
-    };
-    for (let guard = 0; guard < 300; guard++) {
+    const want = (T) => singles(T)[0] || null;
+    // By price, not by the order of the techniques (decided 25 Nov. 2026). search(S, steps): the cheapest way from S (after the
+    // support steps) to a number, as { key, steps, S, x }. The price is the grade's own (whatIfCost: the method's
+    // recognition, the length of the reasoning, techniques inside, memory); a way's price is its dearest step. The techniques
+    // are tried from the easiest; once a way is found, harder techniques are still tried as long as their recognition alone
+    // is below its price, so a short chain or what-if can beat a triple or a long chain, while a pair is cheaper than even a
+    // simple what-if. A technique that only removes options is applied in full (as before), and where that leads is compared
+    // with the harder techniques that give a number directly.
+    let calls = 0;
+    const search = (S, steps) => {
       const ready = singles(S)[0];
-      if (ready) return finish(ready.cell, ready.v);
-      let progressed = false;
-      for (let L = 2; L <= 11 && !progressed; L++) {
+      if (ready) return { key: stepsKey(steps), steps, S, x: ready };
+      if (++calls > 300) return null;
+      const base = stepsKey(steps);
+      let best = null,
+        triedOn = false,
+        onWay = false; // best is where the option-removing steps lead: that search already compared the what-ifs
+      for (let L = 2; L <= 11; L++) {
+        if (best && (L > WHATIF_L || levelFloor(L) >= best.key || (L === WHATIF_L && onWay))) continue;
         if (L === WHATIF_L) {
-          const w = whatIfBest(S0, S, steps, (T) => singles(T)[0] || null);
+          const w = whatIfBest(S0, S, steps, want, best ? best.key : Infinity);
           if (w) {
-            if (w.fromS0) {
-              steps.length = 0;
-              S = clone(S0);
-            }
-            steps.push(w.a);
-            apply(S, w.a);
-            return finish(w.x.cell, w.x.v);
+            const T = clone(w.fromS0 ? S0 : S);
+            apply(T, w.a);
+            const key = Math.max(w.fromS0 ? 0 : base, w.key);
+            if (!best || key < best.key) best = { key, steps: (w.fromS0 ? [] : steps).concat([w.a]), S: T, x: w.x };
+            continue;
           }
+          if (best) continue;
         }
         const apps = levelApps(S, L);
         if (!apps.length) continue;
@@ -946,7 +997,7 @@ function createTutor(G, region) {
           apply(T, a);
           if (T.broken) continue;
           const x = singles(T)[0];
-          // prefer: the easiest technique, the shortest chain (what-if), the easiest number afterwards
+          // within a technique: the easiest technique, the shortest chain (what-if), the easiest number afterwards
           const key = (y) => TECH_WEIGHT[y.a.tech] / 100 + (y.a.relCount || 0) + y.x.score * 0.1;
           if (x && (!bestSingle || key({ a, x }) < key({ a: bestApp, x: bestSingle }))) {
             bestApp = a;
@@ -954,20 +1005,50 @@ function createTutor(G, region) {
           }
         }
         if (bestApp) {
-          steps.push(bestApp);
-          apply(S, bestApp);
-          return finish(bestSingle.cell, bestSingle.v);
+          const key = Math.max(base, whatIfCost(bestApp, 1 + (bestApp.relCount || 0)) + bestSingle.score * 0.1);
+          if (!best || key < best.key) {
+            const T = clone(S);
+            apply(T, bestApp);
+            best = { key, steps: steps.concat([bestApp]), S: T, x: bestSingle };
+          }
+          continue;
         }
+        if (best || triedOn) continue;
+        // only removes options: all of them, and on from there
+        const T = clone(S),
+          st = steps.slice();
         for (const a of apps) {
-          const before = S.cand.join();
-          apply(S, a);
-          if (S.cand.join() !== before) steps.push(a);
+          const before = T.cand.join();
+          apply(T, a);
+          if (T.cand.join() !== before) st.push(a);
         }
-        progressed = true;
+        if (st.length === steps.length) continue;
+        triedOn = true;
+        const on = search(T, st);
+        if (on) {
+          best = on;
+          onWay = true;
+        }
       }
-      if (!progressed) return null;
+      return best;
+    };
+    const plan = search(clone(S0), []);
+    if (!plan) return null;
+    const { steps, S } = plan,
+      { cell, v } = plan.x;
+    // prune steps that are not needed for exactly this number
+    let kept = steps.slice();
+    let res = replay(S0, kept, cell, v);
+    for (let i = kept.length - 1; i >= 0 && res; i--) {
+      const tryList = kept.slice(0, i).concat(kept.slice(i + 1));
+      const r2 = replay(S0, tryList, cell, v);
+      if (r2) {
+        kept = tryList;
+        res = r2;
+      }
     }
-    return null;
+    if (!res) res = { steps: steps.map((a) => ({ app: a, before: null })), kind: singleHolds(S, cell, v) || "naked", after: S };
+    return build(S0, res, cell, v);
   }
 
   // ---------- texts (translated with tr(); see js/i18n.js)
@@ -1061,6 +1142,7 @@ function createTutor(G, region) {
     return trialText(a).text;
   }
   function placeSentence(x) {
+    if (x.kind === "shape") return tr("{cell} touches the whole region with {cells} and becomes {v}", { cell: nm(x.cell), cells: list(RC[x.via].map(nm)), v: x.v });
     return x.kind === "naked"
       ? tr("{cell} can only be {v}", { cell: nm(x.cell), v: x.v })
       : x.kind === "last"
@@ -1146,7 +1228,9 @@ function createTutor(G, region) {
         const x = st.single,
           p = { cell: nm(x.cell), v: x.v };
         parts.push(
-          x.kind === "naked"
+          x.kind === "shape"
+            ? tr("Then {cell} touches the whole region with {cells} and becomes {v}.", { ...p, cells: list(RC[x.via].map(nm)) })
+            : x.kind === "naked"
             ? tr("Then {cell} can only be {v}.", p)
             : x.kind === "last"
               ? KING
@@ -1210,6 +1294,13 @@ function createTutor(G, region) {
   function finalText(S0, res, cell, v, stepIdxOf) {
     const kind = res.kind,
       r = holdUnit(res.after || S0, cell, v, kind);
+    if (kind === "shape")
+      return tr("{cell} touches all of the region with {cells}, so it cannot be 1–{k}. Its own region has {v} cells, so {cell} = {v}.", {
+        cell: nm(cell),
+        cells: list(RC[r].map(nm)),
+        k: RC[r].length,
+        v,
+      });
     if (kind === "last")
       return KING
         ? tr("{cell} is the only empty cell in {region}, and the region is only missing {v}. So {cell} = {v}.", { cell: nm(cell), region: regionName(r), v })
@@ -1316,13 +1407,200 @@ function createTutor(G, region) {
     }
     return peak;
   }
+  // ---------- Show, don't tell (25 Nov 2026). Every view also says what it says without cell names (say), pointing at what the
+  // board shows: the blue cells (the pattern, with its own options picked out), the yellow cells (what changes), the
+  // outlined region or house, the ringed numbers (the placed numbers that do the work), an orange assumption with arrows
+  // to what follows from it, and red for a contradiction. The conclusion comes first. The text with cell names (text) stays,
+  // for the setting "Cell names in explanations" and for screen readers. legend names the roles under the board.
+  // whole phrases per kind of house, so each language can bend the words its own way
+  const kindKey = (u) => houseKey(MODEL, u);
+  const theKind = (u) => theHouse(MODEL, u);
+  const outlinedKind = (u) =>
+    ({ box: tr("the outlined box"), row: tr("the outlined row"), column: tr("the outlined column"), region: tr("the outlined region") })[kindKey(u)];
+  const yellowLose = (targets) => {
+    const g = groupByMask(targets);
+    if (g.length > 1) return tr("The yellow cells lose the struck-out options.");
+    return targets.length === 1 ? tr("The yellow cell {cannot}.", { cannot: cannot(g[0][0]) }) : tr("The yellow cells {cannot}.", { cannot: cannot(g[0][0]) });
+  };
+  // a chain of placements as arrows: from the start through every number that follows, in order
+  const arrows = (from, cells) => {
+    const out = [];
+    let prev = from;
+    for (const c of cells) {
+      if (c !== prev) out.push({ from: prev, to: c });
+      prev = c;
+    }
+    return out;
+  };
+  // what the board shows for one step, and its text without cell names
+  function stepShow(a, st) {
+    const nT = a.targets.length;
+    if (a.tech === 2) {
+      const opts = {};
+      a.spots.forEach((c) => (opts[c] = 1 << a.v));
+      return {
+        say:
+          yellowLose(a.targets) +
+          " " +
+          (KING
+            ? nT === 1
+              ? tr("In the outlined region, {v} must go in one of the blue cells, and the yellow cell touches all of them.", { v: a.v })
+              : tr("In the outlined region, {v} must go in one of the blue cells, and the yellow cells touch all of them.", { v: a.v })
+            : nT === 1
+              ? tr("In {kind}, {v} can only go in the blue cells, and the yellow cell sees all of them.", { v: a.v, kind: outlinedKind(a.region) })
+              : tr("In {kind}, {v} can only go in the blue cells, and the yellow cells see all of them.", { v: a.v, kind: outlinedKind(a.region) })),
+        opts,
+        digit: a.v,
+        outline: RC[a.region],
+        legend: { pattern: tr("where {v} must go", { v: a.v }), outline: theKind(a.region), target: tr("loses {v}", { v: a.v }) },
+      };
+    }
+    if (a.tech === 3 || a.tech === 5) {
+      const kk = a.cells.length,
+        opts = {};
+      a.cells.forEach((c) => (opts[c] = a.mask & st.cand[c]));
+      const shared = a.cells.reduce((acc, c) => acc.filter((u) => unitsOf[c].includes(u)), unitsOf[a.cells[0]]);
+      return {
+        say:
+          yellowLose(a.targets) +
+          " " +
+          (kk === 2
+            ? tr("The blue cells can only be {vals} between them, so those two numbers are used up there.", { vals: vals(a.mask) })
+            : tr("The blue cells can only be {vals} between them, so those three numbers are used up there.", { vals: vals(a.mask) })) +
+          " " +
+          (kk === 2 ? (nT === 1 ? tr("The yellow cell sees both of them.") : tr("The yellow cells see both of them.")) : nT === 1 ? tr("The yellow cell sees all three.") : tr("The yellow cells see all three.")),
+        opts,
+        outline: shared.length ? RC[shared[0]] : null,
+        legend: { pattern: kk === 2 ? tr("the pair") : tr("the triple"), opts: tr("their numbers"), outline: shared.length ? theKind(shared[0]) : "", target: tr("loses options") },
+      };
+    }
+    if (a.tech === 4 || a.tech === 6) {
+      const kk = a.cells.length,
+        opts = {};
+      a.cells.forEach((c) => (opts[c] = a.mask & st.cand[c]));
+      return {
+        say:
+          (kk === 2
+            ? tr("The blue cells must be {vals}, so their other options go.", { vals: vals(a.mask) })
+            : tr("The blue cells must be {vals} between them, so their other options go.", { vals: vals(a.mask) })) +
+          " " +
+          tr("In {kind}, {vals} can only go in the blue cells.", { kind: outlinedKind(a.region), vals: vals(a.mask) }),
+        opts,
+        outline: RC[a.region],
+        noTarget: true, // the pattern's own cells lose the other options: they stay blue, the struck options show it
+        legend: { pattern: kk === 2 ? tr("the hidden pair") : tr("the hidden triple"), opts: tr("their numbers"), outline: theKind(a.region) },
+      };
+    }
+    if (isChain(a.tech)) {
+      const N = a.nodes,
+        Y = N[N.length - 1],
+        opts = {};
+      N.forEach((k) => (opts[k >> 4] = (opts[k >> 4] || 0) | (1 << (k & 15))));
+      return {
+        say:
+          yellowLose(a.targets) +
+          " " +
+          tr("Follow the arrows: if the first blue cell is not {va}, the chain ends with {vb} in the last one. So one of the two ends holds, and the yellow cells see both.", {
+            va: N[0] & 15,
+            vb: Y & 15,
+          }),
+        opts,
+        links: arrows(
+          N[0] >> 4,
+          N.map((k) => k >> 4),
+        ),
+        legend: { pattern: tr("the chain"), opts: tr("its numbers"), links: tr("follows"), target: tr("loses options") },
+      };
+    }
+    if (a.tech === 10 || a.tech === 11 || a.tech === 13) {
+      const br = a.broken,
+        placed = a.chain.filter((x) => x.rel && x.kind === "place").map((x) => x.single.cell);
+      const end =
+        br.kind === "cell"
+          ? tr("then the red cell has no options left")
+          : br.kind === "region"
+            ? tr("then there is no room for {v} in the red cells", { v: br.v })
+            : tr("then the numbers do not add up");
+      return {
+        say: tr("The orange cell where the arrows start cannot be {v}. If it were, the arrows show what follows, and {end}.", { v: a.v, end }),
+        links: arrows(a.cell, placed),
+        digit: a.tech === 10 ? a.v : 0,
+        legend: { hypo: tr("assumed"), links: tr("follows"), bad: tr("contradiction") },
+      };
+    }
+    return null;
+  }
+  // the answer: the numbers that rule the rest out (ringed), the region or house, and the text without cell names
+  function finalShow(S0, res, cell, v, stepIdxOf) {
+    const kind = res.kind,
+      r = holdUnit(res.after || S0, cell, v, kind);
+    if (kind === "shape")
+      return {
+        say: tr("This cell is {v}: it touches all {k} cells of the outlined region, which holds 1–{k}, and its own region has {v} cells.", { v, k: RC[r].length }),
+        outline: RC[r],
+        legend: { target: tr("the answer"), outline: tr("the region it touches") },
+      };
+    if (kind === "last")
+      return {
+        say: tr("This cell is {v}: it is the last empty cell in {kind}, which is missing only {v}.", { v, kind: outlinedKind(r) }),
+        outline: RC[r],
+        legend: { target: tr("the answer"), outline: theKind(r) },
+      };
+    if (kind === "naked") {
+      const work = [],
+        fromStep = new Map();
+      for (let u = 1; u <= size[cell]; u++) {
+        if (u === v) continue;
+        const src = (KING ? RC[r].concat(peers[cell]) : peers[cell]).find((c) => S0.val[c] === u);
+        if (src !== undefined) work.push(src);
+        else fromStep.set(stepIdxOf(cell, u), (fromStep.get(stepIdxOf(cell, u)) || []).concat(u));
+      }
+      const steps = [...fromStep].map(([k, us]) => tr("Step {k} removed {vals}.", { k, vals: list(us.map(String)) })).join(" ");
+      const say =
+        (!work.length
+          ? tr("This cell is {v}: it is the only option left.", { v })
+          : KING
+            ? tr("This cell is {v}. In a region of {n} cells it can be 1–{n}, and the ringed numbers take the others.", { v, n: size[cell] })
+            : tr("This cell is {v}. The ringed numbers take all its other options.", { v })) + (steps ? " " + steps : "");
+      return { say, work, legend: { target: tr("the answer"), work: tr("take the other numbers") } };
+    }
+    const others = RC[r].filter((c) => c !== cell && !S0.val[c]),
+      work = new Set();
+    let stepped = 0;
+    for (const o of others) {
+      const src = peers[o].find((p) => S0.val[p] === v && !RC[r].includes(p));
+      if (src !== undefined) work.add(src);
+      else stepped++;
+    }
+    return {
+      say:
+        tr("This cell is {v}: it is the only place for {v} in {kind}.", { v, kind: outlinedKind(r) }) +
+        " " +
+        (!work.size
+          ? tr("The earlier steps ruled out the other cells.")
+          : stepped
+            ? tr("The ringed {v}s rule out the other cells, together with the earlier steps.", { v })
+            : tr("The ringed {v}s rule out the other cells.", { v })),
+      work: [...work],
+      outline: RC[r],
+      legend: { target: tr("the answer"), pattern: tr("ruled out for {v}", { v }), work: tr("rule them out"), outline: theKind(r) },
+    };
+  }
+  // the parts of the board that play a part in a view, so the rest can be dimmed (only when that is a clear minority)
+  function withFocus(view) {
+    const f = new Set([...(view.pattern || []), ...(view.target || []), ...(view.bad || []), ...(view.work || []), ...(view.outline || [])]);
+    Object.keys(view.hypo || {}).forEach((c) => f.add(+c));
+    (view.links || []).forEach((l) => (f.add(l.from), f.add(l.to)));
+    if (f.size >= 2 && f.size <= 0.6 * n) view.focus = [...f];
+    return view;
+  }
   function build(S0, res, cell, v) {
     const steps = res.steps.map((s) => s.app);
     const stepIdxOf = (c, u) => {
       for (let i = 0; i < steps.length; i++) if (steps[i].targets.some((t) => t.cell === c && t.mask & (1 << u))) return i + 1;
       return "?";
     };
-    const finalTech = res.kind === "naked" ? 0 : 1;
+    const finalTech = res.kind === "naked" || res.kind === "shape" ? 0 : 1;
     const hardest = steps.reduce((m, a) => Math.max(m, a.tech), finalTech);
     const view = [];
     // 0: a nudge without the answer
@@ -1330,7 +1608,9 @@ function createTutor(G, region) {
       view.push({
         nudge: true,
         text:
-          res.kind === "naked"
+          res.kind === "shape"
+            ? tr("The next number comes from the shape of the regions. Look at the marked cell and the region it touches all of.")
+            : res.kind === "naked"
             ? tr("Technique for the next number: {tech}. Look at the marked cell: which numbers can it not be?", { tech: TECH_NAMES[0].toLowerCase() })
             : KING
               ? tr("Technique for the next number: {tech}. Look at the marked region: which number can only go in one place?", { tech: TECH_NAMES[1].toLowerCase() })
@@ -1338,7 +1618,7 @@ function createTutor(G, region) {
                   tech: TECH_NAMES[1].toLowerCase(),
                   kind: MODEL.unitKind(holdUnit(S0, cell, v, res.kind)),
                 }),
-        pattern: res.kind === "naked" ? [cell] : RC[holdUnit(S0, cell, v, res.kind)].filter((c) => !S0.val[c]),
+        pattern: res.kind === "naked" ? [cell] : res.kind === "shape" ? [cell].concat(RC[shapeVia[cell]]) : RC[holdUnit(S0, cell, v, res.kind)].filter((c) => !S0.val[c]),
         target: [],
         cand: {},
         strike: {},
@@ -1389,6 +1669,11 @@ function createTutor(G, region) {
         strike,
       };
       if (isChain(a.tech)) v1.chain = chainText(a, st).chain;
+      const sh = stepShow(a, st);
+      if (sh) {
+        Object.assign(v1, { say: sh.say, opts: sh.opts, digit: sh.digit, outline: sh.outline, links: sh.links, legend: sh.legend });
+        if (sh.noTarget) v1.target = v1.target.filter((c) => !v1.pattern.includes(c));
+      }
       if (a.tech === 12) {
         const bt = bothText(a);
         const hyp = (br) => {
@@ -1396,41 +1681,81 @@ function createTutor(G, region) {
           for (const x of br.chain) if (x.rel) h[x.single.cell] = x.single.v;
           return h;
         };
-        const rootCells = a.cells;
-        view.push({
-          title: tr("Step {k}: Both ways · way 1", { k: i + 1 }),
-          tech: 12,
-          text: bt.intro + " " + bt.b1,
-          pattern: [],
-          target: [a.goal],
-          cand: {},
-          strike: {},
-          hypo: hyp(a.branches[0]),
-        });
-        view.push({
-          title: tr("Step {k}: Both ways · way 2", { k: i + 1 }),
-          tech: 12,
-          text: bt.b2,
-          pattern: [],
-          target: [a.goal],
-          cand: {},
-          strike: {},
-          hypo: hyp(a.branches[1]),
-        });
-        view.push({
-          title: tr("Step {k}: Both ways · conclusion", { k: i + 1 }),
-          tech: 12,
-          text: bt.conclusion,
-          pattern: rootCells,
-          target: [a.goal],
-          cand: { [a.goal]: st.cand[a.goal] },
-          strike: { [a.goal]: a.targets[0].mask },
-        });
+        const rootCells = a.cells,
+          r0 = a.root,
+          m0 = a.targets[0].mask;
+        // without cell names: what each way leads to, the way itself as arrows
+        const res0 = (br) => (br.val ? tr("the yellow cell becomes {v}", { v: br.val }) : tr("the yellow cell {cannot}", { cannot: cannot(m0) }));
+        const wayLinks = (br) =>
+          arrows(
+            br.start[0],
+            br.chain.filter((x) => x.rel).map((x) => x.single.cell),
+          );
+        const intro =
+          r0.kind === "cell"
+            ? tr("The blue cell can only be {a} or {b}. Try both.", { a: r0.a[1], b: r0.b[1] })
+            : tr("In {kind}, {v} can only go in one of the two blue cells. Try both.", { kind: outlinedKind(r0.region), v: r0.a[1] });
+        const way = (k, br) =>
+          r0.kind === "cell"
+            ? tr("Way {k}: if it is {v} (orange), the arrows show what follows: {res}.", { k, v: br.start[1], res: res0(br) })
+            : tr("Way {k}: if {v} goes in the orange cell, the arrows show what follows: {res}.", { k, v: br.start[1], res: res0(br) });
+        const lg = { pattern: tr("the two ways"), hypo: tr("assumed"), links: tr("follows"), target: tr("the cell it is about") };
+        const same = a.branches[0].val && a.branches[0].val === a.branches[1].val;
+        view.push(
+          withFocus({
+            title: tr("Step {k}: Both ways · way 1", { k: i + 1 }),
+            tech: 12,
+            text: bt.intro + " " + bt.b1,
+            say: intro + " " + way(1, a.branches[0]),
+            pattern: rootCells,
+            target: [a.goal],
+            cand: {},
+            strike: {},
+            hypo: hyp(a.branches[0]),
+            hypoStart: a.branches[0].start[0],
+            links: wayLinks(a.branches[0]),
+            outline: r0.kind === "cell" ? null : RC[r0.region],
+            legend: lg,
+          }),
+        );
+        view.push(
+          withFocus({
+            title: tr("Step {k}: Both ways · way 2", { k: i + 1 }),
+            tech: 12,
+            text: bt.b2,
+            say: way(2, a.branches[1]),
+            pattern: rootCells,
+            target: [a.goal],
+            cand: {},
+            strike: {},
+            hypo: hyp(a.branches[1]),
+            hypoStart: a.branches[1].start[0],
+            links: wayLinks(a.branches[1]),
+            outline: r0.kind === "cell" ? null : RC[r0.region],
+            legend: lg,
+          }),
+        );
+        view.push(
+          withFocus({
+            title: tr("Step {k}: Both ways · conclusion", { k: i + 1 }),
+            tech: 12,
+            text: bt.conclusion,
+            say: same
+              ? tr("Both ways make the yellow cell {v}, so it is {v} whichever way is right.", { v: a.branches[0].val })
+              : tr("Both ways: the yellow cell {cannot}. So that holds whichever way is right.", { cannot: cannot(m0) }),
+            pattern: rootCells,
+            target: [a.goal],
+            cand: { [a.goal]: st.cand[a.goal] },
+            strike: { [a.goal]: m0 },
+            legend: { pattern: tr("the two ways"), target: tr("the cell it is about") },
+          }),
+        );
         return;
       }
       if (a.tech === 10 || a.tech === 11 || a.tech === 13) {
         v1.chain = trialText(a).chain;
         v1.hypo = { [a.cell]: a.v };
+        v1.hypoStart = a.cell;
         for (const ch of a.chain) if (ch.kind === "place" && ch.rel) v1.hypo[ch.single.cell] = ch.single.v;
         v1.bad =
           a.broken.kind === "cell"
@@ -1446,38 +1771,47 @@ function createTutor(G, region) {
           title: tr("Step {k}: conclusion", { k: i + 1 }),
           tech: a.tech,
           text: tr("The assumption led to a contradiction, so {cell} cannot be {v}.", { cell: nm(a.cell), v: a.v }),
+          say: tr("The assumption led to a contradiction, so the yellow cell cannot be {v}.", { v: a.v }),
+          legend: { target: tr("cannot be {v}", { v: a.v }) },
           pattern: [],
           target: [a.cell],
           cand: { [a.cell]: st.cand[a.cell] },
           strike: { [a.cell]: 1 << a.v },
         };
       }
-      view.push(v1);
-      if (v1.after) {
-        view.push(v1.after);
-        delete v1.after;
-      }
+      const after = v1.after;
+      delete v1.after;
+      view.push(withFocus(v1));
+      if (after) view.push(withFocus(after));
     });
     // the answer
     const fin = res.after;
     const show = new Set([cell]);
     const hu = holdUnit(fin, cell, v, res.kind);
-    if (res.kind !== "naked")
+    if (res.kind === "shape") RC[hu].forEach((c) => show.add(c));
+    else if (res.kind !== "naked")
       RC[hu].forEach((c) => {
         if (!fin.val[c]) show.add(c);
       });
     const cand = {};
     for (const c of show) if (!fin.val[c]) cand[c] = fin.cand[c];
-    view.push({
-      final: true,
-      title: `${TECH_NAMES[finalTech]}`,
-      tech: finalTech,
-      text: finalText(S0, res, cell, v, stepIdxOf),
-      pattern: res.kind === "naked" ? [] : RC[hu].filter((c) => !S0.val[c] && c !== cell),
-      target: [cell],
-      cand,
-      strike: {},
-    });
+    const fs = finalShow(S0, res, cell, v, stepIdxOf);
+    view.push(
+      withFocus({
+        final: true,
+        title: res.kind === "shape" ? tr("Region shape") : `${TECH_NAMES[finalTech]}`,
+        tech: finalTech,
+        text: finalText(S0, res, cell, v, stepIdxOf),
+        say: fs.say,
+        work: fs.work,
+        outline: fs.outline,
+        legend: fs.legend,
+        pattern: res.kind === "naked" || res.kind === "shape" ? [] : RC[hu].filter((c) => !S0.val[c] && c !== cell),
+        target: [cell],
+        cand,
+        strike: {},
+      }),
+    );
     const support = res.steps.map((s) => ({
       tech: s.app.tech,
       chain: s.app.relCount || 0,
@@ -1670,6 +2004,23 @@ function createTutor(G, region) {
   // Explanation of exactly (cell, v): the steps it takes, with the easiest techniques first, pruned to what is needed.
   // Used in the route analysis to show what the player actually did.
   // All numbers that can be seen directly (naked single / hidden single) in the position: [[cell, v], ...]
+  // All the numbers ready at the easiest level right now, with that level: the easy numbers, or, when there are none, the
+  // numbers the easiest technique makes visible (the same count as routeMove's nAvail)
+  function readyList(known) {
+    const S0 = fromKnown(known);
+    if (S0.broken) return { level: 12, list: [] };
+    const pick = (S) => singles(S).map((x) => [x.cell, x.v]);
+    let l = pick(S0);
+    if (l.length) return { level: 1, list: l };
+    for (let L = 2; L <= 11; L++) {
+      const S = clone(S0);
+      for (let g = 0; g < 300; g++) {
+        if ((l = pick(S)).length) return { level: L, list: l };
+        if (!sweepTo(S, L)) break;
+      }
+    }
+    return { level: 12, list: [] };
+  }
   function easyList(known) {
     const S0 = fromKnown(known);
     if (S0.broken) return [];
@@ -1856,9 +2207,29 @@ function createTutor(G, region) {
       avail = a.level,
       direct = directLevel(S0, cell, v);
     const ahead = direct > avail ? aheadLevel(S0, cell, v, Math.min(direct - 1, 11)) : null;
-    return { avail, nAvail: a.n, direct, ahead };
+    // the next number is chosen by price, so a harder technique can be the cheapest way (a short chain before a triple):
+    // then the move is one of the easiest all the same
+    const e = direct > avail ? easiest(known) : null,
+      cheapest = !!(e && e.cell === cell && e.v === v && e.hardestLevel === direct);
+    // the length of the reasoning for a move with a technique (pairs and up), for calibrating the price per link later
+    const ex = direct >= 3 && direct <= 11 ? explainMove(known, cell, v) : null;
+    return { avail, nAvail: a.n, direct, ahead, cheapest, len: ex ? ex.len : 0 };
   }
 
+  // Solving on from here the easiest way, without the cell itself, until the cell is placed: the hardest level that takes.
+  // If a move on the cell was at most that hard, it was needed anyway, only done early. 1-11, or 12 if it cannot be done.
+  function hardestUntil(known, cell) {
+    const k = known.slice();
+    let top = 1;
+    for (let g = 0; g < 200; g++) {
+      const r = readyList(k);
+      if (!r.list.length) return 12;
+      top = Math.max(top, r.level);
+      if (r.list.some(([c]) => c === cell)) return top;
+      r.list.forEach(([c, x]) => (k[c] = x));
+    }
+    return 12;
+  }
   const st = (cand, val) => ({ cand: cand.slice(), val: val.slice(), broken: null });
   // A fast logical solver for the generator: place singles, and otherwise use all moves at the easiest level that helps,
   // at most maxL. The same techniques as hints. { solved, level (the hardest level used, 1-11), uses: moves per level,
@@ -1910,11 +2281,14 @@ function createTutor(G, region) {
     routeMove,
     explainMove,
     easyList,
+    readyList,
+    hardestUntil,
     drillApps,
     // for the Quick call game (games.js): the houses, whether two cells see each other, and a house's short name
     houses: RC,
     peer,
     houseName: (u) => regionName(u),
+    houseKey: (u) => houseKey(MODEL, u),
     king: KING,
     chainsAt: (cand, val, mode) => chainApps(st(cand, val), false, mode || "all"),
     bothAt: (cand, val) => bothWaysApps(st(cand, val), false),

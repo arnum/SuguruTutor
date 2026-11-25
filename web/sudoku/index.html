@@ -47,6 +47,18 @@
     <svg class="i chev" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg>
   </button>
 
+  <button class="card" id="campCard" type="button">
+    <div class="campico" aria-hidden="true"><svg class="i" viewBox="0 0 24 24"><path d="M4 20h4v-5h4v-5h4V5h4"/></svg></div>
+    <div><span class="eyebrow">Campaign</span><strong id="campTitle"></strong><span class="sub" id="campSub"></span></div>
+    <svg class="i chev" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg>
+  </button>
+
+  <button class="card" id="trialCard" type="button">
+    <div class="campico" aria-hidden="true"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5M9 2h6M12 2v3"/></svg></div>
+    <div><span class="eyebrow">Timed trial</span><strong id="trialTitle"></strong><span class="sub" id="trialSub"></span></div>
+    <svg class="i chev" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg>
+  </button>
+
   <button class="primary big" id="homeNew" type="button">
     <svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>New game</button>
 
@@ -61,6 +73,8 @@
       <svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg><span>Settings</span><small id="homeSetSub">Theme, help and data</small></button>
   </div>
 
+  <button class="link guestlink" id="homeGuest" type="button"></button>
+
   <form class="codeform" id="codeForm">
     <label for="codeInput">Do you have a puzzle code?</label>
     <div class="coderow">
@@ -74,8 +88,12 @@
 <!-- ============ NEW GAME ============ -->
 <section class="view" id="v-new" aria-label="New game">
   <div class="bar"><button class="iconbtn" type="button" data-back aria-label="Back"><svg class="i" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg></button><h2>New game</h2><span></span></div>
+  <h3 class="sec">How to play</h3>
+  <div class="seg modes" id="modes" role="group" aria-label="How to play"></div>
+  <p class="modewhy" id="modeWhy" hidden></p>
   <h3 class="sec">Size</h3>
   <div class="sizes" id="sizes" role="group" aria-label="Size"></div>
+  <div class="manualopts" id="manualOpts">
   <h3 class="sec">Difficulty</h3>
   <div id="levels"></div>
   <h3 class="sec">Nuance <small>· where within the grade</small></h3>
@@ -84,6 +102,7 @@
   <div class="seg" id="kinds" role="group" aria-label="Type"></div>
   <h3 class="sec">Technique <small>· optional</small></h3>
   <div id="musts"></div>
+  </div>
   <p class="note" id="newNote"></p>
   <div class="dock"><button class="primary big" id="startBtn" type="button">Start</button></div>
 </section>
@@ -101,6 +120,7 @@
   <div class="hint" id="hintPanel" hidden aria-live="polite">
     <div class="hint-head"><span class="hint-tag" id="hintTag">Hint</span>
       <button type="button" class="hint-close" id="hintClose" aria-label="Close hint">×</button></div>
+    <div id="hintLegend"></div>
     <p id="hintText"></p>
     <details id="hintChain" hidden><summary id="hintChainSum">See the whole chain</summary><ol id="hintChainList"></ol></details>
     <div class="hint-nav" id="hintNav">
@@ -126,6 +146,18 @@
 <section class="view" id="v-stats" aria-label="Statistics">
   <div class="bar"><button class="iconbtn" type="button" data-back aria-label="Back"><svg class="i" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg></button><h2>Statistics</h2><span></span></div>
   <div id="statsBody" style="display:flex;flex-direction:column;gap:12px"></div>
+</section>
+
+<!-- ============ CAMPAIGN ============ -->
+<section class="view" id="v-camp" aria-label="Campaign">
+  <div class="bar"><button class="iconbtn" type="button" data-back aria-label="Back"><svg class="i" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg></button><h2>Campaign</h2><span></span></div>
+  <div id="campBody"></div>
+</section>
+
+<!-- ============ TIMED TRIAL ============ -->
+<section class="view" id="v-trial" aria-label="Timed trial">
+  <div class="bar"><button class="iconbtn" type="button" data-back aria-label="Back"><svg class="i" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg></button><h2>Timed trial</h2><span></span></div>
+  <div id="trialBody" style="display:flex;flex-direction:column;gap:12px"></div>
 </section>
 
 <!-- ============ SETTINGS ============ -->
@@ -155,6 +187,7 @@
 
 <!-- Sudoku: its own files in js/, shared files in ../shared/js/ (the same ones Suguru uses) -->
 <script src="js/app.js"></script>
+<script src="../shared/js/build.js"></script>
 <script src="../shared/js/lang/da.js"></script>
 <script src="../shared/js/i18n.js"></script>
 <script src="../shared/js/lz.js"></script>
@@ -171,6 +204,7 @@
 <script src="../shared/js/newgame.js"></script>
 <script src="../shared/js/store.js"></script>
 <script src="../shared/js/board.js"></script>
+<script src="../shared/js/draw.js"></script>
 <script src="../shared/js/play.js"></script>
 <script src="../shared/js/stats.js"></script>
 <script src="../shared/js/analysis.js"></script>
@@ -179,6 +213,8 @@
 <script src="../shared/js/drillgen.js"></script>
 <script src="../shared/js/games.js"></script>
 <script src="../shared/js/drill.js"></script>
+<script src="../shared/js/campaign.js"></script>
+<script src="../shared/js/trial.js"></script>
 <script src="../shared/js/debug.js"></script>
 <script src="../shared/js/settings.js"></script>
 <script src="../shared/js/main.js"></script>

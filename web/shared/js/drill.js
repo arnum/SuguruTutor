@@ -1,22 +1,73 @@
 // Practice drills: short rounds of five boards where one technique is the next step. Find the pattern, then use it.
 // The boards come from drillgen.js (in the background worker). While you play, the screen shows only the board and the task:
-// no clock, no level, no nudges. The level adapts quietly after each board, in small steps (quicker than your curve moves it
-// up, slower moves it down), and what it means comes after the round: the score, your level over the last two weeks, and all
-// your techniques.
+// no clock, no level, no nudges. The level adapts quietly after each board (faster than par moves it up, slower down), and
+// what it means comes after the round: the score, your level over the last two weeks, and all your techniques.
 // Fun without pull: no badges or streaks, and the round always ends after five boards with going back as the main button.
 // The practice games (games.js) use the same rounds, levels and screens; D.L is then the game's name instead of a level.
 
 const DRILL_ROUND = 5,
   DRILL_MAX = 6, // board levels per drill (GAME.drillLevels)
-  DRILL_TOP = 7; // stored as 1.0 to 7.0: the whole part picks the board level (1 to 6), the decimals move inside it
-// Shown as 0.0 to 6.0 (stored minus one), so the start is an empty bar and 6 means all six board levels mastered.
+  DRILL_TOP = 7; // the board ladder, 1.0 to 7.0: the whole part picks the board level (1 to 6), the decimals move inside it
 let D = null; // the round in progress: { L, lv0, res: [], cur, next, nextLv, token, over }
 
-// ---------- stored per drill: the level (1.0 to 7.0, shown as 0 to 6), the level at the end of each day, and a log of boards
-const drillAll = () => store.get("drills", {});
+// ---------- Levels (25 Nov 2026): a rating, not a place on the board ladder.
+// Each board is played against par: a fixed time for that game (PAR), not your curve. A board says what level it shows: the
+// level the board is set for, plus one level for each 25 % faster than par (minus one for each 25 % slower); mistakes add
+// time, and "Show me" counts as 1.5 levels below the board. Your level moves part of the way towards that after each board:
+// half the way at first, down to a sixth after 20 boards, so a new player's first boards show quickly and a long-time
+// player's level is steady. The boards follow your level: the easiest boards up to level 3, then one step up the board
+// ladder per level, the hardest from level 9. Below 3 is room to get faster on the easiest boards (level 0 is about twice
+// par), so a slow start still rises visibly. 0.0 to 10.0. Par and the steps are to be calibrated on more boards.
+const LV_STEP = 1.25, // one level is 25 % faster
+  LV_EASY = 3, // the level the easiest boards are set for
+  LV_MAX = 10;
+const ladderOf = (R) => Math.max(1, Math.min(DRILL_TOP - 0.01, R - LV_EASY + 1));
+const boardLv = (R) => ladderOf(R) + LV_EASY - 1; // the level a board fetched at level R is set for
+// Par per board in seconds, on a 6×6 board: a first look at the new board, plus a time per find (a drill has one find;
+// the games count theirs: numbers to place, new numbers, cells, the count; Quick call: per claim). Bigger boards scale by
+// (cells/36)^0.45, as in the time curve, and a game can scale all of it (GAME.parScale: Sudoku). Provisional, 25 Nov 2026:
+// from one player's practice log (77 boards) at the lowest levels; to be calibrated on more boards.
+const PAR = {
+  1: { look: 1.3, per: 2 }, // singles
+  2: { look: 2.5, per: 5 }, // neighbour elimination / locked candidates
+  3: { look: 3, per: 6 }, // pairs
+  4: { look: 3, per: 9 }, // triples (no data yet)
+  cascade: { look: 1.5, per: 0.75 }, // per number, without choosing it on the pad
+  changed: { look: 1.5, per: 1.4 },
+  sweep: { look: 2.5, per: 0.8 },
+  count: { look: 3, per: 2.5 },
+  quick: { look: 0, per: 3.7 }, // per claim
+};
+const parSize = (c) => Math.pow((c.b.rows * c.b.cols) / 36, 0.45) * (GAME.parScale || 1);
+function parOf(L, c) {
+  const p = PAR[L] || PAR[4],
+    finds = isGame(L) && PG[L].finds ? Math.max(1, PG[L].finds(c)) : 1;
+  return (p.look + p.per * finds) * parSize(c);
+}
+
+// ---------- stored per drill: the level (0 to 10), the level at the end of each day, and a log of boards
+// Levels from before 25 Nov 2026 were places on the board ladder (1 to 7): moved to the level that gets the same boards.
+function drillMigrate(s) {
+  if (!s || s.v === 2) return s;
+  const up = (x) => Math.round((x + LV_EASY - 1) * 100) / 100;
+  return Object.assign({}, s, {
+    v: 2,
+    lv: up(s.lv || 1),
+    days: Object.fromEntries(Object.entries(s.days || {}).map(([d, x]) => [d, up(x)])),
+    log: (s.log || []).map((x) => Object.assign({}, x, { lv: up(x.lv || 1) })),
+  });
+}
+function drillAll() {
+  const all = store.get("drills", {});
+  if (!Object.values(all).some((s) => s && s.v !== 2)) return all;
+  const m = {};
+  for (const k in all) m[k] = drillMigrate(all[k]);
+  store.set("drills", m);
+  return m;
+}
 function drillOf(L) {
   const s = drillAll()[L];
-  return s ? Object.assign({ lv: 1, days: {}, log: [] }, s) : { lv: 1, days: {}, log: [] };
+  return s ? Object.assign({ lv: LV_EASY, days: {}, log: [] }, s) : { v: 2, lv: LV_EASY, days: {}, log: [] };
 }
 function drillPut(L, s) {
   const all = Object.assign({}, drillAll());
@@ -24,16 +75,18 @@ function drillPut(L, s) {
   store.set("drills", all);
 }
 const drillWhole = (lv) => Math.max(1, Math.min(DRILL_MAX, Math.floor(lv + 1e-9)));
-// The board level from the whole part; the decimals move the position later into the empty cells (more empty cells to scan),
-// up to half the level's range at .9
-function drillSpec(L, lv) {
-  const base = (isGame(L) ? GAME.games[L] : L === 1 ? GAME.drillSingles : GAME.drillLevels)[drillWhole(lv) - 1],
+// The board for a level: the ladder's whole part picks the board level; the decimals move the position later into the empty
+// cells (more empty cells to scan), up to half the level's range at .9
+function drillSpec(L, R) {
+  const lv = ladderOf(R),
+    base = (isGame(L) ? GAME.games[L] : L === 1 ? GAME.drillSingles : GAME.drillLevels)[drillWhole(lv) - 1],
     f = Math.max(0, Math.min(0.9, lv - drillWhole(lv))),
     [lo, hi] = base.empty,
     sh = f * 0.5 * (hi - lo);
   return Object.assign({}, base, { empty: [Math.min(0.9, lo + sh), Math.min(0.95, hi + sh)] });
 }
-const lvTxt = (lv) => dec(Math.floor((lv - 1) * 10 + 1e-6) / 10);
+const lvTxt = (R) => dec(Math.floor(R * 10 + 1e-6) / 10);
+const sameBoards = (a, b) => drillWhole(ladderOf(a)) === drillWhole(ladderOf(b));
 const drillName = (L) => (isGame(L) ? PG[L].name() : cap(LEVEL_TECH[L]));
 const roundLen = (L) => (isGame(L) && PG[L].round) || DRILL_ROUND;
 // a drill or game from a data-drill attribute: "3" is a technique, "cascade" a game
@@ -71,17 +124,37 @@ function drillFetch(L, lv) {
   });
 }
 
+// One board kept ready for the next round of each drill, fetched while the last board of a round is played, so a round
+// does not start with a wait (Sudoku triples can take seconds to find). Kept on the device; used if its whole level fits.
+let drillStash = null;
+function stashFetch(L, lv) {
+  drillFetch(L, lv).then((b) => {
+    if (!b) return;
+    drillStash = drillStash || store.get("drillstash", {});
+    drillStash[L] = { v: 2, lv, b };
+    store.set("drillstash", drillStash);
+  });
+}
+function stashTake(L, lv) {
+  drillStash = drillStash || store.get("drillstash", {});
+  const st = drillStash[L];
+  if (!st || !st.b || st.v !== 2 || !sameBoards(st.lv, lv)) return null;
+  delete drillStash[L];
+  store.set("drillstash", drillStash);
+  return Promise.resolve(st.b);
+}
+
 // ---------- a round
 function startDrill(L) {
   const s = drillOf(L);
-  D = { L, lv0: s.lv, res: [], cur: null, next: drillFetch(L, s.lv), nextLv: s.lv, token: 0, over: false };
+  D = { L, lv0: s.lv, res: [], cur: null, next: stashTake(L, s.lv) || drillFetch(L, s.lv), nextLv: s.lv, token: 0, over: false };
   go("drill");
   drillNext();
 }
 function drillNext() {
   const s = drillOf(D.L);
   // the board fetched in advance fits unless the whole level changed since (a few tenths only move the position a little)
-  const p = D.next && drillWhole(D.nextLv) === drillWhole(s.lv) ? D.next : drillFetch(D.L, s.lv);
+  const p = D.next && sameBoards(D.nextLv, s.lv) ? D.next : drillFetch(D.L, s.lv);
   D.cur = null;
   const tok = ++D.token;
   renderDrill();
@@ -96,7 +169,10 @@ function drillNext() {
     if (D.res.length + 1 < roundLen(D.L)) {
       D.next = drillFetch(D.L, s.lv);
       D.nextLv = s.lv;
-    } else D.next = null;
+    } else {
+      D.next = null;
+      stashFetch(D.L, s.lv); // the first board of the next round
+    }
     renderDrill();
   });
 }
@@ -234,29 +310,35 @@ function drillSkip() {
   if (D.res.length >= roundLen(D.L)) D.over = true;
   D.over ? renderDrill() : drillNext();
 }
-// Each board: time against what your personal time curve expects for the technique; a miss-tap adds a quarter.
-// The level moves in small steps: half the curve's time gives +0.3, the curve's time 0, twice the time -0.3 (in between on a
-// log scale, so a little faster than the curve still gives a little), and "Show me" -0.4. Over a round: up to 1.5 levels.
+// Each board against par (see Levels above): the time, with a quarter added per wrong tap, gives the level the board shows;
+// your level moves part of the way towards it. A game with one long board per round (Quick call) moves it more per board.
 function drillFinish(miss) {
   const c = D.cur;
   c.phase = "done";
   c.pop = true;
   let sec = Math.max(0.5, (performance.now() - c.t0 - c.hiddenMs) / 1000);
-  const exp = isGame(D.L) ? PG[D.L].expected(c) : calTime(myCal(), D.L, 1, true);
   const pg = isGame(D.L) ? PG[D.L] : {};
   // a game can leave finger work out of the time (Cascade: choosing the number after the cell)
   if (pg.measured) sec = pg.measured(c, sec);
-  const score = pg.score ? pg.score(c) : (sec * (1 + 0.25 * c.wrong + (c.penalty || 0))) / exp;
-  const verdict = miss ? "miss" : score < 0.7 ? "quick" : score > 1.6 ? "slow" : "ok";
-  const s = drillOf(D.L);
-  // a game with one long board per round (Quick call) moves the level more per board
-  const sc = pg.stepScale || 1;
-  const step = miss ? -0.4 * Math.min(sc, 1.5) : sc * Math.max(-0.3, Math.min(0.3, -0.3 * Math.log2(score)));
-  s.lv = Math.round(Math.max(1, Math.min(DRILL_TOP, s.lv + step)) * 100) / 100;
+  const par = parOf(D.L, c),
+    score = pg.score ? pg.score(c) : (sec * (1 + 0.25 * c.wrong + (c.penalty || 0))) / par;
+  const s = drillOf(D.L),
+    before = s.lv,
+    bl = boardLv(c.lv),
+    shows = miss ? bl - 1.5 : bl - Math.log(score) / Math.log(LV_STEP),
+    k = Math.min(0.6, Math.max(1 / 6, 0.5 / (1 + (s.log || []).length / 10)) * (pg.stepScale || 1)),
+    delta = Math.max(-0.6, Math.min(0.6, k * (shows - before)));
+  s.lv = Math.round(Math.max(0, Math.min(LV_MAX, before + delta)) * 100) / 100;
+  s.v = 2;
   delete s.up;
+  const verdict = miss ? "miss" : shows - before >= 0.5 ? "quick" : shows - before <= -0.5 ? "slow" : "ok";
+  // the time on this board that keeps your level where it is (the summary shows it)
+  const exp = par * Math.pow(LV_STEP, bl - before);
   const day = dayKey(new Date());
   s.days = Object.assign({}, s.days, { [day]: s.lv });
-  s.log = (s.log || []).concat([{ d: day, lv: c.lv, s: Math.round(sec * 10) / 10, w: c.wrong, r: verdict }]).slice(-400);
+  s.log = (s.log || [])
+    .concat([{ d: day, lv: c.lv, s: Math.round(sec * 10) / 10, w: c.wrong, r: verdict, p: Math.round(par * 10) / 10, sh: Math.round(shows * 100) / 100 }])
+    .slice(-400);
   drillPut(D.L, s);
   D.res.push({ verdict, sec, exp, wrong: c.wrong, lv: c.lv, board: c });
   plogSave(c, { sec, exp }, verdict);
@@ -347,7 +429,7 @@ function renderDrill() {
     else {
       const h = c.shown || (c.placed ? c.tu.explainMove(c.known, c.placed.cell, c.placed.v) : null),
         kv = h ? keyView(h) : null;
-      text = kv && kv.text ? kv.text : "";
+      text = viewText(kv);
     }
     const nm = (i) => "abcdefghij"[i % c.b.cols] + (Math.floor(i / c.b.cols) + 1);
     task =
@@ -400,7 +482,7 @@ function drillChart(s) {
     .filter((k) => k < dayKey(new Date(Date.now() - (n - 1) * 864e5)))
     .sort();
   if (earlier.length) cur = s.days[earlier[earlier.length - 1]];
-  const y = (l) => bottom - ((l - 1) / (DRILL_TOP - 1)) * (bottom - top);
+  const y = (l) => bottom - (Math.max(0, Math.min(LV_MAX, l)) / LV_MAX) * (bottom - top);
   const step = (W - x0) / (n - 1);
   let line = cur != null ? `M ${x0} ${y(cur)}` : "",
     dots = "";
@@ -414,9 +496,9 @@ function drillChart(s) {
   if (line) line += ` H ${W}`;
   let grid = "";
   let labels = "";
-  for (let l = 1; l <= DRILL_TOP; l++) {
+  for (let l = 0; l <= LV_MAX; l += 2) {
     grid += `M ${x0} ${y(l)} H ${W} `;
-    labels += `<text x="0" y="${y(l)}" font-size="11" fill="var(--mute)" dominant-baseline="middle">${l - 1}</text>`;
+    labels += `<text x="0" y="${y(l)}" font-size="11" fill="var(--mute)" dominant-baseline="middle">${l}</text>`;
   }
   return (
     `<svg class="dchart" viewBox="0 0 316 132" role="img" aria-label="${esc(tr("Your level in {tech} at the end of each day over the last two weeks", { tech: isGame(D.L) ? drillName(D.L) : LEVEL_TECH[D.L] }))}">` +
@@ -444,20 +526,20 @@ function drillLevelText(L, lv) {
 function drillFaster(L, s) {
   if (isGame(L)) return "";
   const weekAgo = dayKey(new Date(Date.now() - 7 * 864e5));
-  const at = (s.log || []).filter((x) => drillWhole(x.lv) === drillWhole(s.lv) && x.r !== "miss");
+  const at = (s.log || []).filter((x) => sameBoards(x.lv, s.lv) && x.r !== "miss");
   const now = at.filter((x) => x.d > weekAgo).map((x) => x.s),
     before = at.filter((x) => x.d <= weekAgo).map((x) => x.s);
   if (now.length < 3 || before.length < 3) return "";
   const a = median(before),
     b = median(now);
   if (b > 0.85 * a) return "";
-  return tr("At level {lv} you find {tech} faster than a week ago: {a} → {b}.", { lv: drillWhole(s.lv) - 1, tech: LEVEL_TECH[L], a: fmtS(a), b: fmtS(b) });
+  return tr("On the same boards you find {tech} faster than a week ago: {a} → {b}.", { tech: LEVEL_TECH[L], a: fmtS(a), b: fmtS(b) });
 }
-// six bars; the decimals fill part of the next one
-function drillBars(lv) {
+// ten bars, one per level; the decimals fill part of the next one
+function drillBars(R) {
   let s = "";
-  for (let i = 1; i <= DRILL_MAX; i++) {
-    const f = Math.max(0, Math.min(1, lv - i));
+  for (let i = 1; i <= LV_MAX; i++) {
+    const f = Math.max(0, Math.min(1, R - i + 1));
     s += f >= 1 ? `<i class="on"></i>` : f > 0 ? `<i style="--f:${Math.round(f * 100)}%"></i>` : `<i></i>`;
   }
   return `<span class="dbar" aria-hidden="true">${s}</span>`;
@@ -474,12 +556,13 @@ function drillListHtml(cur) {
     );
   }).join("");
 }
-// Your typical time per board against what your curve expects: what it takes to move the level
+// Your typical time per board against the time that keeps your level (par, adjusted to your level and the board): what it takes
+// to move the level
 function paceLine() {
   const rs = D.res.filter((r) => r.sec && r.exp && r.verdict !== "miss");
   if (!rs.length) return "";
   const note = isGame(D.L) && PG[D.L].paceNote ? " " + PG[D.L].paceNote() : "";
-  return `<p class="dpace">${tr("Per board you took about {a}; your curve expects about {b}. Faster than that moves the level up.", { a: fmtS(median(rs.map((r) => r.sec))), b: fmtS(median(rs.map((r) => r.exp))) })}${note}</p>`;
+  return `<p class="dpace">${tr("Per board you took about {a}. Par at your level is about {b}: faster moves the level up, slower down.", { a: fmtS(median(rs.map((r) => r.sec))), b: fmtS(median(rs.map((r) => r.exp))) })}${note}</p>`;
 }
 function drillSummaryHtml() {
   const s = drillOf(D.L),
@@ -550,7 +633,7 @@ function bindDrillSummary(root) {
         kv = h ? keyView(h) : null;
       openSheet(
         `<h2>${esc(isGame(D.L) ? drillName(D.L) : GAME.drillFind[D.L][0])}</h2><div class="drillboard">${drillBoardSvg(c)}</div>` +
-          (isGame(D.L) ? `<div class="drilltask">${PG[D.L].task(c)}</div>` : kv && kv.text ? `<p>${esc(kv.text)}</p>` : "") +
+          (isGame(D.L) ? `<div class="drilltask">${PG[D.L].task(c)}</div>` : viewText(kv) ? `<p>${esc(viewText(kv))}</p>` : "") +
           `<div class="actions"><button class="secondary" type="button" id="dClose">${tr("Close")}</button></div>`,
         (b) => (b.querySelector("#dClose").onclick = closeSheet),
       );
@@ -617,7 +700,7 @@ function drillPanel() {
   const played = (k) => (drillOf(k).log || []).length > 0;
   if (!DRILL_TECHS.some(played) && !PRACTICE_GAMES.some(played)) return "";
   return (
-    `<div class="panelcard"><h3>${tr("Practice")}</h3><p>${tr("Your level in each drill, from 0 to 6. It moves a little after each board: up when you find the pattern faster than your curve expects, down when it takes longer. Tap one to practise it.")}</p>` +
+    `<div class="panelcard"><h3>${tr("Practice")}</h3><p>${tr("Your level in each drill, from 0 to 10. Each board has a par time; faster than par at your level moves the level up, slower down. Tap one to practise it.")}</p>` +
     `<div class="dlist">${drillListHtml(null)}</div>` +
     (PRACTICE_GAMES.some(played) ? `<h3 class="dhead">${tr("Games")}</h3><div class="dlist">${gameListHtml(null)}</div>` : "") +
     `</div>`

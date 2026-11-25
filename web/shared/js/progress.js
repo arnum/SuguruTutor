@@ -1,7 +1,9 @@
 // Progress: are you getting faster? The charts show it; they do not draw a conclusion.
-// Overall: puzzles differ, so each solved puzzle (without hints, not replayed) is measured against what its grade usually costs you
-// per empty cell: log(sec. per cell) = a + b * grade. The slope b is measured inside blocks of puzzles played at the same time,
-// so getting faster while moving to harder grades does not hide in the slope. The deviation (the residual) is your speed in that
+// Overall: puzzles differ, so each solved puzzle (without hints, not replayed) is measured against what its grade and board size
+// usually cost you per empty cell: log(sec. per cell) = a + b * grade + z * log(cells). A bigger board costs more per cell at
+// the same grade (more to scan for every number), so without the size a spell of small boards looked like progress. b and z
+// are measured inside blocks of puzzles played at the same time, so getting faster while moving to harder grades or other
+// sizes does not hide in them. The deviation (the residual) is your speed in that
 // puzzle; index 100 = your usual (median) speed for the grade over all your puzzles. New puzzles shift the whole line a little,
 // never its shape.
 // Each point is the median of a block, counted back from the newest, so the last point is always your latest block.
@@ -42,26 +44,47 @@ function progressData(list = games) {
   if (sg.length < PROG_MIN) return { few: sg.length };
   const n = sg.length,
     x = sg.map(gradeFor),
+    z = sg.map((g) => Math.log((g.rows * g.cols) / 36)),
     y = sg.map((g) => Math.log(g.ms / 1000 / g.empty));
   const B = n >= 60 ? Math.max(20, Math.ceil(n / 15)) : Math.max(4, Math.floor(n / 3));
-  // The grade slope within blocks: each block is compared with itself, so a change in speed over time does not enter it
+  // The grade and size slopes within blocks: each block is compared with itself, so a change in speed over time does not enter them
   const blockOf = (i) => Math.floor((i - (n % B)) / B);
   const grp = {};
   sg.forEach((_, i) => (grp[blockOf(i)] = grp[blockOf(i)] || []).push(i));
-  let sxy = 0,
-    sxx = 0;
+  let xx = 0,
+    xz = 0,
+    zz = 0,
+    xy = 0,
+    zy = 0;
   Object.values(grp).forEach((ix) => {
-    const mx = ix.reduce((a, i) => a + x[i], 0) / ix.length,
-      my = ix.reduce((a, i) => a + y[i], 0) / ix.length;
+    const m = (v) => ix.reduce((a, i) => a + v[i], 0) / ix.length,
+      mx = m(x),
+      mz = m(z),
+      my = m(y);
     ix.forEach((i) => {
-      sxy += (x[i] - mx) * (y[i] - my);
-      sxx += (x[i] - mx) ** 2;
+      const dx = x[i] - mx,
+        dz = z[i] - mz,
+        dy = y[i] - my;
+      xx += dx * dx;
+      xz += dx * dz;
+      zz += dz * dz;
+      xy += dx * dy;
+      zy += dz * dy;
     });
   });
-  let b = sxx > 1e-9 ? sxy / sxx : 0;
-  if (!(b > 0.1)) b = Math.log(1.5); // too little spread in the grades: use the typical 1.5x per grade
-  const a = y.reduce((s, yy, i) => s + yy - b * x[i], 0) / n;
-  const r = y.map((yy, i) => yy - (a + b * x[i]));
+  // Too little spread in the sizes within blocks: the size slope from one player's games (0.8: a 7×7 costs 2.4 times a 4×4
+  // per empty cell at the same grade). Too little spread in the grades: the typical 1.5 times per grade.
+  const Z_PRIOR = 0.8,
+    zW = 2; // the prior counts as this much size spread
+  const det = xx * (zz + zW) - xz * xz;
+  let b = det > 1e-9 ? ((zz + zW) * xy - xz * (zy + zW * Z_PRIOR)) / det : 0,
+    zs = det > 1e-9 ? (xx * (zy + zW * Z_PRIOR) - xz * xy) / det : Z_PRIOR;
+  if (!(b > 0.1)) {
+    b = Math.log(1.5);
+    zs = (zy - b * xz + zW * Z_PRIOR) / (zz + zW);
+  }
+  const a = y.reduce((s, yy, i) => s + yy - b * x[i] - zs * z[i], 0) / n;
+  const r = y.map((yy, i) => yy - (a + b * x[i] + zs * z[i]));
   const mid = median(r);
   const blocks = progIndexBlocks(
     progBlocks(
@@ -71,7 +94,7 @@ function progressData(list = games) {
     ),
     mid,
   );
-  return { n, B, a, b, mid, r, games: sg, blocks, perGrade: Math.exp(b) };
+  return { n, B, a, b, z: zs, mid, r, games: sg, blocks, perGrade: Math.exp(b), per7x7: Math.exp(zs * Math.log(49 / 16)) };
 }
 
 // Week by week: games, speed relative to the grade, errors, hints and the hardest solved puzzle
@@ -122,7 +145,7 @@ function progressMoves(list) {
     withCtx++;
     g.route.ctx.forEach(([L, ds, n]) => {
       if (L > 11 || !(ds > 0)) return;
-      (mv[L] = mv[L] || []).push({ r: Math.log(Math.max(0.5, ds / 10)) - Math.log(calTime(cal, L, n, false)), end: g.end });
+      (mv[L] = mv[L] || []).push({ r: Math.log(Math.max(0.5, ds / 10)) - Math.log(calTime(cal, L, n, false, g.rows * g.cols)), end: g.end });
     });
   });
   const rows = [],
@@ -222,8 +245,8 @@ function progressPanel() {
       progressChartHtml(pd) +
       `<p>${tr("Faded band: how sure each point is. Bands that do not overlap differ by more than chance.")}</p>` +
       `<p class="caveat">${tr(
-        "Each puzzle solved without hints is measured against what its grade usually costs you per empty cell, fitted to all your puzzles. For you, one grade harder takes {x} times as long. That is measured within blocks of puzzles played at the same time, so getting faster does not hide in it. New puzzles move the whole line a little, never its shape. Replayed puzzles are not counted.",
-        { x: dec(pd.perGrade) },
+        "Each puzzle solved without hints is measured against what its grade and board size usually cost you per empty cell, fitted to all your puzzles. For you, one grade harder takes {x} times as long, and a 7×7 takes {y} times as long per cell as a 4×4. Both are measured within blocks of puzzles played at the same time, so getting faster does not hide in them. New puzzles move the whole line a little, never its shape. Replayed puzzles are not counted.",
+        { x: dec(pd.perGrade), y: dec(pd.per7x7) },
       )}</p>`;
   html += `</div>`;
 

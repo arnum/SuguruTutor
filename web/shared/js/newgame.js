@@ -12,7 +12,135 @@ function sizeIcon(s) {
   for (let r = 1; r < s.r; r++) d += `M${ox} ${oy + r * cw}h${w}`;
   return `<svg viewBox="0 0 34 34" aria-hidden="true"><path d="${d}" stroke="var(--grid)" stroke-width="0.8"/><rect x="${ox}" y="${oy}" width="${w}" height="${h}" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>`;
 }
+// ---------- Play modes: choose everything yourself (Manual), or let the app pick the grade from your own games.
+// Your usual grade is the median of your latest 20 solved puzzles without hints on this size (all sizes with fewer than 5).
+//   Relax: a grade under your usual, so it goes smoothly. It stays put.
+//   Challenge: a little above your usual to start with, then it moves after each game in the mode (modeAfterGame): up after
+//     a solve without hints at or under your estimate, a little up when somewhat slower, down after a slow solve, hints or
+//     giving up. Kept per board size, in your own data (the guest has their own).
+//   Learn: puzzles that need your focus technique (the weakest in the statistics), or the one you have met least, around your
+//     usual grade, using "require a technique".
+const MODES = ["manual", "relax", "challenge", "learn"];
+const modeName = (m) => ({ manual: tr("Manual"), relax: tr("Relax"), challenge: tr("Challenge"), learn: tr("Learn") })[m];
+const sizeKey = (s) => s.c + "x" + s.r;
+function usualGrade(s) {
+  const micro = s.r * s.c <= 16, // 4×4 is a game of its own (core.js): its usual grade only from 4×4
+    clean = games.filter((g) => g.solved && !g.hints && !g.replay && g.value && isMicro(g) === micro);
+  let pool = clean.filter((g) => g.rows === s.r && g.cols === s.c).slice(-20),
+    same = true;
+  if (pool.length < 5) (pool = clean.slice(-20)), (same = false);
+  return pool.length >= 5 ? { g: median(pool.map(gradeFor)), same } : null;
+}
+function learnTech() {
+  try {
+    const fd = focusData();
+    if (fd.base) {
+      const w = fd.rows.filter((f) => f.score < -0.25 && focusReasons(f, true).length).sort((a, b) => a.score - b.score)[0];
+      if (w && w.L >= 2 && w.L <= 11) return { L: w.L, focus: true };
+    }
+  } catch (e) {}
+  const cal = myCal(),
+    L = [2, 3, 4, 5, 6].sort((a, b) => ((cal.lvl[a] || {}).n || 0) - ((cal.lvl[b] || {}).n || 0))[0];
+  return { L, focus: false };
+}
+function modePlan(mode) {
+  const s = SIZES[ui.sizeIdx],
+    u = usualGrade(s),
+    base = u ? u.g : ui.level + 0.5,
+    play = store.get("play", {}),
+    chal = (play.chal || {})[sizeKey(s)];
+  let t,
+    must = 0,
+    why;
+  const usual = u ? (u.same ? tr("your usual {g} on this size", { g: dec(u.g) }) : tr("your usual {g}", { g: dec(u.g) })) : "";
+  if (mode === "relax") {
+    t = Math.max(1, base - 1);
+    why = u ? tr("A grade under {usual}, so it goes smoothly.", { usual }) : tr("A gentle grade. After 5 solved puzzles without hints, it follows your own level.");
+  } else if (mode === "challenge") {
+    t = chal != null ? chal : base + 0.5;
+    why =
+      (u ? tr("A little above {usual}.", { usual }) : tr("A little above where you start.")) +
+      " " +
+      tr("It moves after each game: up after a solve without hints at or under your estimate, down after a slow solve, hints or giving up.");
+  } else if (mode === "learn") {
+    const lt = withScope(s.r * s.c <= 16 ? "micro" : "main", learnTech);
+    must = lt.L;
+    t = base;
+    why = lt.focus
+      ? tr("Puzzles that need {tech}, your focus area, around {usualg}.", { tech: LEVEL_TECH[must], usualg: dec(t) })
+      : tr("Puzzles that need {tech}, the technique you have met least, around {usualg}.", { tech: LEVEL_TECH[must], usualg: dec(t) });
+  }
+  // a 4×4 with regions of at most 4 cells goes no higher than grade 4
+  const top = s.r * s.c <= 16 && ui.maxRegion === 4 ? 4.9 : 9.9;
+  t = Math.round(Math.min(top, Math.max(1, t)) * 10) / 10;
+  return { mode, t, level: Math.floor(t), must, why };
+}
+function modeLine(pl) {
+  const s = SIZES[ui.sizeIdx];
+  return `<b>${modeName(pl.mode)}: ${esc(BAND[pl.level])} ${dec(pl.t)} · ${s.c}×${s.r}${pl.must ? " · " + esc(LEVEL_TECH[pl.must]) : ""}</b> ${esc(pl.why)}`;
+}
+// Start a game in the chosen mode: the grade within ±0.2 of the plan
+function startMode(mode = ui.mode) {
+  const pl = modePlan(mode),
+    s = SIZES[ui.sizeIdx],
+    d = Math.round((pl.t - pl.level) * 10);
+  generate(
+    {
+      rows: s.r,
+      cols: s.c,
+      level: pl.level,
+      must: pl.must,
+      seed: (Math.random() * 1e9) >>> 0,
+      budget: 20000,
+      lo: Math.max(0, d - 2),
+      hi: Math.min(9, d + 2),
+      nuance: "alle",
+      kind: "alle",
+      maxRegion: ui.maxRegion,
+      np: noPen(),
+    },
+    tr("{mode}: looking for {band} {g}", { mode: modeName(mode), band: BAND[pl.level], g: dec(pl.t) }) + (pl.must ? " " + tr("with {tech}", { tech: LEVEL_TECH[pl.must] }) : "") + " …",
+    (p) => {
+      loadPuzzle(p, null, { mode, modeT: pl.t });
+      go("game");
+      setMsg(tr("{mode}: {band} {g}.", { mode: modeName(mode), band: BAND[pBand(p)], g: levelValue(p) }) + (pl.must && p.rating.level !== pl.must ? " " + tr("No puzzle with {tech} turned up in time; this one needs {got}.", { tech: LEVEL_TECH[pl.must], got: LEVEL_TECH[p.rating.level] }) : ""), pl.must && p.rating.level !== pl.must ? "bad" : "");
+    },
+  );
+}
+// After a game in Challenge: the grade for the next one on this size
+function modeAfterGame(rec) {
+  if (rec.mode !== "challenge") return;
+  const key = rec.cols + "x" + rec.rows,
+    play = store.get("play", {}),
+    chal = Object.assign({}, play.chal),
+    old = chal[key] != null ? chal[key] : rec.modeT != null ? rec.modeT : gradeFor(rec),
+    r = rec.est ? rec.ms / 1000 / rec.est : 1;
+  const step = !rec.solved || rec.hints ? -0.4 : r <= 1 ? 0.3 : r <= 1.3 ? 0.1 : -0.2;
+  chal[key] = Math.round(Math.min(9.9, Math.max(1, old + step)) * 10) / 10;
+  store.set("play", Object.assign({}, play, { chal }));
+}
+// The New game screen: how to play first; in a mode the grade, nuance, type and technique are picked for you
+function renderModes() {
+  $("modes").innerHTML = MODES.map((m) => `<button type="button" data-m="${m}" aria-pressed="${m === ui.mode}">${modeName(m)}</button>`).join("");
+  $("modes")
+    .querySelectorAll("button")
+    .forEach(
+      (b) =>
+        (b.onclick = () => {
+          ui.mode = b.dataset.m;
+          saveUi();
+          renderNew();
+        }),
+    );
+  const manual = ui.mode === "manual";
+  $("manualOpts").hidden = !manual;
+  $("modeWhy").hidden = manual;
+  if (!manual) $("modeWhy").innerHTML = modeLine(modePlan(ui.mode));
+}
+
 function renderNew() {
+  if (!MODES.includes(ui.mode)) ui.mode = "manual";
+  renderModes();
   const solvedBy = {};
   games.forEach((g) => {
     if (g.solved) solvedBy[gBand(g)] = (solvedBy[gBand(g)] || 0) + 1;
@@ -119,7 +247,11 @@ function renderNew() {
         }),
     );
   const s = SIZES[ui.sizeIdx];
-  $("newNote").textContent = ui.must
+  $("newNote").textContent = ui.mode !== "manual"
+    ? s.r * s.c <= 16 && ui.maxRegion === 4
+      ? tr("On 4×4 with regions of at most 4 cells, grade 4 is the highest. Allow bigger regions for more.")
+      : ""
+    : ui.must
     ? tr("The puzzle will require {tech}. The difficulty will be as close to {g} as possible.", { tech: LEVEL_TECH[ui.must], g: ui.level }) +
       (ui.must >= 10 ? " " + GAME.rareNote : "")
     : s.r * s.c <= 16 && ui.maxRegion === 4 && ui.level > 4
@@ -142,9 +274,12 @@ function renderNew() {
           renderNew();
         }),
     );
-  $("startBtn").textContent = tr("Start") + " · " + BAND[ui.level] + " · " + s.c + "×" + s.r;
+  $("startBtn").textContent = tr("Start") + " · " + (ui.mode === "manual" ? BAND[ui.level] : modeName(ui.mode)) + " · " + s.c + "×" + s.r;
 }
-$("startBtn").onclick = () => replaceGame(() => generateFromUi());
+$("startBtn").onclick = () => replaceGame(() => (ui.mode === "manual" ? generateFromUi() : startMode()));
+// "New puzzle" after a game and in the menu: the same settings, or the same mode
+const newSameLabel = () => (ui.mode === "manual" ? BAND[ui.level] : modeName(ui.mode));
+const newSame = () => (ui.mode === "manual" ? generateFromUi() : startMode());
 
 // ---------- Generation in the background
 // The work happens in js/worker.js. If it cannot be started, the same runs in the page (slower to watch, same result).

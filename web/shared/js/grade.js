@@ -69,7 +69,8 @@ function stepEffort(s, pen = true) {
   }
   const R = base + shapeT + openT + workT;
   const memT = P.mem[m][T] * Math.log2(1 + (s.mem || 0));
-  const lenT = GW.len * Math.log2(1 + Math.max(0, (s.len || 1) - 1));
+  // length: log2 of the links for every step, plus a price per link by method (chains and what-ifs, GW.link)
+  const lenT = GW.len * Math.log2(1 + Math.max(0, (s.len || 1) - 1)) + (GW.link ? GW.link[T] : 0) * Math.max(0, (s.len || 1) - 1);
   const spot = GW.spot[Math.max(0, Math.min(4, s.opts == null ? 4 : s.opts))];
   const innerT = s.inner && s.inner.length ? GW.inner * Math.max(...s.inner.map((t) => GW.recog[t])) : 0;
   const nopenT = P.tech[m][T],
@@ -210,6 +211,25 @@ function gradeFromSteps(steps, pen = true) {
     series: ef.map((x, i) => (steps[i].L < 2 ? 0 : Math.round(x.e * 10) / 10)),
     lv: steps.map((s) => s.L * 100 + Math.min(99, s.opts || 1)), // for the personal time estimate
   };
+}
+// Campaign: the same puzzle started where technique L is the next step. The easiest way is walked from the start until its
+// next number needs L; the numbers placed on the way become givens. null if the way never needs L.
+function startAtTechnique(SE, p, L) {
+  const geo = SE.makeGeometry(p.rows, p.cols),
+    tu = createTutor(geo, p.region),
+    known = p.givens.slice();
+  for (let k = 0; k < known.length; k++) {
+    const h = tu.easiest(known);
+    if (!h) return null;
+    if (h.hardestLevel === L) {
+      const q = Object.assign({}, p, { givens: known.slice(), code: null, startAt: L });
+      const st = solveProfile(createTutor(geo, p.region), q.givens);
+      q.grade = st ? gradeFromSteps(st) : null;
+      return q;
+    }
+    known[h.cell] = h.v;
+  }
+  return null;
 }
 const NUANCES = [
   { id: "alle", label: tr("All"), lo: 0, hi: 9 },

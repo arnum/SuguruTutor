@@ -68,6 +68,7 @@ def js_block(w, src=SRC):
          "const GW = {",
          f"  fit: {w['fit']},",
          f"  recog: {arr(w['recog'])},",
+         f"  link: {arr(w.get('link', [0] * NTECH))},",
          f"  spot: {arr(w['spot'])},"]
     for k in SCALARS:
         L.append(f"  {k}: {num(w[k])},")
@@ -87,6 +88,7 @@ def java_block(w):
          "    // Pencil terms: [0] with pencil, [1] without pencil, [2] as you used to play; each a list per technique (derived from base, diff and anchor).",
          f"    static final int FIT = {w['fit']};",
          f"    static final double[] RECOG = {arr(w['recog'])};",
+         f"    static final double[] LINK = {arr(w.get('link', [0] * NTECH))};",
          f"    static final double[] SPOT = {arr(w['spot'])};"]
     for k in SCALARS:
         L.append(f"    static final double W_{k} = {num(w[k])};")

@@ -2,8 +2,9 @@
 // <gen:weights> Written by tools/grade/gen.py from tools/grade/weights.json. Edit there, not here.
 // Pencil terms: [with pencil, without pencil, as you used to play], each a list per technique (derived from base, diff and anchor).
 const GW = {
-  fit: 10,
+  fit: 11,
   recog: [0, 0, 0.6, 2.2, 2.9, 3, 3.7, 1.9, 2.2, 2.5, 2.8, 3.1, 3.5, 3.1],
+  link: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
   spot: [0.5, 0.5, 0.3, 0.15, 0],
   cap: 14.9,
   inner: 0.25,

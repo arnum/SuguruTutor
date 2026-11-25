@@ -1,12 +1,16 @@
-// Personal time curve: how long a move takes you, from which technique it needed and how many places there were to find it.
-//   time ≈ a · L^k · n^b      (L = technique level 1–11, n = number of possible moves at that level)
-// a, k and b are fitted to your own moves. The starting values (priors) come from one real player's 838 Suguru moves (Nov. 2026), so
+// Personal time curve: how long a move takes you, from which technique it needed, how many places there were to find it,
+// and how big the board is.
+//   time ≈ a · L^k · n^b · (cells/ref)^s      (L = technique level 1–11, n = number of possible moves at that level)
+// A bigger board takes longer to scan for every move: in one player's 3,900 moves (Nov. 2026) about √cells (s ≈ 0.45),
+// from 0.6 of the 6×6 time on 4×4 to 1.3 times on 10×8. ref is the board the starting values are for (6×6, Sudoku 9×9).
+// a, k, b and s are fitted to your own moves. The starting values (priors) come from one real player's 838 Suguru moves (Nov. 2026), so
 // the curve is sensible from the first game and moves towards your own numbers as data comes in. A game can give
 // its own starting values (GAME.calPrior); Sudoku does, because a move there takes longer to find.
 // On top of the curve each technique gets its own deviation (r), damped when there are few moves. The deviation is what the focus area shows.
 
-const CAL_PRIOR = Object.assign({ c: Math.log(3.1), k: 2.0, b: -0.31 }, GAME.calPrior || {});
-const CAL_STRENGTH = { c: 3, k: 25, b: 25 }; // how many "moves" the priors count as
+const CAL_PRIOR = Object.assign({ c: Math.log(3.1), k: 2.0, b: -0.31, s: 0.45, cells: 36 }, GAME.calPrior || {});
+const CAL_STRENGTH = { c: 3, k: 25, b: 25, s: 50 }; // how many "moves" the priors count as
+const calCells = (cells) => Math.log((cells || CAL_PRIOR.cells) / CAL_PRIOR.cells);
 const CAL_SHRINK = 4; // a technique with n moves gets n/(n+4) of its measured deviation
 
 // Moves that can be used for the curve: timed, not a hint, not an error and not placed while an error stood on the board
@@ -15,19 +19,23 @@ function calibRows(gs) {
   gs.forEach((g) => {
     // The summary (route.ctx) has the same moves and survives when the route analysis is cleared away
     if (g.route && g.route.ctx) {
+      const lc = calCells(g.rows * g.cols),
+        t = +new Date(g.end) || 0;
       g.route.ctx.forEach(([L, ds, n]) => {
         if (L > 11 || !(ds > 0)) return;
-        rows.push({ L, y: Math.log(Math.max(0.5, ds / 10)), ln: Math.log(Math.max(1, n || 1)), dt: ds / 10, one: (n || 1) <= 1 });
+        rows.push({ L, y: Math.log(Math.max(0.5, ds / 10)), ln: Math.log(Math.max(1, n || 1)), lc, t, dt: ds / 10, one: (n || 1) <= 1 });
       });
       return;
     }
     if (!g.moves) return;
     markErrors(g.moves);
+    const lc = calCells(g.rows * g.cols),
+      t = +new Date(g.end) || 0;
     g.moves.forEach((m) => {
       if (!judged(m) || m.cls === "wrong" || m.cls === "hint" || !(m.dt > 0)) return;
       const L = moveLevel(m);
       if (!L || L > 11) return;
-      rows.push({ L, y: Math.log(Math.max(0.5, m.dt / 1000)), ln: Math.log(Math.max(1, m.nAvail || 1)), dt: m.dt / 1000, one: (m.nAvail || 1) <= 1 });
+      rows.push({ L, y: Math.log(Math.max(0.5, m.dt / 1000)), ln: Math.log(Math.max(1, m.nAvail || 1)), lc, t, dt: m.dt / 1000, one: (m.nAvail || 1) <= 1 });
     });
   });
   return rows;
@@ -35,36 +43,37 @@ function calibRows(gs) {
 
 // Least squares with priors (ridge towards the starting values)
 function fitCalib(rows) {
-  const P = [CAL_PRIOR.c, CAL_PRIOR.k, CAL_PRIOR.b],
-    lam = [CAL_STRENGTH.c, CAL_STRENGTH.k, CAL_STRENGTH.b];
-  const A = [0, 1, 2].map(() => [0, 0, 0, 0]);
+  const N = 4,
+    P = [CAL_PRIOR.c, CAL_PRIOR.k, CAL_PRIOR.b, CAL_PRIOR.s],
+    lam = [CAL_STRENGTH.c, CAL_STRENGTH.k, CAL_STRENGTH.b, CAL_STRENGTH.s];
+  const A = [0, 1, 2, 3].map(() => [0, 0, 0, 0, 0]);
   rows.forEach((r) => {
-    const x = [1, Math.log(r.L), r.ln];
-    for (let i = 0; i < 3; i++) {
-      for (let j = 0; j < 3; j++) A[i][j] += x[i] * x[j];
-      A[i][3] += x[i] * r.y;
+    const x = [1, Math.log(r.L), r.ln, r.lc || 0];
+    for (let i = 0; i < N; i++) {
+      for (let j = 0; j < N; j++) A[i][j] += x[i] * x[j];
+      A[i][N] += x[i] * r.y;
     }
   });
-  // The prior on k and b is weighted by the spread they normally have in the data, so "25 moves" means the same for all three
-  const sx = [1, 0.5, 0.6];
-  for (let i = 0; i < 3; i++) {
+  // The prior on k, b and s is weighted by the spread they normally have in the data, so "25 moves" means the same for all
+  const sx = [1, 0.5, 0.6, 0.3];
+  for (let i = 0; i < N; i++) {
     const w = lam[i] * sx[i] * sx[i];
     A[i][i] += w;
-    A[i][3] += w * P[i];
+    A[i][N] += w * P[i];
   }
-  for (let i = 0; i < 3; i++)
-    for (let r = 0; r < 3; r++)
+  for (let i = 0; i < N; i++)
+    for (let r = 0; r < N; r++)
       if (r !== i) {
         const f = A[r][i] / A[i][i];
-        for (let c = i; c < 4; c++) A[r][c] -= f * A[i][c];
+        for (let c = i; c <= N; c++) A[r][c] -= f * A[i][c];
       }
-  const [c, k, b] = A.map((r, i) => r[3] / r[i]);
+  const [c, k, b, s] = A.map((r, i) => r[N] / r[i]);
   const lvl = {};
   rows.forEach((r) => {
     const e = (lvl[r.L] = lvl[r.L] || { n: 0, sum: 0, n1: 0 });
     e.n++;
     if (r.one) e.n1++;
-    e.sum += r.y - (c + k * Math.log(r.L) + b * r.ln);
+    e.sum += r.y - (c + k * Math.log(r.L) + b * r.ln + s * (r.lc || 0));
   });
   for (const L in lvl) {
     const e = lvl[L];
@@ -76,28 +85,41 @@ function fitCalib(rows) {
   const sq = [0, 0, 0, 0];
   rows.forEach((r) => {
     const g = r.L === 1 ? 0 : 2,
-      d = r.y - (c + k * Math.log(r.L) + b * r.ln + (lvl[r.L] ? lvl[r.L].r : 0));
+      d = r.y - (c + k * Math.log(r.L) + b * r.ln + s * (r.lc || 0) + (lvl[r.L] ? lvl[r.L].r : 0));
     sq[g] += d * d;
     sq[g + 1]++;
   });
   const s2 = (i, prior) => (sq[i] + 10 * prior) / (sq[i + 1] + 10);
-  return { c, k, b, lvl, n: rows.length, s2: [s2(0, 0.6), s2(2, 1.3)] };
+  return { c, k, b, s, lvl, n: rows.length, s2: [s2(0, 0.6), s2(2, 1.3)] };
 }
 
-// Expected time (seconds) for a move at level L with n options. own=true adds your own deviation for the technique on top.
-function calTime(cal, L, n = 1, own = true) {
+// Expected time (seconds) for a move at level L with n options on a board of that many cells (default: the reference board).
+// own=true adds your own deviation for the technique on top.
+function calTime(cal, L, n = 1, own = true, cells) {
   const r = own && cal.lvl[L] ? cal.lvl[L].r : 0;
-  return Math.exp(cal.c + cal.k * Math.log(L) + cal.b * Math.log(Math.max(1, n)) + r);
+  return Math.exp(cal.c + cal.k * Math.log(L) + cal.b * Math.log(Math.max(1, n)) + (cal.s || 0) * calCells(cells) + r);
 }
 // How much more each rung on the ladder costs (from level L to L+1), as a number to show
 const calStep = (cal, L) => Math.pow((L + 1) / L, cal.k);
 
-// Your curve from the latest 60 games, recomputed when new games come in
+// Your curve from your latest moves of each technique: the latest 1,000 easy numbers and the latest 60 moves of every other
+// technique, recomputed when new games come in. Not the latest games: after a spell of easy games those would hold
+// almost no pairs or chains, and the curve would forget your speed with them.
+const CAL_KEEP = (L) => (L === 1 ? 1000 : 60);
 let CAL = null;
 function myCal() {
-  const key = games.length + ":" + (games.length ? games[games.length - 1].id : "");
+  const own = ownGames(),
+    key = (microNow() ? "4x4:" : "") + own.length + ":" + (own.length ? own[own.length - 1].id : "");
   if (!CAL || CAL.key !== key) {
-    CAL = fitCalib(calibRows(games.slice(-60)));
+    const rows = calibRows(ownGames()),
+      seen = {},
+      keep = [];
+    for (let i = rows.length - 1; i >= 0; i--) {
+      const L = rows[i].L;
+      seen[L] = (seen[L] || 0) + 1;
+      if (seen[L] <= CAL_KEEP(L)) keep.push(rows[i]);
+    }
+    CAL = fitCalib(keep.reverse());
     CAL.key = key;
   }
   return CAL;
@@ -106,13 +128,34 @@ function myCal() {
 function stepCodes(steps) {
   return steps.map((s) => s.L * 100 + Math.min(99, s.opts || 1));
 }
-// Personal time estimate (seconds) for a whole puzzle: the sum of the average move for each step
-function estimateSec(cal, lv) {
-  if (!cal || !lv || !lv.length) return null;
+// The sum of the average move for each step of a puzzle on a board of that many cells (seconds)
+function sumOfMeans(cal, lv, cells) {
   return lv.reduce((a, x) => {
     const L = Math.floor(x / 100);
-    return a + calTime(cal, L, x % 100) * Math.exp((L === 1 ? cal.s2[0] : cal.s2[1]) / 2);
+    return a + calTime(cal, L, x % 100, true, cells) * Math.exp((L === 1 ? cal.s2[0] : cal.s2[1]) / 2);
   }, 0);
+}
+// Puzzle times are skewed: a few long searches pull the average up, so most puzzles come in under the sum of the average
+// moves (in one player's latest 60 puzzles, 0.82 of it). The estimate is therefore the typical puzzle: that sum times how
+// your latest 60 puzzles have come out against it (the median). Faster than the estimate is then as common as slower.
+let SKEW = null;
+function calSkew(cal) {
+  if (SKEW && SKEW.cal === cal) return SKEW.q;
+  const r = ownGames()
+    .filter((g) => g.solved && !g.hints && !g.replay && g.lv && g.lv.length && g.ms > 0)
+    .slice(-60)
+    .map((g) => g.ms / 1000 / sumOfMeans(cal, g.lv, g.rows * g.cols))
+    .filter((x) => isFinite(x) && x > 0)
+    .sort((a, b) => a - b);
+  const q = r.length >= 10 ? Math.max(0.6, Math.min(1.2, r[Math.floor(r.length / 2)])) : 1;
+  SKEW = { cal, q };
+  return q;
+}
+// Personal time estimate (seconds) for a whole puzzle on a board of that many cells: what a puzzle with these steps
+// typically takes you
+function estimateSec(cal, lv, cells) {
+  if (!cal || !lv || !lv.length) return null;
+  return sumOfMeans(cal, lv, cells) * calSkew(cal);
 }
 
 // Estimate and comparison as text (used in the "why" sheet, after solving and in the statistics)
@@ -123,13 +166,13 @@ function estCompare(ms, est) {
   if (r <= 0.87) return tr("You were faster: {pct}% of the estimate.", { pct: Math.round(100 * r) });
   return tr("That was about right.");
 }
-function estLineHtml(lv) {
+function estLineHtml(lv, cells) {
   const cal = myCal(),
-    est = estimateSec(cal, lv);
+    est = estimateSec(cal, lv, cells);
   if (!est) return "";
   return (
     `<p class="estline"><b>${tr("Your time estimate: about {t}.", { t: estFmt(est) })}</b> ` +
-    tr("The sum of your typical time for each step in the puzzle, based on {n} of your moves.", { n: cal.n }) +
+    tr("Your time for each step in the puzzle, on this board size, from {n} of your moves, scaled to how your puzzles usually turn out.", { n: cal.n }) +
     (cal.n < 100 ? " " + tr("Until you have played a bit more, it relies mostly on starting values.") : "") +
     `</p>`
   );
@@ -137,10 +180,10 @@ function estLineHtml(lv) {
 // How well does the estimate hit? Your latest solved puzzles with an estimate
 function estStats(k = 12) {
   const cal = myCal();
-  const r = games
+  const r = ownGames()
     .filter((g) => g.solved && g.lv && g.lv.length)
     .slice(-k)
-    .map((g) => g.ms / 1000 / (g.est || estimateSec(cal, g.lv)))
+    .map((g) => g.ms / 1000 / (g.est || estimateSec(cal, g.lv, g.rows * g.cols)))
     .filter((x) => isFinite(x) && x > 0)
     .sort((a, b) => a - b);
   if (r.length < 4) return null;
@@ -155,9 +198,9 @@ function estStats(k = 12) {
 // the deviation is now strongly damped (n + 12) and needs at least 5 puzzles with the same hardest technique.
 let PGM = null;
 function personalModel() {
-  const key = games.length + ":" + (games.length ? games[games.length - 1].id : "");
+  const key = (microNow() ? "4x4:" : "") + games.length + ":" + (games.length ? games[games.length - 1].id : "");
   if (PGM && PGM.key === key) return PGM.m;
-  const hist = games.filter((g) => g.solved && !g.hints && g.empty > 0 && g.ms > 0 && g.value && g.tech).slice(-80);
+  const hist = ownGames().filter((g) => g.solved && !g.hints && g.empty > 0 && g.ms > 0 && g.value && g.tech).slice(-80);
   let m = null;
   if (hist.length >= 10) {
     const x = hist.map(gradeFor),

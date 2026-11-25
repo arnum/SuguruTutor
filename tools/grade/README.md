@@ -76,6 +76,20 @@ gives a contradiction straight away is taken first in the first three steps, so 
 `inner` was lowered at the same time from 0.6 to 0.25: a pair inside a short what-if must not cost more than many steps.
 In the route analysis the four kinds are one tier when a move is compared with the easiest at that moment.
 
+## The next number by price (25 Nov. 2026)
+
+The simulated solver no longer takes the easiest technique first. It takes the cheapest way to a number, priced with
+`whatIfCost` (the same terms as `stepEffort` "as you used to play": recognition, length, techniques inside, memory). It
+still tries the techniques from the easiest, but once a way is found, harder techniques are searched as long as their
+floor (the method at its shortest) is below its price. Steps that only remove options are applied in full and searched on
+from there (as before), and where they lead is compared with harder techniques that give a number directly. A way's price
+is its dearest step. `link` (per technique) adds a price per link beyond the first; it is 0 until the times support it.
+The what-if searches get the price found as a cap, so kinds that cannot get under it are skipped and runs are cut at
+about twice the links they can afford. JS and Java do the same, and the parity test covers it.
+
+**Region shapes:** a cell that touches every cell of a region one smaller than its own region is a single of its own kind
+(`shape`, score 0.5, technique 0). It builds on nothing on the board, so it has no dependencies inside what-if chains.
+
 ## How to calibrate
 
 1. Export the statistics from the app (Settings, "Export statistics") and put the file somewhere outside the repo.

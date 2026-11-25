@@ -200,15 +200,16 @@ const GAME = {
   rareNote: tr("This technique is rare and almost only appears on 8×8."),
   cellRange: (n) => tr("The region has {n} cells, so the cell can be 1–{n}.", { n }),
   // Did the number v in cell c break a rule on the board vis? The text, otherwise null.
-  // short: only what was wrong (the route analysis's list of errors), without the advice afterwards
+  // short: only what was wrong (the route analysis's list of errors), without the advice afterwards. nm null: no cell names
+  // (the board is shown next to the text)
   ruleBreak(P2, vis, c, v, nm, short) {
     const reg = P2.d.region,
       cells = reg.map((r, i) => i).filter((i) => reg[i] === reg[c]);
     const touch = P2.G.king[c].find((x) => vis[x] === v);
-    if (touch !== undefined) return tr("It touched {nb} = {v}.", { nb: nm(touch), v }) + (short ? "" : " " + CHECK_TIP);
+    if (touch !== undefined) return (nm ? tr("It touched {nb} = {v}.", { nb: nm(touch), v }) : tr("It touched another {v}.", { v })) + (short ? "" : " " + CHECK_TIP);
     const dup = cells.find((x) => x !== c && vis[x] === v);
     if (dup !== undefined)
-      return tr("The region already had {v} in {nb}.", { v, nb: nm(dup) }) + (short ? "" : " " + tr("Check which numbers the region is missing before placing one."));
+      return (nm ? tr("The region already had {v} in {nb}.", { v, nb: nm(dup) }) : tr("The region already had a {v}.", { v })) + (short ? "" : " " + tr("Check which numbers the region is missing before placing one."));
     if (v > cells.length) return tr("The region has only {n} cells, so {v} cannot go there.", { n: cells.length, v });
     return null;
   },

@@ -1,8 +1,10 @@
 {
   "_about": "Sudoku: all the numbers in the difficulty. Edit here, then run: python3 tools/grade/gen.py (writes web/sudoku/js/gradew.js). Raise fit when the numbers change. The technique numbers are the same as in Suguru: 0 naked single, 1 hidden single, 2 locked candidates, 3 naked pair, 4 hidden pair, 5 naked triple, 6 hidden triple, 7 single-number chain (X-wing etc.), 8 xy chain (XY-wing etc.), 9 mixed chain, 10 single-number what-if, 11 what-if with singles, 12 both ways, 13 what-if with techniques.",
-  "fit": 2,
+  "fit": 3,
   "_recog": "Recognition per technique. Starting values (21 Nov. 2026) from Sudoku Explainer's order (locked candidates 2.6-2.8; naked pair 3.0; X-wing 3.2; hidden pair 3.4; naked triple 3.6; hidden triple 4.0; XY-wing 4.2; forcing chains 7-8; nishio 7.5-8.5; cell/region chains 8-9; dynamic chains 8.5-9.5), put on the same scale as Suguru. Not fitted to played times yet.",
   "recog": [0, 0, 0.6, 1.8, 2.4, 3.0, 3.6, 2.1, 2.8, 3.2, 3.4, 3.6, 3.8, 3.6],
+  "_link": "Length by method: each link of the reasoning beyond the first costs this much, per technique (chains and what-ifs). On top of len (log2 of the length, for every step). A link in a what-if with techniques asks more than a link in a single-number chain (25 Nov. 2026).",
+  "link": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
   "_inner": "Techniques inside a what-if: inner x the recognition of the hardest of them.",
   "inner": 0.6,
   "_vis": "How well this particular case hides: vis x (shape + openness + work).",

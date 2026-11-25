@@ -2,6 +2,7 @@
 
 setInterval(() => {
   if (view !== "game" || !P || solved) return;
+  if (meta && meta.trial) return trialTick();
   const t = $("timer");
   if (t) t.textContent = fmt(elapsed());
 }, 1000);
@@ -13,6 +14,7 @@ document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "hidden") saveCurrent();
 });
 window.addEventListener("pagehide", saveCurrent);
+if (GUEST_ENDED) setTimeout(() => toast(tr("Guest mode ended after 30 minutes away. Welcome back.")), 600);
 // a shared link is the app's address + "#" + the puzzle code (SU1-… in Suguru, SD1-… in Sudoku)
 const CODE_HASH = new RegExp("^#" + GAME.codePrefix, "i");
 window.addEventListener("hashchange", () => {
@@ -106,7 +108,7 @@ function start(hot) {
     openFromHash();
   } else go(hot && hot.view === "game" && P ? "game" : "home");
   if ("serviceWorker" in navigator && !FRAMED && (location.protocol === "https:" || location.hostname === "localhost")) {
-    navigator.serviceWorker.register("sw.js").catch(() => {});
+    navigator.serviceWorker.register("sw.js?b=" + encodeURIComponent(APP_BUILD)).catch(() => {}); // a new build = a new address = a fresh install (sw.js)
   }
 }
 window.claude?.hot?.ready ? window.claude.hot.ready(start) : start(window.claude?.hot?.data ?? {});

@@ -1,8 +1,7 @@
 // Debug notes: a short comment on a game, e.g. "the route analysis shows a board that never existed" or
 // "felt much harder than the grade". The note is stored in the game (field dbg) and comes along in the ordinary export.
-// A single game can also be copied as a "debug package" (game, moves, analysis, notes, version) that can be pasted into a
+// A single game can also be copied as a "debug package" (game, moves, analysis, notes, build) that can be pasted into a
 // bug report. The buttons are small and grey, so they do not get in the way.
-const APP_BUILD = "2026-11-24b";
 const NOTE_AREAS = () => [
   ["route", tr("Route analysis")],
   ["grade", tr("Grading")],
@@ -18,7 +17,15 @@ function bindNoteLinks(root, g, back) {
   root.querySelectorAll(".notelink").forEach(
     (b) =>
       (b.onclick = () => {
-        if (b.dataset.copy) return copyText(JSON.stringify(debugPacket(g)), tr("Debug packet copied"));
+        if (b.dataset.copy)
+          // the game's notes come along, so they count as copied
+          return copyText(JSON.stringify(debugPacket(g)), tr("Debug packet copied")).then(() => {
+            if (g && g.dbg && g.dbg.some((n) => !n.sent)) {
+              const t = new Date().toISOString();
+              g.dbg.forEach((n) => n.sent || (n.sent = t));
+              saveGames();
+            }
+          });
         closeSheet();
         setTimeout(() => noteSheet(g, b.dataset.area, back), 280);
       }),
@@ -107,10 +114,10 @@ async function copyText(text, ok) {
     );
   }
 }
-// All notes together (for the settings): game context + the notes
-function allNotes() {
+// All notes together (for the settings): game context + the notes. fresh: only notes not copied yet.
+function allNotes(fresh) {
   return games
-    .filter((g) => g.dbg && g.dbg.length)
+    .filter((g) => g.dbg && g.dbg.length && (!fresh || hasNewNote(g)))
     // the moves ([cell, number, time in ms]) come along, so a note about a move can be recreated exactly without a full export
     .map((g) => ({
       id: g.id,
@@ -119,7 +126,102 @@ function allNotes() {
       value: g.value,
       size: g.cols + "x" + g.rows,
       solved: g.solved,
-      notes: g.dbg,
+      notes: fresh ? g.dbg.filter((n) => !n.sent) : g.dbg,
       moves: g.moves ? g.moves.map((m) => [m.c, m.v, m.t]) : null,
     }));
+}
+
+// ---------- Debug notes once copied (25 Nov. 2026): a copied note is marked as sent, so the next copy has only new ones and
+// its game no longer keeps its route details for the note's sake; sent notes can be deleted.
+function noteCount() {
+  let all = 0,
+    fresh = 0,
+    gamesNew = 0;
+  games.forEach((g) => {
+    if (!g.dbg) return;
+    all += g.dbg.length;
+    const f = g.dbg.filter((n) => !n.sent).length;
+    fresh += f;
+    if (f) gamesNew++;
+  });
+  return { all, fresh, sent: all - fresh, gamesNew };
+}
+function markNotesSent() {
+  const t = new Date().toISOString();
+  let n = 0;
+  games.forEach((g) =>
+    (g.dbg || []).forEach((x) => {
+      if (!x.sent) (x.sent = t), n++;
+    }),
+  );
+  if (n) saveGames();
+  return n;
+}
+function deleteSentNotes() {
+  let n = 0;
+  games.forEach((g) => {
+    if (!g.dbg) return;
+    const keep = g.dbg.filter((x) => !x.sent);
+    n += g.dbg.length - keep.length;
+    if (keep.length) g.dbg = keep;
+    else delete g.dbg;
+  });
+  if (n) saveGames();
+  return n;
+}
+function notesSheet() {
+  const c = noteCount();
+  const packet = (fresh) => JSON.stringify({ app: APP.id, kind: "debug-notes", build: APP_BUILD, exported: new Date().toISOString(), games: allNotes(fresh) });
+  const copy = async (fresh) => {
+    const text = packet(fresh);
+    try {
+      await navigator.clipboard.writeText(text);
+      markNotesSent();
+      closeSheet();
+      toast(tr("Notes copied. They are marked as copied."));
+      renderSettings();
+    } catch (e) {
+      copyText(text); // shows the text to copy by hand; the notes stay new
+    }
+  };
+  openSheet(
+    `<h2>${tr("Debug notes")}</h2>` +
+      `<p class="sub">${
+        c.fresh
+          ? tr("{n} new on {g} games, {s} copied before.", { n: c.fresh, g: c.gamesNew, s: c.sent })
+          : tr("All {n} notes have been copied.", { n: c.all })
+      }</p>` +
+      `<p class="caveat">${tr("Copying marks the notes as copied, so the next copy has only new ones, and their games no longer keep their route analysis for the notes' sake. Exporting the statistics counts as copying too.")}</p>` +
+      `<div class="actions">` +
+      (c.fresh ? `<button class="primary big" type="button" id="nNew">${tr("Copy new notes")}</button>` : "") +
+      `<button class="secondary" type="button" id="nAll">${tr("Copy all notes")}</button>` +
+      (c.sent ? `<button class="secondary danger" type="button" id="nDel">${c.sent === 1 ? tr("Delete 1 copied note") : tr("Delete {n} copied notes", { n: c.sent })}</button>` : "") +
+      `<button class="secondary" type="button" id="nClose">${tr("Close")}</button></div>`,
+    (b) => {
+      const on = (id, f) => {
+        const x = b.querySelector("#" + id);
+        if (x) x.onclick = f;
+      };
+      on("nNew", () => copy(true));
+      on("nAll", () => copy(false));
+      on("nDel", () => {
+        closeSheet();
+        setTimeout(
+          () =>
+            confirmSheet({
+              title: tr("Delete the copied notes?"),
+              text: tr("The notes that have been copied are deleted from their games. New notes are kept."),
+              ok: tr("Delete"),
+              onOk: () => {
+                const n = deleteSentNotes();
+                toast(n === 1 ? tr("1 note deleted") : tr("{n} notes deleted", { n }));
+                renderSettings();
+              },
+            }),
+          280,
+        );
+      });
+      on("nClose", closeSheet);
+    },
+  );
 }

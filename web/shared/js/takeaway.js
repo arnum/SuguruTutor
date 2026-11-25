@@ -46,9 +46,15 @@ function takeaway(g) {
     if (!text) return;
     const e = L.e,
       tech = LEVEL_TECH[e.L];
-    const head = L.parts.some((x) => x.type !== "self")
-      ? tr("{cell} = {v} ({tech}) was waiting during {parts}.", { cell: nm(e.c), v: e.v, tech, parts: lessonParts(L) })
-      : tr("You searched {time} for {cell} = {v} ({tech}).", { cell: nm(e.c), v: e.v, tech, time: fmt(L.selfDt * 1000) });
+    // the lesson's number has the colour it has on the board that is shown first (your own number in a long search: orange)
+    const tag = cvTag(nm, e.c, e.v, L.mode === "easy" ? "var(--warn)" : "var(--indigo)");
+    const head = settings.coords
+      ? L.parts.some((x) => x.type !== "self")
+        ? tr("{cell} = {v} ({tech}) was waiting during {parts}.", { cell: nm(e.c), v: e.v, tech, parts: lessonParts(L) })
+        : tr("You searched {time} for {cell} = {v} ({tech}).", { cell: nm(e.c), v: e.v, tech, time: fmt(L.selfDt * 1000) })
+      : L.parts.some((x) => x.type !== "self")
+        ? tr("{num} ({tech}) was waiting during {parts}.", { num: tag, tech, parts: lessonParts(L) })
+        : tr("You searched {time} for {num} ({tech}).", { num: tag, tech, time: fmt(L.selfDt * 1000) });
     // advice about exactly this number when there is some, otherwise how to spot the technique
     const tip = (e.L === 1 && spotTip(g, e, L.parts[0].i)) || TECH_TIP[e.L] || null;
     cands.push({ cost: L.cost, prio: 2, mode: L.mode, i: L.board, L: e.L, cell: e.c, text, head, tip });
@@ -84,7 +90,7 @@ function takeaway(g) {
       L: null,
       cell: m.c,
       text: tr("Move {k}: {cell} = {v} was wrong.", { k: m.i + 1, cell: nm(m.c), v: m.v }) + " " + why,
-      head: tr("{cell} = {v} was wrong.", { cell: nm(m.c), v: m.v }),
+      head: settings.coords ? tr("{cell} = {v} was wrong.", { cell: nm(m.c), v: m.v }) : tr("{num} was wrong.", { num: cvTag(nm, m.c, m.v, "var(--bad)") }),
       tip: why,
     });
   });
@@ -115,16 +121,17 @@ function lapseInfo(g, i) {
     const h = P2.tu.easiest(known);
     const nm = (c) => "abcdefghij"[c % P2.d.cols] + (Math.floor(c / P2.d.cols) + 1);
     const t = h && h.hardestLevel === 1 ? spotTip(g, { c: h.cell, v: h.v, L: 1 }, i) : null;
-    return t ? { tip: tr("For example {cell} = {v}:", { cell: nm(h.cell), v: h.v }) + " " + t, cell: h.cell } : { tip: GAME.stuckTip };
+    const ex = settings.coords ? tr("For example {cell} = {v}:", { cell: nm(h.cell), v: h.v }) : tr("For example {num}:", { num: cvTag(nm, h.cell, h.v, "var(--indigo)") });
+    return t ? { tip: ex + " " + t, cell: h.cell } : { tip: GAME.stuckTip };
   } catch (e) {
     return { tip: GAME.stuckTip };
   }
 }
 // The two boards of a moment and what the switch calls them (a moment with one board has no switch)
-const momentSwitch = (mode) =>
+const momentSwitch = (mode, L) =>
   ({
     cmp: [tr("Your move"), tr("Easier then")],
-    easy: [tr("What you found"), tr("Easy numbers then")],
+    easy: [tr("What you found"), L > 1 ? tr("Just as easy then") : tr("Easy numbers then")],
     err: [tr("What you placed"), tr("The right number")],
   })[mode] || null;
 // The board comes first: up to three moments, each on its board, with what happened in one line. On a phone one board at a
@@ -147,7 +154,7 @@ function afterGameHtml(g) {
     `<div class="moments">` +
     t.moments
       .map((m, k) => {
-        const sw = momentSwitch(m.mode);
+        const sw = momentSwitch(m.mode, m.L);
         return (
           `<div class="moment" data-k="${k}" data-show="1"${k ? " hidden" : ""}>` +
           `<div class="mhead"><b>${tr("Move {k}", { k: m.i + 1 })}</b>` +
@@ -180,6 +187,8 @@ function bindAfterGame(root, g) {
     } catch (e) {
       el.innerHTML = "";
     }
+    // only one board after all (nothing else was ready): no switch
+    if (el.querySelector(".mbpair.one")) mo.querySelectorAll(".mswitch").forEach((x) => x.remove());
   };
   const show = (mo, s) => {
     mo.dataset.show = s;
@@ -189,6 +198,7 @@ function bindAfterGame(root, g) {
     mo.querySelectorAll(".mswitch button").forEach((b) => (b.onclick = () => show(mo, +b.dataset.s)));
     // tapping the board shows the other one
     mo.addEventListener("click", (e) => {
+      if (e.target.closest(".mbstepnav")) return; // stepping through an explanation
       if (e.target.closest(".mbpair:not(.one)") && mo.querySelector(".mswitch")) show(mo, mo.dataset.show === "1" ? 0 : 1);
     });
   });
@@ -214,7 +224,7 @@ function errWhy(g, m, nm) {
   if (known.unsure.length) return GAME.checkTip;
   const vis = known.slice();
   known.wrong.forEach(([c, v]) => (vis[c] = v)); // wrong numbers that stood on the board too
-  const broke = GAME.ruleBreak(P2, vis, m.c, m.v, nm);
+  const broke = GAME.ruleBreak(P2, vis, m.c, m.v, settings.coords ? nm : null);
   if (broke) return broke;
   return (
     tr("Nothing on the board ruled it out directly, so it was the reasoning that went wrong. The cell had to be {right}.", { right: P2.sol[m.c] }) +

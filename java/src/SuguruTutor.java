@@ -23,7 +23,7 @@ public final class SuguruTutor {
         int[] cand, val; Broken broken;
         St copy() { St t = new St(); t.cand = cand.clone(); t.val = val.clone(); t.broken = broken; return t; }
     }
-    static final int LAST = 0, HIDDEN = 1, NAKED = 2;
+    static final int LAST = 0, HIDDEN = 1, NAKED = 2, SHAPE = 3;
     static final class Single { final int kind, cell, v, region; final double score;
         Single(int kind, int cell, int v, int region, double score) { this.kind = kind; this.cell = cell; this.v = v; this.region = region; this.score = score; } }
     static final class Target { final int cell, mask; Target(int cell, int mask) { this.cell = cell; this.mask = mask; } }
@@ -110,7 +110,19 @@ public final class SuguruTutor {
             }
             peers[a] = SuguruEngine.toArray(p);
         }
+        // Region shapes (as tutor.js): a cell that touches every cell of a region one smaller than its own region is its own
+        // region's largest number, whatever else is on the board. Counted as a single.
+        shapeV = new int[n]; shapeVia = new int[n];
+        Arrays.fill(shapeVia, -1);
+        for (int c = 0; c < n; c++)
+            for (int r = 0; r < nr && shapeV[c] == 0; r++) {
+                if (RC[r].length != size[c] - 1 || region[c] == r) continue;
+                boolean all = true;
+                for (int o : RC[r]) if (o == c || Math.abs(c / cols - o / cols) > 1 || Math.abs(c % cols - o % cols) > 1) { all = false; break; }
+                if (all) { shapeV[c] = size[c]; shapeVia[c] = r; }
+            }
     }
+    int[] shapeV, shapeVia;
 
     boolean peer(int a, int b) { return peerM[a * n + b]; }
     static int pc(int x) { return Integer.bitCount(x); }
@@ -158,6 +170,8 @@ public final class SuguruTutor {
             }
         }
         for (int c = 0; c < n; c++)
+            if (shapeV[c] != 0 && s.val[c] == 0 && (s.cand[c] & (1 << shapeV[c])) != 0) add(best, new Single(SHAPE, c, shapeV[c], region[c], 0.5));
+        for (int c = 0; c < n; c++)
             if (s.val[c] == 0 && pc(s.cand[c]) == 1) add(best, new Single(NAKED, c, ctz(s.cand[c]), region[c], 1.5 + size[c] / 10.0));
         List<Single> out = new ArrayList<>(best.values());
         out.sort((a, b) -> a.score != b.score ? Double.compare(a.score, b.score) : Integer.compare(a.cell, b.cell));
@@ -171,6 +185,7 @@ public final class SuguruTutor {
         List<Integer> empty = new ArrayList<>();
         for (int c : RC[r]) if (s.val[c] == 0) empty.add(c);
         if (empty.size() == 1 && empty.get(0) == cell && (s.cand[cell] & (1 << v)) != 0) return LAST;
+        if (shapeV[cell] == v && (s.cand[cell] & (1 << v)) != 0) return SHAPE;
         List<Integer> spots = new ArrayList<>();
         for (int c : empty) if ((s.cand[c] & (1 << v)) != 0) spots.add(c);
         if (spots.size() == 1 && spots.get(0) == cell && !regionHas(s, r, v)) return HIDDEN;
@@ -455,6 +470,7 @@ public final class SuguruTutor {
         }
         void singleDeps(Single x, St b, Set<Integer> deps) {
             if (x.kind == NAKED) depsOfCell(x.cell, b, deps);
+            else if (x.kind == SHAPE) { /* a region shape builds on nothing on the board */ }
             else for (int o : RC[x.region]) if (o != x.cell && s0.val[o] == 0 && (x.kind == LAST || (s0.cand[o] & (1 << x.v)) != 0)) {
                 if (placedBy.containsKey(o)) deps.add(placedBy.get(o));
                 else { Integer y = removedBy.get(o * 8 + x.v); if (y != null) deps.add(y); }
@@ -580,12 +596,13 @@ public final class SuguruTutor {
             return peakLive(R.nodes, rel, root);
         }
     }
-    Branch runBranch(St s, int c0, int v0) {
+    Branch runBranch(St s, int c0, int v0) { return runBranch(s, c0, v0, 400); }
+    Branch runBranch(St s, int c0, int v0, int maxSteps) {
         Run R = new Run(s);
         St b = R.t.copy();
         place(R.t, c0, v0); R.record(b, R.t, 0);
         int guard = 0;
-        while (R.t.broken == null && !solved(R.t) && guard++ < 400) {
+        while (R.t.broken == null && !solved(R.t) && guard++ < maxSteps) {
             List<Single> sg = singles(R.t);
             if (sg.isEmpty()) break;
             Single x = sg.get(0);
@@ -612,11 +629,12 @@ public final class SuguruTutor {
         }
         return roots;
     }
-    List<App> bothWaysApps(St s, boolean first) {
+    List<App> bothWaysApps(St s, boolean first) { return bothWaysApps(s, first, 400); }
+    List<App> bothWaysApps(St s, boolean first, int maxSteps) {
         List<App> out = new ArrayList<>();
         for (int[] root : bothRoots(s)) {
-            Branch A = runBranch(s, root[0], root[1]); if (A == null) continue;
-            Branch B = runBranch(s, root[2], root[3]); if (B == null) continue;
+            Branch A = runBranch(s, root[0], root[1], maxSteps); if (A == null) continue;
+            Branch B = runBranch(s, root[2], root[3], maxSteps); if (B == null) continue;
             for (int g = 0; g < n; g++) {
                 if (s.val[g] != 0) continue;
                 int gone = s.cand[g] & ~A.R.t.cand[g] & ~B.R.t.cand[g];
@@ -638,33 +656,50 @@ public final class SuguruTutor {
     // Levels 8-11 are compared on effort (the grade's "as you used to play"), not on kind: a short what-if with a pair is easier
     // than a long one with singles. len = support steps + the assumption + the chain's relevant steps.
     static final int WHATIF_L = 8;
+    /** The lowest price a technique level can have (its easiest method's recognition), as tutor.js. */
+    static double levelFloor(int L) {
+        double m = Double.POSITIVE_INFINITY;
+        for (int T = 0; T < TECH_LEVEL.length; T++) if (TECH_LEVEL[T] == L) m = Math.min(m, T >= 7 ? costOf(T, T >= 7 && T <= 9 ? 2 : 0, 2) : costOf(T, 0, 1));
+        return m;
+    }
+    /** whatIfCost for a bare technique (no techniques inside): used for the floors and the caps. */
+    static double costOf(int T, int memPeak, int len) { App a = new App(); a.tech = T; a.memPeak = memPeak; return whatIfCost(a, len); }
     static double whatIfCost(App a, int len) {
         int T = a.tech;
         double innerR = 0;
         for (int t = 0; t < SuguruGrade.RECOG.length; t++) if ((a.innerMask & (1 << t)) != 0) innerR = Math.max(innerR, SuguruGrade.RECOG[t]);
         double lg = SuguruGrade.log2(Math.max(1, len));
-        double c = SuguruGrade.RECOG[T] + SuguruGrade.W_len * lg + SuguruGrade.W_inner * innerR
+        double c = SuguruGrade.RECOG[T] + SuguruGrade.W_len * lg + SuguruGrade.LINK[T] * Math.max(0, Math.max(1, len) - 1) + SuguruGrade.W_inner * innerR
             + SuguruGrade.P_mem[2][T] * SuguruGrade.log2(1 + a.memPeak) + SuguruGrade.P_len[2][T] * lg;
         return Math.round(c * 1e6) / 1e6;
     }
     static final class WhatIf { final App a; final Single x; final boolean fromS0; final int len; final double key;
         WhatIf(App a, Single x, boolean fromS0, int len, double key) { this.a = a; this.x = x; this.fromS0 = fromS0; this.len = len; this.key = key; } }
-    List<App> whatIfBase(St s) {
+    List<App> whatIfBase(St s, double cap) {
         List<App> l = nishioApps(s, false);
-        l.addAll(trialApps(s, 1, false));
-        l.addAll(bothWaysApps(s, false));
+        if (relMax(11, cap) >= 0) l.addAll(trialApps(s, 1, false, relMax(11, cap) == Integer.MAX_VALUE ? 400 : 2 * relMax(11, cap) + 2));
+        if (relMax(12, cap) >= 0) l.addAll(bothWaysApps(s, false, relMax(12, cap) == Integer.MAX_VALUE ? 400 : 2 * relMax(12, cap) + 2));
         return l;
+    }
+    /** The most relevant links a what-if of kind T can have and still cost less than cap (-1: none; MAX_VALUE: no cap). */
+    static int relMax(int T, double cap) {
+        if (!(cap < Double.POSITIVE_INFINITY)) return Integer.MAX_VALUE;
+        int r = -1;
+        while (r < 60 && costOf(T, 0, 2 + r) < cap) r++;
+        return r;
     }
     static final class Raw { final App a; final Single x; final boolean fromS0; final int rel, ub; final double lb;
         Raw(App a, Single x, boolean fromS0, int rel, double lb, int ub) { this.a = a; this.x = x; this.fromS0 = fromS0; this.rel = rel; this.lb = lb; this.ub = ub; } }
-    void whatIfConsider(List<App> steps, St St, App a, boolean fromS0, List<Raw> raw) {
+    void whatIfConsider(List<App> steps, St St, App a, boolean fromS0, List<Raw> raw, double cap) {
         St T = St.copy(); apply(T, a);
         if (T.broken != null) return;
         List<Single> xs = singles(T);
         if (xs.isEmpty()) return;
         Single x = xs.get(0);
         int rel = a.relCount;
-        raw.add(new Raw(a, x, fromS0, rel, whatIfCost(a, 1 + rel) + x.score * 0.1, fromS0 ? 1 + rel : steps.size() + 1 + rel));
+        double lb = whatIfCost(a, 1 + rel) + x.score * 0.1;
+        if (lb >= cap) return;
+        raw.add(new Raw(a, x, fromS0, rel, lb, fromS0 ? 1 + rel : steps.size() + 1 + rel));
     }
     int whatIfSupport(St S0, List<App> steps, Raw r) {
         if (r.fromS0 || steps.isEmpty()) return 0;
@@ -679,20 +714,22 @@ public final class SuguruTutor {
         return res != null ? res.steps.size() - 1 : steps.size();
     }
     /** The what-if with the least effort that gives a number: searched in S (after the support steps) and in S0 (without). null if nothing gives a number. */
-    WhatIf whatIfBest(St S0, St S, List<App> steps) {
+    WhatIf whatIfBest(St S0, St S, List<App> steps, double cap) {
         List<Raw> raw = new ArrayList<>();
-        for (App a : whatIfBase(S)) whatIfConsider(steps, S, a, false, raw);
-        if (!steps.isEmpty()) for (App a : whatIfBase(S0)) whatIfConsider(steps, S0, a, true, raw);
+        for (App a : whatIfBase(S, cap)) whatIfConsider(steps, S, a, false, raw, cap);
+        if (!steps.isEmpty()) for (App a : whatIfBase(S0, cap)) whatIfConsider(steps, S0, a, true, raw, cap);
         if (raw.isEmpty()) return null;
         int lim = Integer.MAX_VALUE;
         for (Raw r : raw) lim = Math.min(lim, r.ub);
+        int r13 = relMax(13, cap);
+        if (r13 != Integer.MAX_VALUE) lim = Math.min(lim, r13 + 1);
         lim -= 1;
         if (lim > 0) {
             St[] states = steps.isEmpty() ? new St[]{S} : new St[]{S0, S};
             boolean[] from = steps.isEmpty() ? new boolean[]{false} : new boolean[]{true, false};
             for (int k = 0; k < states.length; k++)
                 for (App a : trialApps(states[k], 4, false, Math.max(2, 2 * lim + 2)))
-                    if (a.relCount < lim) whatIfConsider(steps, states[k], a, from[k], raw);
+                    if (a.relCount < lim) whatIfConsider(steps, states[k], a, from[k], raw, cap);
         }
         raw.sort((p, q) -> Double.compare(p.lb, q.lb));
         WhatIf best = null;
@@ -801,49 +838,81 @@ public final class SuguruTutor {
     }
 
     // ------------------------------------------------------------------ the easiest next number
+    /** The price of support steps that only remove options: the dearest of them. */
+    static double stepsKey(List<App> list) { double m = 0; for (App a : list) m = Math.max(m, whatIfCost(a, 1 + a.relCount)); return m; }
+    static final class Plan { final double key; final List<App> steps; final St S; final Single x;
+        Plan(double key, List<App> steps, St S, Single x) { this.key = key; this.steps = steps; this.S = S; this.x = x; } }
+    int calls;
     public Hint easiest(int[] known) {
         St S0 = fromKnown(known);
         if (S0.broken != null || solved(S0)) return null;
         List<Single> sg = singles(S0);
         if (!sg.isEmpty()) return build(S0, new ArrayList<>(), sg.get(0).kind, sg.get(0).cell, sg.get(0).v);
-        St S = S0.copy();
-        List<App> steps = new ArrayList<>();
-        for (int guard = 0; guard < 300; guard++) {
-            List<Single> ready = singles(S);
-            if (!ready.isEmpty()) return finish(S0, S, steps, ready.get(0).cell, ready.get(0).v);
-            boolean progressed = false;
-            for (int L = 2; L <= 11 && !progressed; L++) {
-                if (L == WHATIF_L) {
-                    WhatIf w = whatIfBest(S0, S, steps);
-                    if (w != null) {
-                        if (w.fromS0) { steps.clear(); S = S0.copy(); }
-                        steps.add(w.a); apply(S, w.a);
-                        return finish(S0, S, steps, w.x.cell, w.x.v);
+        calls = 0;
+        Plan plan = search(S0, S0.copy(), new ArrayList<>());
+        if (plan == null) return null;
+        return finish(S0, plan.S, plan.steps, plan.x.cell, plan.x.v);
+    }
+    /** By price, as tutor.js: the cheapest way from S (after the support steps) to a number. */
+    Plan search(St S0, St S, List<App> steps) {
+        List<Single> ready = singles(S);
+        if (!ready.isEmpty()) return new Plan(stepsKey(steps), steps, S, ready.get(0));
+        if (++calls > 300) return null;
+        double base = stepsKey(steps);
+        Plan best = null;
+        boolean triedOn = false, onWay = false; // onWay: best is where the option-removing steps lead (what-ifs already compared there)
+        for (int L = 2; L <= 11; L++) {
+            if (best != null && (L > WHATIF_L || levelFloor(L) >= best.key || (L == WHATIF_L && onWay))) continue;
+            if (L == WHATIF_L) {
+                WhatIf w = whatIfBest(S0, S, steps, best != null ? best.key : Double.POSITIVE_INFINITY);
+                if (w != null) {
+                    St T = (w.fromS0 ? S0 : S).copy(); apply(T, w.a);
+                    double key = Math.max(w.fromS0 ? 0 : base, w.key);
+                    if (best == null || key < best.key) {
+                        List<App> st = w.fromS0 ? new ArrayList<>() : new ArrayList<>(steps);
+                        st.add(w.a);
+                        best = new Plan(key, st, T, w.x);
                     }
+                    continue;
                 }
-                List<App> apps = levelApps(S, L);
-                if (apps.isEmpty()) continue;
-                App bestApp = null; Single bestSingle = null; double bestKey = 0;
-                for (App a : apps) {
-                    St T = S.copy(); apply(T, a);
-                    if (T.broken != null) continue;
-                    List<Single> xs = singles(T);
-                    if (xs.isEmpty()) continue;
-                    Single x = xs.get(0);
-                    double key = TECH_WEIGHT[a.tech] / 100.0 + a.relCount + x.score * 0.1;
-                    if (bestSingle == null || key < bestKey) { bestApp = a; bestSingle = x; bestKey = key; }
-                }
-                if (bestApp != null) { steps.add(bestApp); apply(S, bestApp); return finish(S0, S, steps, bestSingle.cell, bestSingle.v); }
-                for (App a : apps) {
-                    int[] before = S.cand.clone();
-                    apply(S, a);
-                    if (!Arrays.equals(before, S.cand)) steps.add(a);
-                }
-                progressed = true;
+                if (best != null) continue;
             }
-            if (!progressed) return null;
+            List<App> apps = levelApps(S, L);
+            if (apps.isEmpty()) continue;
+            App bestApp = null; Single bestSingle = null; double levelKey = 0;
+            for (App a : apps) {
+                St T = S.copy(); apply(T, a);
+                if (T.broken != null) continue;
+                List<Single> xs = singles(T);
+                if (xs.isEmpty()) continue;
+                Single x = xs.get(0);
+                double key = TECH_WEIGHT[a.tech] / 100.0 + a.relCount + x.score * 0.1;
+                if (bestSingle == null || key < levelKey) { bestApp = a; bestSingle = x; levelKey = key; }
+            }
+            if (bestApp != null) {
+                double key = Math.max(base, whatIfCost(bestApp, 1 + bestApp.relCount) + bestSingle.score * 0.1);
+                if (best == null || key < best.key) {
+                    St T = S.copy(); apply(T, bestApp);
+                    List<App> st = new ArrayList<>(steps); st.add(bestApp);
+                    best = new Plan(key, st, T, bestSingle);
+                }
+                continue;
+            }
+            if (best != null || triedOn) continue;
+            // only removes options: all of them, and on from there
+            St T = S.copy();
+            List<App> st = new ArrayList<>(steps);
+            for (App a : apps) {
+                int[] before = T.cand.clone();
+                apply(T, a);
+                if (!Arrays.equals(before, T.cand)) st.add(a);
+            }
+            if (st.size() == steps.size()) continue;
+            triedOn = true;
+            Plan on = search(S0, T, st);
+            if (on != null) { best = on; onWay = true; }
         }
-        return null;
+        return best;
     }
     Hint finish(St S0, St S, List<App> steps, int cell, int v) {
         List<App> kept = new ArrayList<>(steps);
@@ -882,7 +951,7 @@ public final class SuguruTutor {
         return T;
     }
     Hint build(St S0, List<App> steps, int kind, int cell, int v) {
-        int hardest = kind == NAKED ? 0 : 1;
+        int hardest = kind == NAKED || kind == SHAPE ? 0 : 1;
         int[] support = new int[steps.size()];
         int len = 0;
         for (int i = 0; i < steps.size(); i++) { hardest = Math.max(hardest, steps.get(i).tech); support[i] = steps.get(i).relCount; len += 1 + support[i]; }

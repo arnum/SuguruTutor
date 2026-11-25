@@ -25,8 +25,9 @@ public final class SuguruGrade {
      */
     // <gen:weights> Written by tools/grade/gen.py from tools/grade/weights.json. Edit there, not here.
     // Pencil terms: [0] with pencil, [1] without pencil, [2] as you used to play; each a list per technique (derived from base, diff and anchor).
-    static final int FIT = 10;
+    static final int FIT = 11;
     static final double[] RECOG = {0, 0, 0.6, 2.2, 2.9, 3, 3.7, 1.9, 2.2, 2.5, 2.8, 3.1, 3.5, 3.1};
+    static final double[] LINK = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
     static final double[] SPOT = {0.5, 0.5, 0.3, 0.15, 0};
     static final double W_cap = 14.9;
     static final double W_inner = 0.25;
@@ -137,7 +138,7 @@ public final class SuguruGrade {
         }
         f.R = f.base + f.shapeT + f.openT + f.workT;
         f.memT = P_mem[m][T] * log2(1 + s.mem);
-        f.lenT = W_len * log2(1 + Math.max(0, Math.max(1, s.len) - 1));
+        f.lenT = W_len * log2(1 + Math.max(0, Math.max(1, s.len) - 1)) + LINK[T] * Math.max(0, Math.max(1, s.len) - 1);
         f.spot = SPOT[Math.max(0, Math.min(4, s.opts))];
         double innerMax = 0; boolean anyInner = false;
         for (int t = 0; t < RECOG.length; t++) if ((s.innerMask & (1 << t)) != 0) { innerMax = anyInner ? Math.max(innerMax, RECOG[t]) : RECOG[t]; anyInner = true; }

@@ -26,9 +26,11 @@ self.onmessage = (e) => {
     return;
   }
   if (d.type === "route") {
-    self.postMessage({ type: "route", list: analyzeRoute(SE, d.puzzle, d.moves) });
+    self.postMessage({ type: "route", list: analyzeRoute(SE, d.puzzle, d.moves, null, d.typ) });
     return;
   }
-  const puzzle = generateGraded(SE, d, (tries, level, decimal) => self.postMessage({ type: "progress", tries, level, decimal }));
+  let puzzle = generateGraded(SE, d, (tries, level, decimal) => self.postMessage({ type: "progress", tries, level, decimal }));
+  // campaign: start where the technique is the next step
+  if (d.startAt) puzzle = startAtTechnique(SE, puzzle, d.startAt) || puzzle;
   self.postMessage({ type: "done", puzzle });
 };

@@ -1,9 +1,202 @@
 # Changelog
 
-Newest first. The project has no version history, so the dates up to 20 November are worked out from the timestamps
-of work files and screenshots. A change may be a day older than shown, and those days list only the main changes.
+Newest first. Each heading is the build: the date of the release and a letter per release that day. The settings show
+the build you have. Before 22 November there were no builds, so those headings are dates, worked out from the
+timestamps of work files and screenshots. A change may be a day older than shown, and those days list only the main
+changes.
 
-## 24 November 2026 (2) · Suguru offline v53, Sudoku v19, build 2026-11-24b
+## 2026-11-25a
+
+### New
+- **Play modes in New game:** Manual (as before), Relax, Challenge and Learn. In a mode the app picks the grade from your
+  own games, and one line says what and why ("Challenge: Very hard 5.2 · 6×6, a little above your usual 4.7 on this
+  size"). The size stays your choice. "New puzzle" after a game and in the menu follows the mode.
+  - Relax: a grade under your usual (the median of your latest 20 solved puzzles without hints on that size).
+  - Challenge: a little above your usual to start with, then it moves after each game in the mode: +0.3 after a solve
+    without hints at or under your estimate, +0.1 when somewhat slower, −0.2 when slow, −0.4 after hints or giving up.
+    Kept per board size.
+  - Learn: puzzles that need your focus technique (or the one you have met least), around your usual grade.
+- **Campaign (first version):** a path through the techniques, one step each, in order, on the home screen.
+  - **During a board:** there is no hint button and no check for errors, without any notice about it. "Give up" in the
+    menu ends the board.
+  - **After a board:** the sheet has the conclusion as its heading ("Singles passed", "Good board: 2 more to pass
+    pairs", "Too slow to pass: practise pairs first"). Then come the time against your usual time, and the same
+    analysis as after any game: the moments worth a second look, the route analysis and the final board.
+  - **Statistics:** campaign boards are kept by the campaign (the latest 20, with their analysis), not in the
+    statistics.
+  - **Passing a step:** a step you already master is passed on its first board when you solve it within your usual time
+    (your estimate for that board). Otherwise it takes 3 boards in a row without help, each within 1.5 times your usual
+    time.
+  - **Starting where the technique is needed:** the first 2 boards of a step start part-solved, at the point where the
+    technique is the next step, and you finish the game.
+  - **Practice in between:** when a board does not go well, the step waits until you have practised outside the
+    campaign. That means 3 normal puzzles that need the technique, solved without hints, or 15 practice boards of it
+    (singles to triples). The campaign offers both, and the practice games count in your statistics as usual.
+  - **Step names:** the steps are the 11 technique levels. The numbers are a first guess, to be tuned.
+- **Timed trial:** boards against the clock, on the home screen, in two flavours with a level and an index each.
+  - **Flavours:** soft lets you erase and correct; in hardcore the first wrong number ends the board.
+  - **The board:** always 6×6 (Sudoku 9×9). There is no pencil, no hints and no check, and the time left counts down.
+  - **The difficulty follows you:** solved in time, the next board is 0.25 grade harder; time out or give up, it is
+    0.25 easier (0.5 during the first 5 boards). A wrong number does not change it.
+  - **A fixed point:** the time limit comes from the time model's starting point, which is the same for everybody, not
+    from your curve. On your boards it is about 1.2 to 1.3 times your usual time. The index is 100 at grade 3.0 and
+    rises about 35 % per grade.
+  - **Its own statistics:** a screen with the index, the grade now, a chart of the index after each board and the
+    latest boards. Trial boards are not in the normal statistics.
+  - **After a board:** the result as the heading ("Solved in time: index 100 → 116"), then the same analysis as after
+    any game.
+- **Guest mode:** "Let someone else play" on the home screen. A guest's games, curve, practice levels and game in
+  progress are kept apart and deleted when guest mode ends, so nothing they do counts in your statistics, curve,
+  progress, practice, daily puzzle or days in a row. Your game in progress waits and comes back. A band at the bottom
+  of every screen shows guest mode; tapping it ends guest mode, and it also ends by itself when the app is opened after
+  30 minutes away. Export, import and reset are not available while it is on.
+
+### Changed
+- **One drawing code for every board** (`draw.js`): the game board and the small boards in practice, after the game
+  and in the route analysis are drawn by the same code from what is on them (numbers, notes, the selection, rule breaks,
+  highlights, options, assumptions, circled numbers). The game board looks exactly as before (checked pixel for pixel
+  in both apps); the small boards now look like it (the same numbers, lines and frame). It is the base for showing,
+  not telling, in the explanations.
+- **Explanations show instead of tell.** Hints, the boards after the game and in the route analysis, and the
+  practice texts point at the board instead of naming cells. Each step says its conclusion first ("The yellow cell
+  cannot be 3."), then why in a sentence or two, about what the board shows:
+  - blue cells for the pattern, with its own options picked out in small blue circles;
+  - yellow for the cells that lose options (the lost ones struck out);
+  - an outline round the region, row, column or box it is about;
+  - a green ring on the placed numbers that do the work;
+  - arrows for chains and what-ifs, from a solid orange ring where the assumption starts to dashed rings for what
+    follows, and red for the contradiction;
+  - cells that play no part dimmed, on bigger boards.
+
+  A legend under the board names the colours shown, once, so the sentences never name colours you have not been shown.
+  The colours are checked for colour blindness in both themes, and each role also has its own shape.
+- **Setting: "Cell names in explanations"** (Help while playing, off by default). On, the explanations are worded with
+  cell names as before (b3, the region with c3 and d3), and the whole chain in words comes back under a chain hint.
+  Screen readers always get the version with cell names.
+- **After the game, a number is shown as it is marked on the board**: a small ring in the board's colour instead of
+  "c1 = 1" ("You searched 08:46 for ①"). The same holds for the boards' captions, the advice for next time ("The region
+  had only one empty cell"), and errors ("It touched another 3").
+- **Quick call's claims are shorter and name no cells:** "The blue cell is an easy 3.", "The blue cells are a pair.",
+  "In their row, 5 can only go in the blue cells." When a claim missed a place, that place is yellow on the board
+  afterwards.
+
+### Changed (grading)
+- **Region shapes count as singles.** A cell that touches every cell of a region one smaller than its own region cannot
+  hold any of that region's numbers, so it is its own region's largest number whatever else is on the board (a cell in
+  the bend of a 4-cell L, in a region of 5: 5; a 3-cell block next to a cell in a region of 4: 4). It is now found as a
+  single, with its own explanation (the region outlined, "Region shape"). It came up in 111 of your 222 puzzles (148
+  cells, never a given); the grader had priced 94 of them as neighbour eliminations. 77 of 249 test puzzles grade lower
+  (on average 0.24), and the grade follows your times slightly better (0.736 to 0.742 within board size).
+- **The next number is chosen by price, not by the order of the techniques.** Hints, the grade and the solver take the
+  cheapest way to a number, priced as in the grade: how hard the method is, the length of the reasoning, techniques
+  inside and memory. A short chain can now beat a triple, and a what-if can beat a long chain, while a pair stays cheaper
+  than even a simple what-if. Where the steps first only remove options, where they lead is compared with the harder
+  techniques. With the fitted prices this changes 7 of 249 test puzzles (mostly a triple replaced by a shorter chain,
+  0.4 lower on average). Solving takes 1.2 to 1.4 times as long.
+- **The price per link is prepared, but at 0.** The weights now have a price per link for each method, so a link in a
+  what-if with techniques can cost more than one in a single-number chain. Your times do not support a price yet: even
+  0.1 per link in chains lowered the fit (0.742 to 0.733), and making the one-step what-if in your 4×4 of 24 Nov.
+  cheaper than the 6-link chain the grader used took what-ifs 0.9 cheaper and lowered it to 0.712. Your moves agree:
+  a what-if took you a median 258 s, a pair 62 s and a single-number chain 84 s. The route analysis now stores the
+  length of each move's reasoning, so the price per link can be calibrated from the next exports.
+- **The route analysis counts the cheapest way as easy**, also when it uses a harder technique than the easiest one
+  available (a short chain where a triple was possible).
+- All stored games are regraded once.
+- **The setting "with pencil" counts from the start.** A game played with that setting counts as played with pencil
+  whether or not notes are written, so the heading and the solved sheet show the same grade. The notice of what the
+  pencil will cost is only shown with the setting "without pencil".
+
+### Changed (principles; the numbers are provisional and will be calibrated)
+- **Practice is measured against par, not your game curve.** Each practice game has a fixed par per board: a first
+  look plus a time per find, scaled by board size. Your curve no longer moves practice expectations, so getting faster
+  in games no longer makes practice stricter, and the first look at a new board and knowing what to look for are both
+  in par.
+- **The practice level is a rating.** Each board shows a level: the level the board is set for, plus one for each
+  25 % faster than par (minus one for each 25 % slower). Mistakes add time, and "Show me" counts as 1.5 levels below the
+  board. Your level moves part of the way towards it: half at first, a sixth after 20 boards. The boards follow your
+  level. The easiest boards are level 3, so levels 0–3 are room to get faster on them: a slow start still rises as soon
+  as you get faster. Levels now run from 0 to 10, and your levels moved up by 3 to keep the same boards. The summary
+  shows par at your level instead of what your curve expects.
+- **4×4 is a game of its own in the statistics** (not in the menus). The statistics have a "5×5 and up / 4×4" switch,
+  and 4×4 has its own statistics, progress, rating check and time curve, learnt from its own games. Its times no
+  longer mix into the main ones, where a grade on 4×4 says little about the time.
+- **"Does the rating fit?" measures properly:** puzzles without hints, time per cell on a log scale, and within each
+  board size, with a table per size and one dashed line per size. Your main games: 0.75 (5×5 0.72, 6×6 0.71, 7×7
+  0.91). Before, it mixed sizes and games with hints on raw seconds, and fell from 0.70 to 0.55 as you moved to smaller
+  boards.
+
+### Changed (storage and debug notes)
+- **The games that matter keep their route analysis.** Clearing older route details (the moves behind the boards,
+  moments and replays) now keeps, besides the latest 40 games:
+  - **Games with debug notes not yet copied:** they keep their moves until the notes are copied, also when they move
+    into the archive.
+  - **Games worth a second look:** up to half as many as the latest (20 by default). A moment comes first, then a
+    record, then help used or not solved, then an unusual time (under 0.4 or over twice your estimate). Newest first
+    within each.
+
+  Ordinary games are cleared first. If storage fills up, those worth a second look go next, and the noted ones last.
+  Storage shows what is kept ("the latest 40, 2 with new debug notes and 20 worth a second look"). Before, an export
+  could have lost the moves of exactly the games you wanted analysed: both screenshot games and three of five noted
+  games on 25 November.
+- **Debug notes once copied:** Settings → Debug notes shows how many are new.
+  - **Copying:** "Copy new notes" copies only the new ones and marks them as copied, and "Copy all notes" is there
+    too. Exporting the statistics and copying a game's debug packet also count as copying.
+  - **Deleting:** "Delete copied notes" removes the copied ones and keeps new ones.
+  - **Moves:** a game whose notes are all copied no longer keeps its moves for the notes' sake.
+
+### Fixed
+- **A moment after the game could show no board** (a long search for a triples number with nothing else easy on the
+  board: the side shown first said "That was the only one" and had no board). The side now shows the numbers that
+  were just as easy at the moment's own level ("Just as easy then"), and a side is never left without a board.
+- **A what-if moment could not be followed.** The moment showed only the hardest step, so for b3 = 2 it proved b3 is
+  not 3 but never why it is 2, and the board showed the answer in b3 where the text said "Assume b3 = 3 (orange)".
+  The boards after the game now step through the whole explanation (‹ Step 1 of 3 ›), each step on its own board,
+  with the assumption drawn in its cell and the answer circled on the last step only. The conclusion is no longer
+  repeated after a what-if.
+- **An equally easy number was called overlooked.** After a long search that ended in one of the easiest moves, the
+  lesson named another number just as easy (e2 instead of your c2) and counted it as overlooked. The lesson is now
+  the search for your own number, with the others that were just as easy beside it.
+- **"Harder than needed" when the technique was needed anyway.** If solving on the easiest way would need a technique
+  at least as hard before that cell is filled, the move was only done early. It now counts as one of the easiest
+  ("needed anyway, done early"), with its time for its own technique, and is not a concentration lapse. In your
+  latest 40 games, 34 of 37 "harder than needed" moves were of this kind.
+- **The analysis credited a route in your head that you did not take.** A move that could be reached by easier
+  numbers in your head, but took far longer than that usually takes you and is closer to your time for its direct
+  technique, now counts as seen directly (a pair is counted as a pair, not as a 35-second single). The easier route
+  is still named.
+- **What changed?** explains every new easy number afterwards, not only the first.
+- **Count them:** a count off by one is a near miss and counts like a wrong tap (slower), not as a miss. In the
+  practice log, all 4 misses in 10 boards were off by one.
+- **Sudoku triples drill:** a board for the next round is found while you play the last board of a round, so a round
+  no longer starts with a wait, and boards where a pair would also do are only used when no exact one turns up.
+- **A new build reaches the phone at once:** the offline copy now checks every file with the server instead of
+  trusting the browser's own cache, so a new `build.js` is not missed for minutes.
+
+### Changed
+- **Board size is in the time model.** A bigger board takes longer to scan for every move (in your 3,900 moves, from
+  0.6 of the 6×6 time on 4×4 to 1.3 times on 10×8). Your time curve now has a size term fitted to your moves, and the
+  estimate uses the board's size. Before, small boards were overpriced and big ones underpriced.
+- **The estimate is your typical puzzle, not the average.** A few long searches pull the average up, so most puzzles
+  came in under it (in your latest 60, 0.82 of it). The estimate is now scaled to how your latest 60 puzzles have come
+  out against it, so faster than the estimate is as common as slower.
+- **The curve keeps your latest moves of each technique** (1,000 easy numbers, 60 of every other technique) instead
+  of your latest 60 games, so a spell of easy games no longer makes it forget your pairs and chains.
+- **Progress includes board size.** The index is now measured against your usual time for the grade and the board
+  size. The rise to 112–127 in the last blocks came from moving to 4×4 and 5×5; with size in, those blocks are 75
+  and 81, with wide bands.
+- **Short times show tenths under 10 seconds** (3.4 s instead of 0:03), where 2 and 3 seconds are 50 % apart.
+
+## 2026-11-24c
+
+### Changed
+- One version for both apps, the build, set in one place (`shared/js/build.js`). Each app's offline storage is named
+  after it: a new build installs a fresh copy of every file and deletes the old one. Before, each app had its own
+  storage version that had to be raised by hand, and a forgotten raise could leave old files on a phone.
+- The settings show the build in both apps (before: "Suguru 2.0" and "Sudoku 1.0", which never changed). Exports
+  include it too.
+- The changelog headings show only the build.
+
+## 2026-11-24b
 
 ### Changed
 - Progress is shown, not concluded. The chart has one point per block of 20 puzzles without hints, counted back from
@@ -17,7 +210,7 @@ of work files and screenshots. A change may be a day older than shown, and those
   your time curve fitted to all your moves. Before, it was the curve from your latest 60 games, including your own
   deviation per technique, so a technique you got faster at drifted back to 100.
 
-## 24 November 2026 · Suguru offline v52, Sudoku v18, build 2026-11-24a
+## 2026-11-24a
 
 ### Added
 - Suguru: 4×4 as a board size ("Micro"). With regions of at most 4 cells the highest grade is 4, and New game says so;
@@ -31,7 +224,7 @@ of work files and screenshots. A change may be a day older than shown, and those
 - Sheets, such as the solved page, always open at the top. Before, a sheet could open where the previous one had
   been scrolled to, and the solved page stays at the top while its boards are drawn.
 
-## 23 November 2026 (3) · Suguru offline v51, Sudoku v17, build 2026-11-23c
+## 2026-11-23c
 
 ### Added
 - A temporary practice log: every practice board with the time of each tap since the board appeared (and in Cascade
@@ -39,7 +232,7 @@ of work files and screenshots. A change may be a day older than shown, and those
   last 600 boards are kept on the device and included in the export. It is there to measure how long the first look
   at a new board takes (see TODO.md) and will be removed afterwards.
 
-## 23 November 2026 (2) · Suguru offline v50, Sudoku v16, build 2026-11-23b
+## 2026-11-23b
 
 ### Changed
 - The practice screens now use the game's own input code instead of a copy: the same fast taps, the same way of
@@ -49,7 +242,7 @@ of work files and screenshots. A change may be a day older than shown, and those
 ### Fixed
 - Sudoku: the number keys 7, 8 and 9 did nothing on a keyboard in the main game.
 
-## 23 November 2026 · Suguru offline v49, Sudoku v15, build 2026-11-23a
+## 2026-11-23a
 
 ### Changed
 - Practice boards, number pads and the true/false buttons react when the finger lands, like the main game, instead
@@ -58,27 +251,27 @@ of work files and screenshots. A change may be a day older than shown, and those
   moves under your finger.
 - The tap that places the last number can no longer also press "Next board", which appears in the same spot.
 
-## 22 November 2026 (13) · Suguru offline v48, Sudoku v14, build 2026-11-22m
+## 2026-11-22m
 
 ### Changed
 - Cascade measures seeing, not finger speed: the time from tapping a cell to choosing its number (up to a second per
   number) no longer counts. A 14-second board with 8 numbers now counts as about 8 seconds.
 
-## 22 November 2026 (12) · Suguru offline v47, Sudoku v13, build 2026-11-22l
+## 2026-11-22l
 
 ### Changed
 - Practice levels are shown from 0 to 6 instead of 1 to 6.9: the start is an empty bar, and each whole number is one
   board level passed. Your levels are kept; they just read one lower.
 - After every round: your typical time per board and what your curve expects, so you can see what it takes to move up.
 
-## 22 November 2026 (11) · Suguru offline v46, Sudoku v12, build 2026-11-22k
+## 2026-11-22k
 
 ### Changed
 - Quick call expected one right answer per easy-number time on your curve (about 20 in a minute at 3 seconds), so
   even a good run hardly moved the level. It now expects 1.5 times that per claim (about 13), and the summary shows
   the number your curve expects.
 
-## 22 November 2026 (10) · Suguru offline v45, Sudoku v11, build 2026-11-22j
+## 2026-11-22j
 
 ### Added
 - **Quick call**, a fifth practice game: claims about a board ("e4 = 3 is an easy number", "b2 and c3 are a pair",
@@ -100,7 +293,7 @@ of work files and screenshots. A change may be a day older than shown, and those
   there too.
 - Sweep explains a tap on a cell that sees the pattern but has nothing left to lose.
 
-## 22 November 2026 (9) · Suguru offline v44, Sudoku v10, build 2026-11-22i
+## 2026-11-22i
 
 ### Added
 - Four practice games, each training one part of seeing, with their own level (1.0 to 6.9) like the drills:
@@ -116,7 +309,7 @@ of work files and screenshots. A change may be a day older than shown, and those
 - The practice chooser ("More practice" on the home screen) lists techniques and games; the games also appear in
   Statistics → Technique once played.
 
-## 22 November 2026 (8) · Suguru offline v43, Sudoku v9, build 2026-11-22h
+## 2026-11-22h
 
 ### Fixed
 - Practice: the text after a find could describe a different elimination than the board showed. When two numbers are
@@ -124,19 +317,19 @@ of work files and screenshots. A change may be a day older than shown, and those
   explained the other. Now everything those cells eliminate is shown, the text explains exactly that, and every number
   it gives counts.
 
-## 22 November 2026 (7) · Suguru offline v42, Sudoku v8, build 2026-11-22g
+## 2026-11-22g
 
 ### Changed
 - Statistics: long explanations are folded. Notes on how something is measured sit behind "How it's measured", and a
   long introduction shows its first sentence with "More". Findings, numbers and short texts stay as they are.
 - Focus area: the curve's times per technique moved into "How it's measured", next to the explanation of the curve.
 
-## 22 November 2026 (6) · Suguru offline v41, Sudoku v7, build 2026-11-22f
+## 2026-11-22f
 
 ### Changed
 - The practice level chart no longer zooms: it always shows the whole range, 1 to 6.9, with every whole level marked.
 
-## 22 November 2026 (5) · Suguru offline v40, Sudoku v6, build 2026-11-22e
+## 2026-11-22e
 
 ### Changed
 - Practice levels are decimal numbers (1.0 to 6.9) that move a little after every board: faster than your curve gives
@@ -145,7 +338,7 @@ of work files and screenshots. A change may be a day older than shown, and those
   level also means slightly harder boards.
 - The level chart zooms to the levels it passes through, so a rise of a few tenths shows. The level bars fill partly.
 
-## 22 November 2026 (4) · Suguru offline v39, Sudoku v5, build 2026-11-22d
+## 2026-11-22d
 
 ### Added
 - Practice: short rounds of five boards where one technique is the next step (singles, neighbour elimination or
@@ -165,7 +358,7 @@ of work files and screenshots. A change may be a day older than shown, and those
 ### Fixed
 - "had only 1 empty cells" now reads "had only one empty cell".
 
-## 22 November 2026 (3) · Suguru offline v38, Sudoku v4, build 2026-11-22c
+## 2026-11-22c
 
 ### Changed
 - iPhone and iPad: the board is as large as the screen allows, and the number pad never ends up below the screen.
@@ -176,7 +369,7 @@ of work files and screenshots. A change may be a day older than shown, and those
 ### Fixed
 - On a phone in landscape the board ran off the screen and the number pad was out of reach.
 
-## 22 November 2026 (2) · Suguru offline v37, Sudoku v3, build 2026-11-22b
+## 2026-11-22b
 
 ### Changed
 - English is the base language in the code, comments, guides and docs; Danish is a translation (`lang/da.js`).
@@ -190,7 +383,7 @@ of work files and screenshots. A change may be a day older than shown, and those
 - The Sudoku guide covers all 14 techniques, including the first example of "both ways"; hints link to it.
 - `CHANGELOG.md`, and Danish copies of the READMEs.
 
-## 22 November 2026 · Suguru offline v36, Sudoku v2, build 2026-11-22
+## 2026-11-22
 
 ### Changed
 - What-ifs are chosen by total effort (the whole reasoning's length), not by kind, in hints, route analysis and grade.
@@ -209,7 +402,7 @@ of work files and screenshots. A change may be a day older than shown, and those
 ### Fixed
 - The same overlooked easy number was listed several times when several harder moves were made while it waited.
 
-## 21 November 2026 · Suguru offline v35, Sudoku v1
+## 2026-11-21
 
 ### Added
 - Sudoku: a new app on the shared code, with its own grade, puzzle codes (`SD1-…` or 81 characters) and guide.
@@ -226,7 +419,7 @@ of work files and screenshots. A change may be a day older than shown, and those
 - Pencil numbers 7–9 were not drawn in notes and hints.
 - An old home-screen install could keep showing the version from before the move.
 
-## 20 November 2026
+## 2026-11-20
 
 ### Added
 - Three grades per puzzle: with pencil, without pencil, and "as you used to play" for games from before pencil use was recorded.
@@ -238,7 +431,7 @@ of work files and screenshots. A change may be a day older than shown, and those
 ### Changed
 - The scale goes above 10 (was capped at 9.9).
 
-## 19 November 2026
+## 2026-11-19
 
 ### Added
 - Debug notes on a game, and a debug package to copy.
@@ -248,7 +441,7 @@ of work files and screenshots. A change may be a day older than shown, and those
 ### Changed
 - Techniques used inside a what-if count in the grade.
 
-## 18 November 2026
+## 2026-11-18
 
 ### Added
 - "Key takeaway from the game" right after solving.
@@ -260,13 +453,13 @@ of work files and screenshots. A change may be a day older than shown, and those
 ### Changed
 - Grade recalibrated on 93 puzzles: pairs and triples weigh more.
 
-## 14 November 2026
+## 2026-11-14
 
 ### Added
 - A personal grade in the game heading: how the puzzle will probably feel for you.
 - "Thought ahead" in the route analysis: numbers you found by placing others in your head first.
 
-## 13 November 2026
+## 2026-11-13
 
 ### Added
 - Boards in the route analysis: your move next to the easiest move at that moment.
@@ -274,14 +467,14 @@ of work files and screenshots. A change may be a day older than shown, and those
 ### Changed
 - The grade's weights fitted to 17 puzzles with measured solving times.
 
-## 12 November 2026
+## 2026-11-12
 
 ### Added
 - English translation.
 - Dark theme.
 - "Why this grade?" sheet in the game.
 
-## 7–11 November 2026: first versions
+## 2026-11-07 to 2026-11-11 · first versions
 
 - 7 Nov: Java generator and difficulty rater, later printable booklets.
 - 9 Nov: Suguru strategy guide; web version with hints (the easiest next number) and a decimal grade.

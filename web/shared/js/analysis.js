@@ -47,7 +47,7 @@ function upgradeAheadVia() {
   };
   setTimeout(next, 1500);
 }
-function runRoute(p, moves, done) {
+function runRoute(p, moves, done, typ) {
   try {
     const w = newWorker();
     w.onmessage = (e) => {
@@ -58,11 +58,11 @@ function runRoute(p, moves, done) {
     };
     w.onerror = () => {
       w.terminate();
-      setTimeout(() => done(analyzeRoute(E, p, moves)), 30);
+      setTimeout(() => done(analyzeRoute(E, p, moves, null, typ)), 30);
     };
-    w.postMessage({ type: "route", puzzle: p, moves });
+    w.postMessage({ type: "route", puzzle: p, moves, typ });
   } catch (e) {
-    setTimeout(() => done(analyzeRoute(E, p, moves)), 30);
+    setTimeout(() => done(analyzeRoute(E, p, moves, null, typ)), 30);
   }
 }
 function startRoute(rec) {
@@ -70,8 +70,9 @@ function startRoute(rec) {
     moves = meta.moves.slice();
   if (!moves.some((m) => m.v && !m.u && !m.h)) return;
   rec.routePending = true;
+  const typ = typicalTimes();
   runRoute(p, moves, (list) => {
-    const g = games.find((x) => x.id === rec.id);
+    const g = rec.camp || rec.trial ? rec : games.find((x) => x.id === rec.id);
     if (!g) return;
     delete g.routePending;
     delete rec.routePending;
@@ -82,16 +83,22 @@ function startRoute(rec) {
     });
     g.route = routeSummary(list);
     g.thirds = thirdsOf(g);
-    g.pace = paceOf(g, baseline(null));
+    g.pace = paceOf(g, baseline(null, isMicro(g)));
     g.conc = concOf(g, baseline(g.id));
     rec.conc = g.conc;
     const cl = document.getElementById("concLine");
     if (cl) cl.innerHTML = concWarnHtml(g);
     rec.route = g.route;
     rec.moves = g.moves;
-    // Keep the details for the latest games (default 40); older ones keep only the summary
-    trimMoves(Math.max(1, settings.keepMoves ?? 40));
-    saveGames();
+    if (rec.camp) campKeep(rec);
+    else if (rec.trial) trialKeep(rec);
+    else {
+      delete g.keepWhy;
+      keepWhy(g);
+      // Keep the details for the latest games (default 40); older ones keep only the summary
+      trimMoves(Math.max(1, settings.keepMoves ?? 40));
+      saveGames();
+    }
     const el2 = document.getElementById("routeLine");
     if (el2) el2.innerHTML = routeLineHtml(g);
     const tk = document.getElementById("takeaway");
@@ -101,7 +108,7 @@ function startRoute(rec) {
       const sh = tk.closest(".solved");
       if (sh) fillPractice(sh, g);
     }
-  });
+  }, typ);
 }
 function routeLineHtml(rec) {
   if (rec.routePending || (!rec.route && rec.solved)) return tr("Analysing your solving route …");
@@ -135,22 +142,69 @@ function median(arr) {
 // has every summary the statistics use: the route summary with times and context, concentration, pace and
 // errors/hints per third. Afterwards the route analysis cannot be opened for those games, but every number in the statistics is the same.
 // Returns the number of games cleared.
-function trimMoves(keep) {
-  let seen = 0,
-    n = 0;
-  for (let i = games.length - 1; i >= 0; i--) {
-    const g = games[i];
-    if (!g.moves) continue;
-    if (++seen <= keep) continue;
+// Which games keep their moves (the full route analysis: the boards, the moments, the replay) when older ones are cleared
+// (decided 25 Nov. 2026), so an export still has the games that matter:
+//  - the latest `keep` games (the setting, 40 by default);
+//  - games with debug notes that have not been copied yet, until they are (also through the archive);
+//  - games worth a second look (keepWhy): keep/2 of them, a moment first, then a record, help used / not solved, and an
+//    unusual time, the latest first within each;
+//  - the ordinary ones go first.
+// The storage-full fallback can let go of the games worth a look (notable: false) and, last, of the noted ones (notes: false).
+// Why a game is worth keeping, as letters: m a moment worth a second look, r a record, t an unusual time (under half or over
+// under 0.4 or over twice your estimate), h help used or not solved; "-" an ordinary game. Worked out once, while the
+// moves are there.
+function keepWhy(g) {
+  if (g.keepWhy) return g.keepWhy;
+  if (!g.moves) return "";
+  let w = "";
+  try {
+    const t = takeaway(g);
+    if (t && t.moments && t.moments.length) w += "m";
+  } catch (e) {}
+  if (g.solved && !g.hints && games.some((x) => x !== g) && isRecordGame(g)) w += "r";
+  const r = g.est && g.solved ? g.ms / 1000 / g.est : null;
+  if (r != null && (r > 2 || r < 0.4)) w += "t";
+  if (g.hints || g.revealed || !g.solved) w += "h";
+  return (g.keepWhy = w || "-");
+}
+// The fastest solve without hints so far on that size and grade (at the time it was played)
+function isRecordGame(g) {
+  const prev = games.filter((x) => x.end < g.end && x.solved && !x.hints && x.rows === g.rows && x.cols === g.cols && gBand(x) === gBand(g));
+  return prev.length > 0 && g.ms < Math.min(...prev.map((x) => x.ms));
+}
+function movesToClear(keep, { notable = true, notes = true } = {}) {
+  const withMoves = games.filter((g) => g.moves),
+    latest = new Set(withMoves.slice(-Math.max(1, keep))),
+    rest = withMoves.filter((g) => !latest.has(g) && !(notes && hasNewNote(g)));
+  // the games worth a second look that are kept: by what makes them worth it, then the latest first
+  const rank = (g) => {
+    const w = keepWhy(g);
+    return w.includes("m") ? 0 : w.includes("r") ? 1 : w.includes("h") ? 2 : w.includes("t") ? 3 : 9;
+  };
+  const kept = new Set(
+    notable
+      ? rest
+          .map((g, i) => ({ g, i, k: rank(g) }))
+          .filter((x) => x.k < 9)
+          .sort((a, b) => a.k - b.k || b.i - a.i)
+          .slice(0, Math.floor(keep / 2))
+          .map((x) => x.g)
+      : [],
+  );
+  return rest.filter((g) => !kept.has(g));
+}
+function trimMoves(keep, opts) {
+  const list = movesToClear(keep, opts);
+  for (const g of list) {
     markErrors(g.moves);
+    keepWhy(g); // stays with the summary
     if (!g.route || g.route.ctx === undefined) g.route = routeSummary(g.moves);
     if (g.thirds == null) g.thirds = thirdsOf(g);
-    if (g.pace == null) g.pace = paceOf(g, baseline(null));
+    if (g.pace == null) g.pace = paceOf(g, baseline(null, isMicro(g)));
     if (g.conc == null) g.conc = concOf(g, baseline(g.id));
     delete g.moves;
-    n++;
   }
-  return n;
+  return list.length;
 }
 // Storage: how much do the stored data take up, and how much of it is route details (moves)?
 function storageInfo() {
@@ -172,7 +226,9 @@ function storageInfo() {
   const keepCost = (k) => perGame.slice(0, k).reduce((s, x) => s + x, 0);
   return { total, keys, history: keys.history || 0, moves: movesLen, nMoves: withMoves.length, keepCost };
 }
+// Short times: tenths under 10 seconds, where 2 and 3 seconds are 50 % apart; otherwise m:ss
 function fmtS(sec) {
+  if (sec < 9.95) return tr("{s} s", { s: dec(Math.max(0, sec), 1) });
   sec = Math.round(sec);
   return Math.floor(sec / 60) + ":" + String(sec % 60).padStart(2, "0");
 }
@@ -188,10 +244,20 @@ function timesOf(g) {
   return o;
 }
 // Your normal search time per level from earlier games (at least 3 moves)
-function baseline(excludeId) {
+// Your typical seconds per level, so the route analysis can tell which way a long move most likely went
+function typicalTimes() {
+  const b = baseline(null),
+    o = {};
+  for (const L in b) o[L] = b[L].med;
+  return o;
+}
+// Only games of the same scope (4×4 or not, core.js): the one left out (excludeId) decides it, else micro, else the board's
+function baseline(excludeId, micro) {
+  const ex = excludeId && micro == null ? games.find((g) => g.id === excludeId) : null,
+    m = micro != null ? micro : ex ? isMicro(ex) : microNow();
   const all = {};
   games.forEach((g) => {
-    if (g.id === excludeId) return;
+    if (g.id === excludeId || isMicro(g) !== m) return;
     const t = timesOf(g);
     for (const L in t) (all[L] = all[L] || []).push(...t[L]);
   });
@@ -279,10 +345,14 @@ function routeChart(list, p) {
         ? tr("placed after an error, not judged")
         : m.slip
           ? tr("mistap, fixed right away")
-          : m.cls === "wrong" && m.follow ? tr("follow-up error") : ROUTE_CLS[m.cls].long;
-    let tip = tr("Move {k} · {cell} = {v} · found after {time}: {what}", { k: i + 1, cell: nm, v: m.v, time: fmt(m.dt), what });
+          : m.cls === "wrong" && m.follow
+            ? tr("follow-up error")
+            : m.early
+              ? tr("needed anyway, done early")
+              : ROUTE_CLS[m.cls].long;
+    let tip = tr("Move {k} · {cell} = {v} · found after {time}: {what}", { k: i + 1, cell: nm, v: m.v, time: fmtS(m.dt / 1000), what });
     if (lv && m.cls !== "hint") tip += ` · ${LEVEL_TECH[lv]}`;
-    if (m.avail && m.cls !== "easy" && m.cls !== "hint" && m.cls !== "wrong") tip += " · " + tr("easiest: {tech}", { tech: LEVEL_TECH[m.avail] });
+    if (m.avail && (m.cls !== "easy" || m.early) && m.cls !== "hint" && m.cls !== "wrong") tip += " · " + tr("easiest: {tech}", { tech: LEVEL_TECH[m.avail] });
     s += `<rect x="${Math.min(x0, x1 - 6)}" y="${yy - 9}" width="${Math.max(12, x1 - x0 + 6)}" height="18" fill="transparent" data-tip="${esc(tip)}"/>`;
   });
   s +=
@@ -334,6 +404,12 @@ function routeLessons(g) {
     const h = P2.tu.easiest(known);
     return h ? { c: h.cell, v: h.v, L: h.hardestLevel, tech: h.hardest } : null;
   };
+  const ownNumber = (m, known) => {
+    const h = known ? P2.tu.explainMove(known, m.c, m.v) : null,
+      L = moveLevel(m);
+    // named after the explanation that is shown, when it is the same family (the what-ifs)
+    return { c: m.c, v: m.v, L: h && tierOf(h.hardestLevel) === tierOf(L) ? h.hardestLevel : L, tech: h ? h.hardest : undefined };
+  };
   // Was a number that already has a lesson still ready as one of the easiest? Then the move belongs to that lesson, even
   // when the hint engine would at that moment have pointed to another, equally easy number.
   const stillWaiting = (known, avail) =>
@@ -350,8 +426,10 @@ function routeLessons(g) {
     const stuck = isStuck(m) && !lapse.has(i);
     if (!kind && !stuck) return;
     const known = before(i);
-    let L = known ? stillWaiting(known, m.avail) : null;
-    const e = L ? L.e : easiestAt(m, known);
+    // Your own move was one of the easiest: the long search was for it, not for another number that was just as easy
+    const own = m.cls === "easy";
+    let L = known && !own ? stillWaiting(known, m.avail) : null;
+    const e = L ? L.e : own ? ownNumber(m, known) : easiestAt(m, known);
     if (!e && !kind) return;
     const self = !!e && m.c === e.c && m.v === e.v;
     if (self && !stuck) return; // found the easy number (by a detour in the head) without searching long: nothing to learn
@@ -425,7 +503,13 @@ function spotTip(g, e, i) {
     if (direct(kb, e.c, e.v)) continue; // was already ready before move j
     const m = list[j]; // move j made it possible; only your own correct number gives the advice
     if (m.cls !== "wrong" && m.cls !== "hint" && m.v === P2.sol[m.c])
-      return tr("It became possible when you placed {cell} = {v}.", { cell: nm(m.c), v: m.v }) + " " + GAME.followTip;
+      return (
+        (settings.coords
+          ? tr("It became possible when you placed {cell} = {v}.", { cell: nm(m.c), v: m.v })
+          : tr("Your {v} just before made it possible.", { v: m.v })) +
+        " " +
+        GAME.followTip
+      );
     break;
   }
   // 2. the number was almost finished on the board
@@ -436,17 +520,22 @@ function spotTip(g, e, i) {
   const houses = d.hidden.length ? d.hidden : M.unitsOf[e.c];
   const free = (u) => M.RC[u].filter((x) => !known[x]).length;
   const u = houses.reduce((a, b) => (free(b) < free(a) ? b : a));
+  const houseTxt = settings.coords ? M.unitName(u, nm, list2) : theHouse(M, u);
   if (free(u) <= 3)
     return (
       (free(u) === 1
-        ? tr("{house} had only one empty cell.", { house: cap(M.unitName(u, nm, list2)) })
-        : tr("{house} had only {k} empty cells.", { house: cap(M.unitName(u, nm, list2)), k: free(u) })) +
+        ? tr("{house} had only one empty cell.", { house: cap(houseTxt) })
+        : tr("{house} had only {k} empty cells.", { house: cap(houseTxt), k: free(u) })) +
       " " +
       GAME.fullTip
     );
   // 4. how it could be seen
+  if (!settings.coords)
+    return d.naked
+      ? tr("It could only be {v}: all other numbers were already around it.", { v: e.v }) + " " + GAME.nakedTip
+      : tr("In {house}, {v} could only go there.", { house: houseTxt, v: e.v }) + " " + GAME.hiddenTip;
   if (d.naked) return tr("{cell} could only be {v}: all other numbers were already around it.", { cell: nm(e.c), v: e.v }) + " " + GAME.nakedTip;
-  return tr("In {house}, {v} could only go in {cell}.", { house: M.unitName(u, nm, list2), v: e.v, cell: nm(e.c) }) + " " + GAME.hiddenTip;
+  return tr("In {house}, {v} could only go in {cell}.", { house: houseTxt, v: e.v, cell: nm(e.c) }) + " " + GAME.hiddenTip;
 }
 // What you spent the time on while the number was ready: "2 harder moves and a long search"
 function lessonParts(L) {
@@ -723,76 +812,73 @@ function keyView(h) {
   if (!steps.length) return h.views[h.views.length - 1];
   const hard = steps.filter((v) => v.tech === h.hardest);
   const kv = (hard.length ? hard[hard.length - 1] : steps[steps.length - 1]) || steps[0];
-  // For a what-if, the assumption (with the assumed numbers on the board) says more than the conclusion alone
+  // For a what-if, the assumption (with the assumed numbers on the board) says more than the conclusion alone. Its text
+  // already ends with the contradiction, so the conclusion is not repeated.
   const prev = h.views[h.views.indexOf(kv) - 1];
-  if (prev && prev.hypo && prev.tech === kv.tech && !kv.hypo) return Object.assign({}, prev, { text: prev.text + " " + kv.text });
+  if (prev && prev.hypo && prev.tech === kv.tech && !kv.hypo) return prev;
   return kv;
 }
-// opts (optional): color = {cell: colour} for your numbers, corner = {cell: colour} for a small corner, label = description
+// All the steps of an explanation, for stepping through them on a board: without the opening nudge, and without the
+// conclusion after a what-if (the what-if's own text ends with it)
+function stepViews(h) {
+  const out = [];
+  h.views.forEach((v, i) => {
+    const prev = h.views[i - 1];
+    if (v.nudge || (prev && prev.hypo && !v.hypo && !v.final && v.tech === prev.tech)) return;
+    out.push(v);
+  });
+  return out.length ? out : [h.views[h.views.length - 1]];
+}
+// An explanation on the board, one step at a time (‹ 1 / 3 ›) when it has more than one. The number it ends in (mark) is
+// circled on the last step only, so an assumption in the same cell can be seen on the steps before. The arrows are
+// handled for the whole page (below), so the boards work wherever they are drawn.
+function stepsHtml(P2, known, h, mark, head = {}) {
+  if (!h) return miniBoard(P2, known, null, mark, head);
+  const vs = stepViews(h),
+    n = vs.length;
+  const text = (v) => (viewText(v) ? viewLegend(v) + `<p class="mbtext">${v.title && n > 1 ? `<b>${esc(v.title)}</b> ` : ""}${esc(viewText(v))}</p>` : "");
+  if (n === 1) return miniBoard(P2, known, vs[0], mark, head) + text(vs[0]);
+  const nav = (k) =>
+    `<div class="mbstepnav"><button type="button" data-mbstep="-1" aria-label="${esc(tr("Previous step"))}"${k ? "" : " disabled"}>‹</button>` +
+    `<span>${tr("Step {k} of {n}", { k: k + 1, n })}</span>` +
+    `<button type="button" data-mbstep="1" aria-label="${esc(tr("Next step"))}"${k === n - 1 ? " disabled" : ""}>›</button></div>`;
+  return (
+    `<div class="mbsteps" data-k="0">` +
+    vs.map((v, k) => `<div class="mbstep"${k ? " hidden" : ""}>${miniBoard(P2, known, v, k === n - 1 ? mark : null, head)}${nav(k)}${text(v)}</div>`).join("") +
+    `</div>`
+  );
+}
+document.addEventListener("click", (e) => {
+  const b = e.target.closest("[data-mbstep]");
+  if (!b) return;
+  const box = b.closest(".mbsteps"),
+    st = [...box.querySelectorAll(":scope > .mbstep")],
+    k = Math.max(0, Math.min(st.length - 1, +box.dataset.k + +b.dataset.mbstep));
+  st.forEach((x, j) => (x.hidden = j !== k));
+  box.dataset.k = k;
+});
+// A small board (practice, after the game, the route analysis), drawn by the shared drawing code (draw.js).
+// known: the numbers (with .wrong = [[cell, number]] for wrong numbers on the board, shown in red); hv: a hint view (pattern,
+// target, bad, options with strikes, an assumption); mark: circled number(s) {c, v, col}; head: numbers placed in your head.
+// opts: color = {cell: colour} for your numbers, corner = {cell: colour} for a small corner, label = description.
 function miniBoard(P2, known, hv, mark, head = {}, opts = {}) {
-  const wrongAt = {};
-  (known.wrong || []).forEach(([c, v]) => (wrongAt[c] = v));
-  const marks = Array.isArray(mark) ? mark : mark ? [mark] : [];
-  const { rows, cols, region } = P2.d,
-    S = 100,
-    giv = P2.d.givens,
-    pos = P2.maxR >= 7 ? NOTE_POS9 : P2.maxR >= 6 ? NOTE_POS6 : NOTE_POS5;
-  const pat = new Set(hv ? hv.pattern || [] : []),
-    tgt = new Set(hv ? hv.target || [] : []),
-    bad = new Set(hv && hv.bad ? hv.bad : []),
-    hypo = (hv && hv.hypo) || {},
-    cand = (hv && hv.cand) || {},
-    strike = (hv && hv.strike) || {};
-  let s = `<svg viewBox="-30 -30 ${cols * S + 36} ${rows * S + 36}" role="img" aria-label="${esc(opts.label || tr("The board before the move"))}">`;
-  for (let c = 0; c < cols; c++) s += `<text x="${c * S + 50}" y="-10" font-size="22" text-anchor="middle" fill="var(--mute)">${"abcdefghij"[c]}</text>`;
-  for (let r = 0; r < rows; r++) s += `<text x="-16" y="${r * S + 58}" font-size="22" text-anchor="middle" fill="var(--mute)">${r + 1}</text>`;
-  for (let i = 0; i < rows * cols; i++) {
-    const x = (i % cols) * S,
-      y = Math.floor(i / cols) * S;
-    let fill = baseFill(i, region, rows, cols, giv[i]);
-    if (pat.has(i)) fill = "var(--pat)";
-    if (tgt.has(i)) fill = "var(--tgt)";
-    if (bad.has(i)) fill = "var(--badbg)";
-    s += `<rect x="${x}" y="${y}" width="${S}" height="${S}" fill="${fill}" stroke="var(--grid)" stroke-width="2"/>`;
-    const v = known[i];
-    if (v)
-      s += giv[i]
-        ? `<text x="${x + 50}" y="${y + 72}" font-size="62" font-weight="800" text-anchor="middle" fill="var(--ink)" font-family="Shippori Mincho B1, Georgia, serif">${v}</text>`
-        : `<text x="${x + 50}" y="${y + 70}" font-size="54" text-anchor="middle" fill="${(opts.color && opts.color[i]) || "var(--indigo)"}">${v}</text>`;
-    if (opts.corner && opts.corner[i]) s += `<path d="M${x + S - 30} ${y + 2}h28v28z" fill="${opts.corner[i]}"/>`;
-    else if (wrongAt[i] !== undefined && !(mark && (Array.isArray(mark) ? mark : [mark]).some((k) => k.c === i)))
-      s += `<text x="${x + 50}" y="${y + 70}" font-size="54" text-anchor="middle" fill="var(--bad)">${wrongAt[i]}</text>`;
-    else if (head[i] !== undefined) {
-      s += `<circle cx="${x + 50}" cy="${y + 50}" r="34" fill="none" stroke="var(--warn)" stroke-width="3" stroke-dasharray="5 6"/>`;
-      s += `<text x="${x + 50}" y="${y + 67}" font-size="46" font-weight="700" text-anchor="middle" fill="var(--warn)">${head[i]}</text>`;
-    } else if (marks.some((k) => k.c === i)) {
-      const mk = marks.find((k) => k.c === i);
-      s += `<circle cx="${x + 50}" cy="${y + 50}" r="40" fill="none" stroke="${mk.col}" stroke-width="6"/>`;
-      s += `<text x="${x + 50}" y="${y + 70}" font-size="56" font-weight="800" text-anchor="middle" fill="${mk.col}">${mk.v}</text>`;
-    } else if (hypo[i] !== undefined) {
-      s += `<circle cx="${x + 50}" cy="${y + 50}" r="36" fill="none" stroke="var(--hypo)" stroke-width="3" stroke-dasharray="5 6"/>`;
-      s += `<text x="${x + 50}" y="${y + 68}" font-size="48" font-weight="700" text-anchor="middle" fill="var(--hypo)">${hypo[i]}</text>`;
-    } else if (cand[i] !== undefined) {
-      for (let dg = 1; dg <= 9; dg++) {
-        if (!(cand[i] & (1 << dg)) || !pos[dg]) continue;
-        const [px, py] = pos[dg],
-          st = (strike[i] || 0) & (1 << dg);
-        s += `<text x="${x + px}" y="${y + py + 9}" font-size="25" text-anchor="middle" fill="${st ? "var(--bad)" : "var(--mute)"}" font-weight="${st ? 700 : 500}">${dg}</text>`;
-        if (st) s += `<line x1="${x + px - 11}" y1="${y + py + 11}" x2="${x + px + 11}" y2="${y + py - 9}" stroke="var(--bad)" stroke-width="3" stroke-linecap="round"/>`;
-      }
-    }
-  }
-  // Region borders
-  let path = "";
-  for (let r = 0; r < rows; r++)
-    for (let c = 0; c < cols; c++) {
-      const i = r * cols + c;
-      if (c < cols - 1 && region[i] !== region[i + 1]) path += `M${(c + 1) * S} ${r * S}v${S}`;
-      if (r < rows - 1 && region[i] !== region[i + cols]) path += `M${c * S} ${(r + 1) * S}h${S}`;
-    }
-  s += `<path d="${path}" stroke="var(--ink)" stroke-width="6" stroke-linecap="square" fill="none"/>`;
-  s += `<rect x="0" y="0" width="${cols * S}" height="${rows * S}" fill="none" stroke="var(--ink)" stroke-width="7"/></svg>`;
-  return s;
+  const marks = Array.isArray(mark) ? mark : mark ? [mark] : [],
+    values = known.slice(),
+    color = Object.assign({}, opts.color);
+  (known.wrong || []).forEach(([c, v]) => {
+    if (values[c] || marks.some((k) => k.c === c)) return;
+    values[c] = v;
+    color[c] = "var(--bad)";
+  });
+  return boardSvg(
+    { rows: P2.d.rows, cols: P2.d.cols, region: P2.d.region, givens: P2.d.givens, values, color, maxR: P2.maxR },
+    Object.assign(viewLayers(hv), {
+      head,
+      marks,
+      corner: opts.corner,
+      label: opts.label || (hv && hv.text) || undefined, // screen readers get the explanation with cell names
+    }),
+  );
 }
 function mboardHtml(g, i, mode) {
   const P2 = routePuzzle(g);
@@ -808,52 +894,48 @@ function mboardHtml(g, i, mode) {
     const right = P2.sol[m.c],
       h = P2.tu.explainMove(known, m.c, right),
       alt = h ? null : P2.tu.easiest(known);
-    const hh = h || alt,
-      kv = hh ? keyView(hh) : null;
+    const hh = h || alt;
     const left =
-      `<figure class="mbcol"><figcaption><b style="color:var(--bad)">${tr("What you placed")}</b><br>${nm(m.c)} = ${m.v}</figcaption>` +
+      `<figure class="mbcol"><figcaption><b style="color:var(--bad)">${tr("What you placed")}</b><br>${cvTag(nm, m.c, m.v, "var(--bad)")}</figcaption>` +
       miniBoard(P2, known, null, { c: m.c, v: m.v, col: "var(--bad)" }) +
       `</figure>`;
     const rightCol = hh
-      ? `<figure class="mbcol"><figcaption><b style="color:var(--indigo)">${h ? tr("The right number") : tr("The easiest move then")}</b><br>${nm(hh.cell)} = ${hh.v} · ${esc(LEVEL_TECH[hh.hardestLevel])}</figcaption>` +
-        miniBoard(P2, known, kv, { c: hh.cell, v: hh.v, col: "var(--indigo)" }) +
-        (kv && kv.text ? `<p class="mbtext">${esc(kv.text)}</p>` : "") +
+      ? `<figure class="mbcol"><figcaption><b style="color:var(--indigo)">${h ? tr("The right number") : tr("The easiest move then")}</b><br>${cvTag(nm, hh.cell, hh.v, "var(--indigo)")} · ${esc(LEVEL_TECH[hh.hardestLevel])}</figcaption>` +
+        stepsHtml(P2, known, hh, { c: hh.cell, v: hh.v, col: "var(--indigo)" }) +
         `</figure>`
       : "";
     return `<div class="mbpair">${left}${rightCol}</div>`;
   }
-  if (mode === "one") {
-    // The only number that could be found: only that and the explanation
-    const mine = P2.tu.explainMove(known, m.c, m.v),
-      kv = mine ? keyView(mine) : null;
+  // The only number that could be found: only that and the explanation
+  const onlyOne = () => {
+    const mine = P2.tu.explainMove(known, m.c, m.v);
     return (
-      `<div class="mbpair one"><figure class="mbcol"><figcaption><b style="color:var(--indigo)">${tr("How it could be found")}</b><br>${nm(m.c)} = ${m.v}${mine ? " · " + esc(LEVEL_TECH[mine.hardestLevel]) : ""}</figcaption>` +
-      miniBoard(P2, known, kv, { c: m.c, v: m.v, col: "var(--indigo)" }) +
-      (kv && kv.text ? `<p class="mbtext">${esc(kv.text)}</p>` : "") +
+      `<div class="mbpair one"><figure class="mbcol"><figcaption><b style="color:var(--indigo)">${tr("How it could be found")}</b><br>${cvTag(nm, m.c, m.v, "var(--indigo)")}${mine ? " · " + esc(LEVEL_TECH[mine.hardestLevel]) : ""}</figcaption>` +
+      stepsHtml(P2, known, mine, { c: m.c, v: m.v, col: "var(--indigo)" }) +
       `</figure></div>`
     );
-  }
+  };
+  if (mode === "one") return onlyOne();
   if (mode === "easy") {
-    // An easy number that took long: what you found, and how many other easy numbers were ready
-    const mine = P2.tu.explainMove(known, m.c, m.v),
-      kv = mine ? keyView(mine) : null,
-      all = P2.tu.easyList(known);
+    // A number that took long while others were just as easy: what you found, and the others ready at the same level
+    // (easy numbers, or the numbers the easiest technique gave). With none to show, only your number and how to see it.
+    const ready = P2.tu.readyList(known),
+      others = ready.list.filter(([c]) => c !== m.c);
+    if (!others.length) return onlyOne();
+    const mine = P2.tu.explainMove(known, m.c, m.v);
     const left =
-      `<figure class="mbcol"><figcaption><b style="color:var(--warn)">${tr("What you found")}</b><br>${nm(m.c)} = ${m.v}${mine ? " · " + esc(LEVEL_TECH[mine.hardestLevel]) : ""}</figcaption>` +
-      miniBoard(P2, known, kv, { c: m.c, v: m.v, col: "var(--warn)" }) +
-      (kv && kv.text ? `<p class="mbtext">${esc(kv.text)}</p>` : "") +
+      `<figure class="mbcol"><figcaption><b style="color:var(--warn)">${tr("What you found")}</b><br>${cvTag(nm, m.c, m.v, "var(--warn)")}${mine ? " · " + esc(LEVEL_TECH[mine.hardestLevel]) : ""}</figcaption>` +
+      stepsHtml(P2, known, mine, { c: m.c, v: m.v, col: "var(--warn)" }) +
       `</figure>`;
-    const others = all.filter(([c]) => c !== m.c);
-    const right = others.length
-      ? `<figure class="mbcol"><figcaption><b style="color:var(--indigo)">${tr("Easy numbers then")}</b><br>${others.length === 1 ? tr("One other to choose") : tr("{n} others to choose from", { n: others.length })}</figcaption>` +
-        miniBoard(
-          P2,
-          known,
-          null,
-          others.map(([c, v]) => ({ c, v, col: "var(--indigo)" })).concat([{ c: m.c, v: m.v, col: "var(--warn)" }]),
-        ) +
-        `<p class="mbtext">${GAME.directAll}</p></figure>`
-      : `<figure class="mbcol"><figcaption><b style="color:var(--indigo)">${tr("Easy numbers then")}</b><br>${tr("That was the only one.")}</figcaption></figure>`;
+    const right =
+      `<figure class="mbcol"><figcaption><b style="color:var(--indigo)">${ready.level > 1 ? tr("Just as easy then") : tr("Easy numbers then")}</b><br>${others.length === 1 ? tr("One other to choose") : tr("{n} others to choose from", { n: others.length })}</figcaption>` +
+      miniBoard(
+        P2,
+        known,
+        null,
+        others.map(([c, v]) => ({ c, v, col: "var(--indigo)" })).concat([{ c: m.c, v: m.v, col: "var(--warn)" }]),
+      ) +
+      `<p class="mbtext">${ready.level > 1 ? tr("All the numbers that could be found with {tech} at that moment.", { tech: LEVEL_TECH[ready.level] }) : GAME.directAll}</p></figure>`;
     return `<div class="mbpair">${left}${right}</div>`;
   }
   // Could the move be found more easily by placing other numbers in your head first (thought ahead)? Then that route is shown,
@@ -863,7 +945,7 @@ function mboardHtml(g, i, mode) {
   let mine,
     extra = "",
     lvl = null;
-  if (r && r.ahead && r.ahead.level < r.direct) {
+  if (r && r.ahead && r.ahead.level < r.direct && !m.aheadSlow) {
     const kk = known.slice();
     let best = null;
     for (const [c, v] of r.ahead.via) {
@@ -880,27 +962,37 @@ function mboardHtml(g, i, mode) {
       mine = best.h;
       extra =
         "<br>" +
-        tr("first {via} in your head ({tech}), then {cell} ({tech2})", {
-          via: viaTxt,
-          tech: LEVEL_TECH[best.h.hardestLevel],
-          cell: nm(m.c),
-          tech2: LEVEL_TECH[fin.hardestLevel],
-        });
+        (settings.coords
+          ? tr("first {via} in your head ({tech}), then {cell} ({tech2})", {
+              via: viaTxt,
+              tech: LEVEL_TECH[best.h.hardestLevel],
+              cell: nm(m.c),
+              tech2: LEVEL_TECH[fin.hardestLevel],
+            })
+          : tr("first the dashed numbers in your head ({tech}), then this one ({tech2})", {
+              tech: LEVEL_TECH[best.h.hardestLevel],
+              tech2: LEVEL_TECH[fin.hardestLevel],
+            }));
     } else {
       mine = fin;
-      extra = "<br>" + tr("after {via} in your head", { via: viaTxt });
+      extra = "<br>" + (settings.coords ? tr("after {via} in your head", { via: viaTxt }) : tr("after the dashed numbers in your head"));
     }
-  } else mine = P2.tu.explainMove(known, m.c, m.v);
+  } else {
+    mine = P2.tu.explainMove(known, m.c, m.v);
+    // it took too long for the route in your head, so it is counted as seen directly; the easier route is still named
+    if (m.aheadSlow && r && r.ahead) {
+      const vs = r.ahead.via.map(([c, v]) => nm(c) + " = " + v);
+      extra = "<br>" + tr("Easier: first {via} in your head", { via: list2(vs.slice(0, 4)) + (vs.length > 4 ? " " + tr("and more") : "") });
+    }
+  }
   const easy = P2.tu.easiest(known);
   // least: your own number. The app cannot see how you found it, only the easiest route to it: "at least {technique}"
   const panel = (h, col, title, c, v, hd, extra, L, least) => {
-    const kv = h ? keyView(h) : null;
     L = L || (h ? h.hardestLevel : 0);
     const tech = L ? (least ? tr("at least {tech}", { tech: LEVEL_TECH[L] }) : LEVEL_TECH[L]) : "";
     return (
-      `<figure class="mbcol"><figcaption><b style="color:${col}">${title}</b><br>${nm(c)} = ${v}${tech ? " · " + esc(tech) : ""}${extra || ""}</figcaption>` +
-      miniBoard(P2, known, kv, { c, v, col }, hd) +
-      (kv && kv.text ? `<p class="mbtext">${esc(kv.text)}</p>` : "") +
+      `<figure class="mbcol"><figcaption><b style="color:${col}">${title}</b><br>${cvTag(nm, c, v, col)}${tech ? " · " + esc(tech) : ""}${extra || ""}</figcaption>` +
+      stepsHtml(P2, known, h, { c, v, col }, hd) +
       `</figure>`
     );
   };
@@ -946,14 +1038,14 @@ function concOf(g, base) {
   markErrors(g.moves);
   const mv = g.moves.filter(judged);
   if (mv.length < 8) return null;
-  const easyT = mv.filter((m) => m.avail === 1 && m.cls === "easy").map((m) => m.dt / 1000);
+  const easyT = mv.filter((m) => m.avail === 1 && m.cls === "easy" && !m.early).map((m) => m.dt / 1000);
   const norm = base[1] ? base[1].med : easyT.length ? median(easyT) : 8;
   const thr = Math.max(20, 3 * norm);
   const slips = [];
   g.moves.forEach((m, i) => {
     if (!judged(m)) return;
     if (m.cls === "wrong") slips.push({ i, kind: "err" });
-    else if (m.avail === 1 && (m.nAvail || 0) >= 3 && m.dt / 1000 >= thr) slips.push({ i, kind: "slow" });
+    else if (m.avail === 1 && (m.nAvail || 0) >= 3 && m.dt / 1000 >= thr && !m.early) slips.push({ i, kind: "slow" }); // a move needed anyway is work, not a lapse
   });
   const slow = slips.filter((x) => x.kind === "slow").length,
     err = slips.length - slow;
@@ -1273,7 +1365,9 @@ function feltExport() {
   );
 }
 function ratingPanel() {
-  // The latest 400 solved puzzles: enough for a reliable picture, and the chart does not get heavy with thousands of games
+  // The latest 400 solved puzzles: enough for a reliable picture, and the chart does not get heavy with thousands of games.
+  // The check uses the puzzles without hints, on a log scale of time per cell (a few very long games do not decide it), and
+  // per board size: a bigger board costs more per cell at the same grade, so sizes mixed together look like a poorer fit.
   const pts = games
     .filter((g) => g.solved && g.empty)
     .slice(-400)
@@ -1284,14 +1378,33 @@ function ratingPanel() {
       out +
       `<p>${tr("Once you have solved 5 puzzles, the computed difficulty is compared here with your actual time per cell and with how the puzzles felt.")}</p></div>`
     );
-  const n = pts.length,
-    mx = pts.reduce((a, p) => a + p.x, 0) / n,
-    my = pts.reduce((a, p) => a + p.y, 0) / n;
-  const sxy = pts.reduce((a, p) => a + (p.x - mx) * (p.y - my), 0),
-    sxx = pts.reduce((a, p) => a + (p.x - mx) ** 2, 0),
-    syy = pts.reduce((a, p) => a + (p.y - my) ** 2, 0);
-  const r = sxx && syy ? sxy / Math.sqrt(sxx * syy) : 0,
-    slope = sxx ? sxy / sxx : 0;
+  const clean = pts.filter((p) => !p.g.hints && !p.g.replay);
+  const corr = (xs) => {
+    const m = xs.length;
+    if (m < 3) return 0;
+    const ax = xs.reduce((a, q) => a + q[0], 0) / m,
+      ay = xs.reduce((a, q) => a + q[1], 0) / m;
+    const xy = xs.reduce((a, q) => a + (q[0] - ax) * (q[1] - ay), 0),
+      xx = xs.reduce((a, q) => a + (q[0] - ax) ** 2, 0),
+      yy = xs.reduce((a, q) => a + (q[1] - ay) ** 2, 0);
+    return xx && yy ? xy / Math.sqrt(xx * yy) : 0;
+  };
+  const ly = (p) => Math.log(p.y),
+    sizeOf = (g) => g.cols + "×" + g.rows;
+  const bySize = {};
+  clean.forEach((p) => (bySize[sizeOf(p.g)] = bySize[sizeOf(p.g)] || []).push(p));
+  const sizes = Object.keys(bySize).sort((a, b) => bySize[a][0].g.rows * bySize[a][0].g.cols - bySize[b][0].g.rows * bySize[b][0].g.cols);
+  // the grade within each size, pooled: each size measured against its own average, so the sizes' levels do not count
+  const within = [];
+  sizes.forEach((k) => {
+    const l = bySize[k],
+      mx = l.reduce((a, p) => a + p.x, 0) / l.length,
+      my = l.reduce((a, p) => a + ly(p), 0) / l.length;
+    l.forEach((p) => within.push([p.x - mx, ly(p) - my]));
+  });
+  const n = clean.length,
+    r = corr(within);
+  // the chart: time per cell on a log scale against the grade, one dashed line per size
   const W = 320,
     H = 170,
     L = 30,
@@ -1300,42 +1413,58 @@ function ratingPanel() {
     B = 24;
   const x0 = Math.floor(Math.min(...pts.map((p) => p.x))),
     x1 = Math.ceil(Math.max(...pts.map((p) => p.x)) + 0.01),
-    y1 = Math.max(...pts.map((p) => p.y)) * 1.1;
+    yl = Math.log(Math.max(0.5, Math.min(...pts.map((p) => p.y)) * 0.85)),
+    yh = Math.log(Math.max(...pts.map((p) => p.y)) * 1.15);
   const X = (v) => L + ((W - L - R) * (v - x0)) / Math.max(1, x1 - x0),
-    Y = (v) => T + (H - T - B) * (1 - v / y1);
+    Y = (v) => T + (H - T - B) * (1 - (Math.log(v) - yl) / Math.max(0.01, yh - yl));
   let s = `<svg class="trend" viewBox="0 0 ${W} ${H}" role="img" aria-label="${tr("Computed difficulty against your time per cell")}">`;
-  for (let k = 0; k <= 3; k++) {
-    const v = (y1 * k) / 3;
-    s += `<line x1="${L}" x2="${W - R}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--grid)"/><text x="${L - 6}" y="${Y(v) + 4}" font-size="10" text-anchor="end" fill="var(--mute)">${Math.round(v)}</text>`;
-  }
+  [1, 2, 5, 10, 20, 50, 100, 200].filter((v) => Math.log(v) >= yl && Math.log(v) <= yh).forEach((v) => {
+    s += `<line x1="${L}" x2="${W - R}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--grid)"/><text x="${L - 6}" y="${Y(v) + 4}" font-size="10" text-anchor="end" fill="var(--mute)">${v}</text>`;
+  });
   for (let v = x0; v <= x1; v++) s += `<text x="${X(v)}" y="${H - 8}" font-size="10" text-anchor="middle" fill="var(--mute)">${v}</text>`;
-  s += `<line x1="${X(x0)}" y1="${Y(Math.max(0, my + slope * (x0 - mx)))}" x2="${X(x1)}" y2="${Y(Math.max(0, my + slope * (x1 - mx)))}" stroke="var(--mute)" stroke-width="1.5" stroke-dasharray="4 3"/>`;
+  sizes.forEach((k) => {
+    const l = bySize[k];
+    if (l.length < 5) return;
+    const mx = l.reduce((a, p) => a + p.x, 0) / l.length,
+      my = l.reduce((a, p) => a + ly(p), 0) / l.length,
+      sxx = l.reduce((a, p) => a + (p.x - mx) ** 2, 0),
+      b = sxx ? l.reduce((a, p) => a + (p.x - mx) * (ly(p) - my), 0) / sxx : 0;
+    const lo = Math.min(...l.map((p) => p.x)),
+      hi = Math.max(...l.map((p) => p.x));
+    s += `<line x1="${X(lo)}" y1="${Y(Math.exp(my + b * (lo - mx)))}" x2="${X(hi)}" y2="${Y(Math.exp(my + b * (hi - mx)))}" stroke="var(--mute)" stroke-width="1.5" stroke-dasharray="4 3"/>`;
+  });
   pts.forEach((p) => {
     const g = p.g,
       d = new Date(g.end).toLocaleDateString(LOCALE, { day: "numeric", month: "short" });
-    const tip = `${d}: ${BAND[gBand(g)]} ${dec(p.x)} · ${g.cols}×${g.rows} · ${tr("{s} sec. per cell", { s: Math.round(p.y) })}${g.hints ? " · " + (g.hints === 1 ? tr("1 hint") : tr("{n} hints", { n: g.hints })) : ""}${g.felt != null ? " · " + tr("felt {f}", { f: FELT[g.felt + 2].toLowerCase() }) : ""}`;
+    const tip = `${d}: ${BAND[gBand(g)]} ${dec(p.x)} · ${g.cols}×${g.rows} · ${tr("{s} sec. per cell", { s: dec(p.y, 1) })}${g.hints ? " · " + (g.hints === 1 ? tr("1 hint") : tr("{n} hints", { n: g.hints })) : ""}${g.felt != null ? " · " + tr("felt {f}", { f: FELT[g.felt + 2].toLowerCase() }) : ""}`;
     s +=
       `<circle cx="${X(p.x)}" cy="${Y(p.y)}" r="4.5" fill="${g.hints ? "var(--cell)" : "var(--indigo)"}" stroke="${g.hints ? "var(--indigo)" : "var(--cell)"}" stroke-width="2"/>` +
       `<circle cx="${X(p.x)}" cy="${Y(p.y)}" r="12" fill="transparent" data-tip="${esc(tip)}"/>`;
   });
   s += `</svg><div class="legendrow" style="justify-content:space-between"><span>${tr("seconds per cell ↑ · computed difficulty →")}</span><span><i style="background:var(--indigo);border-radius:50%"></i> ${tr("without hints")}</span></div>`;
-  const corr = (xs) => {
-    const m = xs.length,
-      ax = xs.reduce((a, q) => a + q[0], 0) / m,
-      ay = xs.reduce((a, q) => a + q[1], 0) / m;
-    const xy = xs.reduce((a, q) => a + (q[0] - ax) * (q[1] - ay), 0),
-      xx = xs.reduce((a, q) => a + (q[0] - ax) ** 2, 0),
-      yy = xs.reduce((a, q) => a + (q[1] - ay) ** 2, 0);
-    return xx && yy ? xy / Math.sqrt(xx * yy) : 0;
+  const perSize = sizes.length
+    ? `<table class="data"><tr><th>${tr("Board")}</th><th class="num">${tr("Puzzles")}</th><th class="num">${tr("Correlation")}</th></tr>` +
+      sizes.map((k) => `<tr><td>${k}</td><td class="num">${bySize[k].length}</td><td class="num">${bySize[k].length >= 8 ? dec(corr(bySize[k].map((p) => [p.x, ly(p)])), 2) : "–"}</td></tr>`).join("") +
+      `</table>`
+    : "";
+  const two = clean.filter((q) => q.g.peak != null);
+  // also within each board size, like the check above
+  const inSize = (fx) => {
+    const by = {};
+    two.forEach((q) => (by[sizeOf(q.g)] = by[sizeOf(q.g)] || []).push([fx(q), ly(q)]));
+    return Object.values(by).flatMap((l) => {
+      const mx = l.reduce((a, d) => a + d[0], 0) / l.length,
+        my = l.reduce((a, d) => a + d[1], 0) / l.length;
+      return l.map((d) => [d[0] - mx, d[1] - my]);
+    });
   };
-  const two = pts.filter((q) => q.g.peak != null);
   const split =
     two.length >= 8
       ? `<table class="data"><tr><th>${tr("What tracks your time?")}</th><th class="num">${tr("Correlation")}</th></tr>` +
         [
-          [tr("The overall number"), two.map((q) => [q.x, q.y])],
-          [tr("Peak (heaviest step)"), two.map((q) => [q.g.peak, q.y])],
-          [tr("Load (number of heavy steps)"), two.map((q) => [q.g.load, q.y])],
+          [tr("The overall number"), inSize((q) => q.x)],
+          [tr("Peak (heaviest step)"), inSize((q) => q.g.peak)],
+          [tr("Load (number of heavy steps)"), inSize((q) => q.g.load)],
         ]
           .map(([t, d]) => `<tr><td>${t}</td><td class="num">${dec(corr(d), 2)}</td></tr>`)
           .join("") +
@@ -1343,15 +1472,17 @@ function ratingPanel() {
       : `<p class="caveat">${tr("After 8 solved puzzles on the new scale, this shows whether peak or load tracks your time best.")}</p>`;
   const verdict =
     n < 8
-      ? tr("Too few puzzles to say anything for sure ({n}).", { n })
+      ? tr("Too few puzzles without hints to say anything for sure ({n}).", { n })
       : r >= 0.6
         ? tr("The rating tracks your time well (correlation {r} on a scale from 0 to 1).", { r: dec(r, 2) })
         : r >= 0.3
-          ? tr("The rating only partly tracks your time (correlation {r}). Points far from the dashed line are puzzles it got wrong for you.", { r: dec(r, 2) })
+          ? tr("The rating only partly tracks your time (correlation {r}). Points far from their dashed line are puzzles it got wrong for you.", { r: dec(r, 2) })
           : tr("The rating explains your time poorly (correlation {r}). It clearly measures something other than what is hard for you.", { r: dec(r, 2) });
   out +=
-    `<p>${tr("Each point is a solved puzzle. If the rating fits you, the points rise to the right.")}</p><p class="insight ${n >= 8 && r < 0.3 ? "warn" : ""}">${verdict}</p>` +
+    `<p>${tr("Each point is a solved puzzle. If the rating fits you, the points rise to the right, along the dashed line of their board size.")}</p><p class="insight ${n >= 8 && r < 0.3 ? "warn" : ""}">${verdict}</p>` +
     s +
+    perSize +
+    `<p class="caveat">${tr("Measured on puzzles without hints, on time per cell, and within each board size, since a bigger board takes longer per cell at the same grade.")}</p>` +
     split;
   // Experience
   const felt = games.filter((g) => g.felt != null);
@@ -1386,13 +1517,13 @@ function spotOf(g) {
     if (m.avail && m.cls !== "wrong" && judged(m)) {
       const e = (o[m.avail] = o[m.avail] || [0, 0]);
       e[0]++;
-      if (m.cls === "easy") e[1]++;
+      if (m.cls === "easy" && !m.early) e[1]++;
     }
   });
   return o;
 }
 function focusData() {
-  let src = games.filter((g) => g.route || g.moves || (g.hintTechs || []).length).slice(-40);
+  let src = ownGames().filter((g) => g.route || g.moves || (g.hintTechs || []).length).slice(-40);
   // Games late in a long session or at night are left out if enough are left: otherwise fatigue looks like a weak technique
   const ctx = contexts(),
     fresh = src.filter((g) => {
@@ -1678,9 +1809,9 @@ function gameSheet(g) {
   openSheet(
     `<h2>${esc(BAND[gBand(g)])} ${dec(gradeFor(g))} · ${g.cols}×${g.rows}</h2>` +
       (g.np != null && Math.abs(g.np - g.value) >= 0.1
-        ? `<p class="sub">${penUsed(g) === true ? tr("Played with pencil. Without pencil: {v}.", { v: dec(g.np) }) : penUsed(g) === false ? tr("Played without pencil. With pencil: {v}.", { v: dec(g.value) }) : tr("With pencil: {a}. Without pencil: {b}.", { a: dec(g.value), b: dec(g.np) })}</p>`
+        ? `<p class="sub">${penUsed(g) === true ? (g.pen < PEN_MIN ? tr("Counted with pencil (your setting). Without pencil: {v}.", { v: dec(g.np) }) : tr("Played with pencil. Without pencil: {v}.", { v: dec(g.np) })) : penUsed(g) === false ? tr("Played without pencil. With pencil: {v}.", { v: dec(g.value) }) : tr("With pencil: {a}. Without pencil: {b}.", { a: dec(g.value), b: dec(g.np) })}</p>`
         : "") +
-      `<p style="color:var(--mute)">${new Date(g.end).toLocaleString(LOCALE, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })} · ${g.solved ? tr("solved in {time}", { time: fmt(g.ms) }) : tr("not solved")}${g.solved && g.lv ? " · " + tr("estimate {t}", { t: estFmt(g.est || estimateSec(myCal(), g.lv)) }) : ""}</p>` +
+      `<p style="color:var(--mute)">${new Date(g.end).toLocaleString(LOCALE, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })} · ${g.solved ? tr("solved in {time}", { time: fmt(g.ms) }) : tr("not solved")}${g.solved && g.lv ? " · " + tr("estimate {t}", { t: estFmt(g.est || estimateSec(myCal(), g.lv, g.rows * g.cols)) }) : ""}</p>` +
       `<div class="menu">` +
       menuItem(
         "gRoute",

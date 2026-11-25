@@ -74,6 +74,20 @@ samme, tages først i de første tre skridt, så det korte ræsonnement findes.
 `inner` blev samtidig sænket fra 0,6 til 0,25: et par inde i et kort hvis-så må ikke koste mere end mange skridt.
 I ruteanalysen er de fire slags ét trin, når et træk sammenlignes med det letteste lige da.
 
+## Det næste tal efter pris (25. nov. 2026)
+
+Den simulerede løser tager ikke længere den letteste teknik først. Den tager den billigste vej til et tal, prissat med
+`whatIfCost` (de samme led som `stepEffort` "som du plejede at spille": genkendelse, længde, teknikker indeni,
+hukommelse). Den prøver stadig teknikkerne fra den letteste, men når en vej er fundet, søges der i sværere teknikker, så
+længe deres bund (metoden ved sin korteste) er under vejens pris. Trin, der kun fjerner muligheder, bruges helt og søges
+videre derfra (som før), og hvor de fører hen, sammenlignes med sværere teknikker, der giver et tal direkte. En vejs pris
+er dens dyreste trin. `link` (per teknik) lægger en pris per led ud over det første; den er 0, indtil tiderne støtter
+den. Hvis-så-søgningerne får den fundne pris som loft, så slags, der ikke kan komme under den, springes over, og
+kørslerne stoppes ved cirka det dobbelte af de led, de har råd til. JS og Java gør det samme, og paritetstesten dækker det.
+
+**Regionsformer:** et felt, der rører alle felter i en region én mindre end dets egen, er en single af sin egen slags
+(`shape`, score 0,5, teknik 0). Den bygger ikke på noget på pladen, så den har ingen afhængigheder i hvis-så-kæder.
+
 ## Sådan kalibreres
 
 1. Eksportér statistikken fra appen (Indstillinger, «Eksportér statistik») og læg filen et sted uden for repoet.

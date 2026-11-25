@@ -2,8 +2,9 @@
 // <gen:weights> Written by tools/grade/gen.py from tools/grade/sudoku.json. Edit there, not here.
 // Pencil terms: [with pencil, without pencil, as you used to play], each a list per technique (derived from base, diff and anchor).
 const GW = {
-  fit: 2,
+  fit: 3,
   recog: [0, 0, 0.6, 1.8, 2.4, 3, 3.6, 2.1, 2.8, 3.2, 3.4, 3.6, 3.8, 3.6],
+  link: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
   spot: [0.5, 0.5, 0.3, 0.15, 0],
   cap: 14.9,
   inner: 0.6,

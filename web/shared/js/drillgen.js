@@ -10,8 +10,8 @@ const DRILL_TECHS = [1, 2, 3, 4];
 // d = { L, spec: { size: [rows, cols], maxRegion, empty: [lo, hi], opts }, seed, budget (ms) }
 // Generates puzzles that need technique level L and walks their solution with the tutor (always the easiest next number).
 // A position fits when the next number needs exactly one pattern at level L and nothing harder (singles: any position, with
-// at most spec.opts easy numbers to find). Rare patterns (triples in Sudoku) also accept a position without easy numbers where
-// an easier pattern would do too, as long as one pattern at level L gives a number on its own. Among the fitting positions,
+// at most spec.opts easy numbers to find). When no exact fit turns up in half the time, a position where an easier pattern
+// would do too is accepted, as long as one pattern at level L gives a number on its own (rare patterns: triples in Sudoku). Among the fitting positions,
 // one inside the wanted range of empty cells is picked at random (the exact fits first); otherwise the nearest.
 function findDrill(SE, d) {
   const t0 = Date.now(),
@@ -52,7 +52,9 @@ function findDrill(SE, d) {
       known[h.cell] = h.v;
     }
     if (inRange.length) return inRange[Math.floor(rand() * inRange.length)];
-    if (loose.length && (d.L >= 4 || Date.now() - t0 > d.budget / 2)) return loose[Math.floor(rand() * loose.length)];
+    // a position where an easier pattern would also do only when no exact one turns up in half the time (it runs ahead of
+    // play, so the wait is hidden: drill.js fetches the next board, and the first of the next round, in advance)
+    if (loose.length && Date.now() - t0 > d.budget / 2) return loose[Math.floor(rand() * loose.length)];
     if (best && Date.now() - t0 > d.budget) return best;
     if (Date.now() - t0 > 3 * d.budget) break;
   }

@@ -14,6 +14,10 @@
   --pat: #dde4f7;
   --tgt: #f5e9bd;
   --hypo: #a8610b;
+  --work: #1f8a5b; /* the numbers that do the work (a ring) */
+  --optbg: rgba(44, 71, 160, 0.16); /* an option that belongs to the pattern */
+  --outline: #7a4fc9; /* the region or house it is about */
+  --link: #a8610b; /* arrows */
   --badbg: #f6d6ce;
   --peer: #eef0ea;
   --same: #e6ebf8;
@@ -43,6 +47,10 @@
     --pat: #26304f;
     --tgt: #3d3520;
     --hypo: #f0a54a;
+    --work: #5cc995; /* the numbers that do the work (a ring) */
+    --optbg: rgba(147, 169, 242, 0.28); /* an option that belongs to the pattern */
+    --outline: #b79cf4; /* the region or house it is about */
+    --link: #f0a54a; /* arrows */
     --badbg: #4a2620;
     --peer: #1d2028;
     --same: #222a40;
@@ -69,6 +77,10 @@
   --pat: #26304f;
   --tgt: #3d3520;
   --hypo: #f0a54a;
+  --work: #5cc995; /* the numbers that do the work (a ring) */
+  --optbg: rgba(147, 169, 242, 0.28); /* an option that belongs to the pattern */
+  --outline: #b79cf4; /* the region or house it is about */
+  --link: #f0a54a; /* arrows */
   --badbg: #4a2620;
   --peer: #1d2028;
   --same: #222a40;
@@ -789,7 +801,8 @@ svg#grid {
 }
 .tools {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-auto-flow: column; /* as many equal columns as there are buttons shown (the campaign and trials hide some) */
+  grid-auto-columns: 1fr;
   gap: 7px;
 }
 .tools button {
@@ -2028,6 +2041,34 @@ textarea.io {
   color: var(--mute);
   margin: 4px 0 0;
 }
+/* An explanation stepped through on the board: arrows under the board, the step's text in full ink */
+.mbstepnav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: var(--mute);
+}
+.mbstepnav button {
+  width: 44px;
+  height: 36px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--indigo);
+  font-size: 22px;
+  cursor: pointer;
+}
+.mbstepnav button:disabled {
+  opacity: 0.25;
+  cursor: default;
+}
+.mbsteps .mbtext {
+  color: var(--ink);
+  font-size: 12.5px;
+}
 .mbnote {
   font-size: 11.5px;
   color: var(--mute);
@@ -3033,4 +3074,264 @@ details.fold.lead[open] .more {
 /* no double-tap zoom anywhere (see the end of core.js for the pinch) */
 html {
   touch-action: manipulation;
+}
+
+/* Guest mode: a band at the bottom of every screen (under sheets and dialogs), and room for it */
+.guestband {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 25;
+  width: 100%;
+  min-height: 34px;
+  padding: 6px 12px calc(6px + env(safe-area-inset-bottom));
+  border: 0;
+  background: var(--warn);
+  color: var(--paper);
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+}
+body.guest .view {
+  padding-bottom: calc(28px + 34px + env(safe-area-inset-bottom));
+}
+body.guest .dock {
+  bottom: calc(34px + env(safe-area-inset-bottom));
+}
+.guestlink {
+  align-self: center;
+  margin: -4px 0 0;
+  padding: 8px 12px;
+  border: 0;
+  background: none;
+  color: var(--indigo);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* Play modes in New game: the manual choices are folded away in a mode, and one line says what will be picked */
+.manualopts {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.manualopts[hidden] {
+  display: none;
+}
+.modewhy {
+  margin: -4px 0 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--cell);
+  border: 1px solid var(--grid);
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: var(--mute);
+}
+.modewhy b {
+  display: block;
+  color: var(--ink);
+  font-size: 14.5px;
+  margin-bottom: 2px;
+}
+
+/* The statistics' switch between the main game and 4×4 (a game of its own in the statistics) */
+.scopeseg {
+  margin-bottom: 2px;
+}
+
+/* The legend under a board (legendHtml in draw.js): each role's colour and shape, named once */
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--mute);
+}
+.legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.legend .lg {
+  display: inline-block;
+  flex: none;
+  width: 13px;
+  height: 13px;
+  font-style: normal;
+}
+.legend .lg.cell {
+  border-radius: 3px;
+  border: 1px solid var(--grid);
+}
+.legend .lg.ring {
+  border-radius: 50%;
+  border: 2.5px solid;
+}
+.legend .lg.ring.dash {
+  border-style: dashed;
+}
+.legend .lg.box {
+  border: 3px solid;
+  border-radius: 2px;
+}
+.legend .lg.opt {
+  border-radius: 50%;
+  background: var(--optbg);
+  box-shadow: inset 0 0 0 1px var(--indigo);
+}
+.legend .lg.arrow {
+  width: auto;
+  height: auto;
+  font-weight: 800;
+  line-height: 1;
+}
+.legend .lg.strike {
+  width: auto;
+  height: auto;
+  color: var(--bad);
+  font-weight: 700;
+  text-decoration: line-through;
+  line-height: 1;
+}
+
+/* A number named in a caption or sentence, drawn as it is marked on the board (cvTag in draw.js): the colour and the ring
+   find it there; the cell name is only for screen readers */
+.cvtag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.45em;
+  height: 1.45em;
+  padding: 0 2px;
+  box-sizing: border-box;
+  border: 2px solid var(--c);
+  border-radius: 999px;
+  color: var(--c);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  vertical-align: -0.2em;
+}
+.vh {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+/* the hint's legend sits above its text */
+#hintLegend .legend {
+  margin: 0 0 6px;
+}
+
+/* Campaign (campaign.js): the card on the home screen and the path */
+.campico {
+  width: 56px;
+  height: 62px;
+  border-radius: 12px;
+  background: var(--paper);
+  box-shadow: inset 0 0 0 1.5px var(--grid);
+  display: grid;
+  place-items: center;
+  color: var(--indigo);
+}
+.campico .i {
+  width: 30px;
+  height: 30px;
+}
+.campath {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.campstep {
+  display: grid;
+  grid-template-columns: 32px 1fr;
+  gap: 12px;
+  align-items: start;
+  padding: 10px 4px;
+}
+.campstep .campn {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  font-weight: 700;
+  font-size: 14px;
+  box-shadow: inset 0 0 0 2px var(--grid);
+  color: var(--mute);
+}
+.campstep strong {
+  display: block;
+  line-height: 28px;
+}
+.campstep .sub {
+  display: block;
+  color: var(--mute);
+  font-size: 14px;
+}
+.campstep.done .campn {
+  background: var(--indigo);
+  box-shadow: none;
+  color: var(--paper);
+}
+.campstep.cur {
+  background: var(--cell);
+  border-radius: 14px;
+  box-shadow: inset 0 0 0 1.5px var(--grid);
+}
+.campstep.cur .campn {
+  box-shadow: inset 0 0 0 2px var(--indigo);
+  color: var(--indigo);
+}
+.campstep.later {
+  opacity: 0.6;
+}
+.campact {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+/* a destructive button outside the menus (Delete copied notes) */
+.actions button.danger {
+  color: var(--bad);
+}
+
+/* Timed trial (trial.js): the time left, the index chart and the list of boards */
+.timer.short {
+  color: var(--bad);
+  font-weight: 700;
+}
+.trialchart {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin: 4px 0 8px;
+}
+.trialchart .ax {
+  font-size: 11px;
+  fill: var(--mute);
+}
+.trialchart .fixed {
+  stroke: var(--grid);
+  stroke-width: 1.5;
+  stroke-dasharray: 4 4;
+}
+.trialtab td,
+.trialtab th {
+  font-size: 14px;
 }

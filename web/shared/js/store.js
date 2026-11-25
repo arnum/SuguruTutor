@@ -41,6 +41,10 @@ function loadPuzzle(p, saved, opts = {}) {
           revealed: false,
           started: new Date().toISOString(),
           replay: !!opts.replay,
+          mode: opts.mode || null, // the play mode it was started in, and the grade it aimed at (newgame.js)
+          modeT: opts.modeT != null ? opts.modeT : null,
+          camp: opts.camp || null, // a campaign board: { L, board, part } (campaign.js)
+          trial: opts.trial || null, // a timed trial board: { fl, T, lim } (trial.js)
           moves: [],
         };
   if (!meta.moves) meta.moves = [];
@@ -70,6 +74,7 @@ function recordGame(won) {
     npk: P.grade && P.grade.np ? P.grade.np.peak : null, // and its peak and load
     npl: P.grade && P.grade.np ? P.grade.np.load : null,
     pen: meta.pen || 0, // number of pencil notes written in the game (0 = played without pencil)
+    penOn: noPen() || meta.trial ? undefined : 1, // the setting "with pencil": the game counts as with pencil, notes or not
     peak: P.grade ? P.grade.peak : null,
     load: P.grade ? P.grade.load : null,
     nHard: P.grade ? P.grade.nHard : null,
@@ -83,16 +88,34 @@ function recordGame(won) {
     code: P.code,
     daily: meta.daily,
     replay: meta.replay || undefined,
+    mode: meta.mode || undefined,
+    modeT: meta.mode && meta.modeT != null ? meta.modeT : undefined,
     dbg: meta.dbg && meta.dbg.length ? meta.dbg : undefined,
     lv: P.grade ? P.grade.lv : null,
     pv: (P.grade && (personalGrade(shownGrade(P), P.rating.level) || {}).value) || null,
-    est: P.grade ? Math.round(estimateSec(myCal(), P.grade.lv) || 0) || null : null,
+    est: P.grade ? Math.round(estimateSec(myCal(), P.grade.lv, P.rows * P.cols) || 0) || null : null,
     filled: entries.filter(Boolean).length,
     empty: P.givens.filter((g) => !g).length,
   };
+  // a timed trial board is kept by the trials, not in the statistics
+  if (meta.trial) {
+    if (meta.trialDone) return null;
+    meta.trialDone = true;
+    trialRecord(rec);
+    return rec;
+  }
+  // a campaign board is kept by the campaign, not in the statistics
+  if (meta.camp) {
+    if (meta.campDone) return null;
+    meta.campDone = true;
+    rec.camp = meta.camp;
+    campRecord(rec);
+    return rec;
+  }
   games = games.filter((g) => g.id !== rec.id);
   games.push(rec);
   saveGames();
+  modeAfterGame(rec);
   return rec;
 }
 

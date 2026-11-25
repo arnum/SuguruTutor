@@ -120,7 +120,9 @@ const GAME = {
   // and box for nine numbers. With 8 s an easy puzzle becomes about 5-6 minutes and a medium one about 10, which is what is typically
   // given for practised players (not experts); the world record for an easy puzzle was 2:08 (Thomas Snyder, 2006).
   // Already after the first game the estimate builds mostly on your own times (the starting value weighs as 3 moves).
-  calPrior: { c: Math.log(8) },
+  calPrior: { c: Math.log(8), cells: 81 },
+  // practice par (drill.js) on top of the board-size scaling: a find in Sudoku takes longer (provisional, as in calPrior)
+  parScale: 1.8,
   codeNote: tr("The code contains the puzzle itself. It can be loaded on the app's home screen, also on another phone."),
   directAll: tr("All the numbers that could be seen directly: the only number in a cell, or the only place for a number in a row, column or box."),
   // Advice for an overlooked easy number, chosen from the situation on the board (see spotTip in analysis.js)
@@ -211,8 +213,14 @@ const GAME = {
       const dup = M.RC[u].find((x) => x !== c && vis[x] === v);
       if (dup === undefined) continue;
       const k = M.kindOf(u);
-      const t =
-        k === "box"
+      // nm null: no cell names (the board is shown next to the text)
+      const t = !nm
+        ? k === "box"
+          ? tr("The box already had a {v}.", { v })
+          : k === "row"
+            ? tr("The row already had a {v}.", { v })
+            : tr("The column already had a {v}.", { v })
+        : k === "box"
           ? tr("The box already had {v} in {nb}.", { v, nb: nm(dup) })
           : k === "row"
             ? tr("The row already had {v} in {nb}.", { v, nb: nm(dup) })

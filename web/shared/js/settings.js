@@ -59,6 +59,7 @@ function renderSettings() {
     `<h3 class="sec">${tr("Help while playing")}</h3><div class="group">${sw("same", tr("Highlight matching numbers"), tr("All cells with the selected number are coloured."))}` +
     `${sw("peers", GAME.peersLabel, tr("Cells that cannot hold the same number."))}` +
     `${sw("confirm", tr("Ask before overwriting a number"), tr("Tap a different number twice to change it."))}` +
+    `${sw("coords", tr("Cell names in explanations"), tr("Explanations name the cells (b3, the region with c3 and d3) instead of pointing at the colours on the board."))}` +
     (GAME.anyDigit ? `${sw("anyDigit", tr("Allow all numbers in all cells"), GAME.anyDigit)}` : "") +
     `<div class="set stack"><span>${tr("Pencil")}</span><small>${tr("Which grade you see, and which new puzzles are chosen by. Without pencil, triples, chains and what-ifs are harder because the options must be remembered. The statistics always use the grade that fits whether you actually used the pencil in the game.")}</small><div class="seg" id="penSeg">` +
     [
@@ -76,7 +77,9 @@ function renderSettings() {
       .map(([k, name]) => `<button type="button" data-e="${k}" aria-pressed="${(settings.liveErrors === false ? "end" : "live") === k}">${name}</button>`)
       .join("") +
     `</div></div></div>` +
-    `<h3 class="sec">${tr("Data")}</h3><div class="menu">` +
+    `<h3 class="sec">${tr("Data")}</h3>` +
+    (GUEST ? `<p class="about">${tr("Guest mode: export, import and reset are not available, and the guest's games are deleted when guest mode ends.")}</p>` : "") +
+    `<div class="menu"${GUEST ? " hidden" : ""}>` +
     menuItem("dExport", '<path d="M12 3v12M8 11l4 4 4-4M5 21h14"/>', tr("Export statistics"), tr("{n} games", { n: games.length })) +
     menuItem("dImport", '<path d="M12 21V9M8 13l4-4 4 4M5 3h14"/>', tr("Import statistics")) +
     menuItem(
@@ -85,14 +88,19 @@ function renderSettings() {
       tr("Storage"),
       kb(storageInfo().total) + " · " + (games.filter((g) => g.moves).length === 1 ? tr("route analysis for 1 game") : tr("route analysis for {n} games", { n: games.filter((g) => g.moves).length })),
     ) +
-    (allNotes().length
-      ? menuItem("dNotes", '<path d="M4 20h4l10-10-4-4L4 16z"/><path d="M13 7l4 4"/>', tr("Copy debug notes"), tr("{n} games with notes", { n: allNotes().length }))
+    (noteCount().all
+      ? menuItem(
+          "dNotes",
+          '<path d="M4 20h4l10-10-4-4L4 16z"/><path d="M13 7l4 4"/>',
+          tr("Debug notes"),
+          noteCount().fresh ? (noteCount().fresh === 1 ? tr("1 new note") : tr("{n} new notes", { n: noteCount().fresh })) : tr("all copied"),
+        )
       : "") +
     menuItem("dReset", '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>', tr("Reset statistics"), "", "danger") +
     `</div>` +
     shareSection() +
     `<p class="about">${tr("Data is only stored on this device and in this browser. Use export and import to move it.")}</p>` +
-    `<p class="about">${APP.name} ${APP_VERSION} · ${STANDALONE ? tr("running as an app") : FRAMED ? tr("running in Claude") : tr("running in the browser")}${GAME.aboutNote ? " · " + GAME.aboutNote : ""}</p>`;
+    `<p class="about">${APP.name} · ${tr("version {v}", { v: APP_BUILD })} · ${STANDALONE ? tr("running as an app") : FRAMED ? tr("running in Claude") : tr("running in the browser")}${GAME.aboutNote ? " · " + GAME.aboutNote : ""}</p>`;
   bindShare();
   // The language is switched by reloading the page, so all texts (also those already made) come in the new language
   $("langSeg")
@@ -116,6 +124,7 @@ function renderSettings() {
           saveSettings();
           if (b.dataset.key === "anyDigit" && P) renderPad();
           if (b.dataset.key === "regionTint" && P) renderGrid();
+          if (b.dataset.key === "coords" && P) renderHint();
           b.setAttribute("aria-checked", settings[b.dataset.key]);
         }),
     );
@@ -162,8 +171,7 @@ function renderSettings() {
   $("dExport").onclick = exportData;
   $("dImport").onclick = importData;
   $("dStorage").onclick = storageSheet;
-  if ($("dNotes"))
-    $("dNotes").onclick = () => copyText(JSON.stringify({ app: APP.id, kind: "debug-notes", build: APP_BUILD, exported: new Date().toISOString(), games: allNotes() }), tr("Notes copied"));
+  if ($("dNotes")) $("dNotes").onclick = notesSheet;
   $("dReset").onclick = () =>
     confirmSheet({
       title: tr("Reset statistics?"),
@@ -209,16 +217,23 @@ function storageSheet() {
       `<h3>${tr("Keep full route analysis for")}</h3>` +
       `<div class="seg" id="keepSeg">${opts.map((k) => `<button type="button" data-k="${k}" aria-pressed="${k === cur}">${k === 1 ? tr("latest only") : tr("{n} games", { n: k })}</button>`).join("")}</div>` +
       `<p class="sub" id="keepInfo"></p>` +
+      `<p class="caveat">${tr("Besides the latest games, games with debug notes keep their route analysis until the notes are copied, and so do the latest games worth a second look (a moment, a record, an unusual time, or help used), up to half as many. Ordinary games are cleared first.")}</p>` +
       `<p class="caveat">${tr("What is cleared is the moves behind the full route analysis: the chart, the boards and the “key takeaway”. All numbers in the statistics are kept, including the focus area, progress, your time curve and concentration. New games are still saved with full analysis, and the oldest are cleared as you go.")}</p>` +
       `<div class="actions row2"><button class="secondary" type="button" id="stClose">${tr("Close")}</button><button class="primary" type="button" id="stTrim">${tr("Save and clean up")}</button></div>`,
     (b) => {
       let k = cur;
       const info = () => {
-        const freed = si.moves - si.keepCost(k);
-        const n = Math.max(0, si.nMoves - k);
-        b.querySelector("#keepInfo").textContent = n
-          ? tr("Clears the route analysis for {n} older games and frees about {size}.", { n, size: kb(freed) })
-          : tr("Nothing to clear right now.");
+        const clear = movesToClear(k),
+          gone = new Set(clear),
+          kept = games.filter((g) => g.moves && !gone.has(g)),
+          latest = new Set(games.filter((g) => g.moves).slice(-Math.max(1, k))),
+          noted = kept.filter((g) => !latest.has(g) && hasNewNote(g)).length,
+          notable = kept.length - Math.min(latest.size, kept.length) - noted;
+        const freed = clear.reduce((s, g) => s + JSON.stringify(g.moves).length, 0);
+        b.querySelector("#keepInfo").textContent =
+          tr("Kept: the latest {a}, {b} with new debug notes and {c} worth a second look.", { a: Math.min(latest.size, kept.length), b: noted, c: Math.max(0, notable) }) +
+          " " +
+          (clear.length ? tr("Clears the route analysis for {n} older games and frees about {size}.", { n: clear.length, size: kb(freed) }) : tr("Nothing to clear right now."));
       };
       info();
       b.querySelectorAll("#keepSeg button").forEach(
@@ -243,9 +258,10 @@ function storageSheet() {
   );
 }
 function exportData() {
-  const data = JSON.stringify({ app: APP.id, v: 1, exported: new Date().toISOString(), history: games, drills: store.get("drills", {}), practiceLog: store.get("practicelog", []) });
+  const data = JSON.stringify({ app: APP.id, v: 1, build: APP_BUILD, exported: new Date().toISOString(), history: games, drills: store.get("drills", {}), practiceLog: store.get("practicelog", []), campaign: store.get("campaign", null), trials: store.get("trials", null) });
   openSheet(
     `<h2>${tr("Export statistics")}</h2><p>${tr("Copy the text and paste it under “Import” on the other device or version.")}</p>` +
+      (noteCount().fresh ? `<p class="sub">${tr("The new debug notes come along and count as copied.")}</p>` : "") +
       `<textarea class="io" id="ioText" readonly></textarea><div class="actions row2"><button class="primary" type="button" id="ioCopy">${tr("Copy")}</button>` +
       (FRAMED ? "" : `<button class="secondary" type="button" id="ioFile">${tr("Save as file")}</button>`) +
       `</div><div class="actions"><button class="secondary" type="button" id="ioClose">${tr("Close")}</button></div>`,
@@ -254,6 +270,7 @@ function exportData() {
       b.querySelector("#ioCopy").onclick = async () => {
         try {
           await navigator.clipboard.writeText(data);
+          markNotesSent();
           toast(tr("Copied"));
         } catch (e) {
           b.querySelector("#ioText").select();
@@ -268,6 +285,7 @@ function exportData() {
           document.body.appendChild(a);
           a.click();
           a.remove();
+          markNotesSent();
         };
       b.querySelector("#ioClose").onclick = closeSheet;
     },
@@ -309,8 +327,8 @@ function importData() {
 function mergeDrills(other) {
   const all = Object.assign({}, store.get("drills", {}));
   for (const L of Object.keys(other)) {
-    const a = all[L],
-      b = other[L];
+    const a = drillMigrate(all[L]),
+      b = drillMigrate(other[L]); // levels from before 25 Nov 2026 onto the new scale
     if (!b || !Array.isArray(b.log)) continue;
     if (!a) {
       all[L] = b;
@@ -327,7 +345,7 @@ function mergeDrills(other) {
         .sort((x, y) => (x.d < y.d ? -1 : x.d > y.d ? 1 : 0))
         .slice(-400);
     const newer = last(b) > last(a) ? b : a;
-    all[L] = { lv: newer.lv, days: Object.assign({}, b.days, a.days, newer.days), log };
+    all[L] = { v: 2, lv: newer.lv, days: Object.assign({}, b.days, a.days, newer.days), log };
   }
   store.set("drills", all);
 }

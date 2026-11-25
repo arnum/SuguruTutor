@@ -35,6 +35,7 @@ web/
     js/route.js    route analysis of the player's moves
     js/drillgen.js finding practice positions (runs in the worker); js/drill.js the practice screens;
                    js/games.js the practice games (Cascade, What changed?, Sweep, Count them, Quick call)
+    js/campaign.js the campaign: one step per technique, boards without hints, kept out of the statistics
     js/…           language, storage, screens, statistics, settings, startup
 ```
 
@@ -42,14 +43,14 @@ The shared code asks the game only through `APP`, `GAME` and `boardModel(G, regi
 with the six files in `js/`, an `index.html`, a service worker and a manifest.
 
 **Separate apps.** The two apps store data under their own prefix (`suguru.*` and `sudoku.*`), each has its own service
-worker (`suguru-v…` and `sudoku-v…`, which only clean up their own storage) and its own manifest with its own `id`. They
+worker (storage `suguru-<build>` and `sudoku-<build>`, each cleaning up only its own) and its own manifest with its own `id`. They
 sit in separate folders side by side, so neither contains the other: on Android a link to one game does not open in the
 other game's app.
 
 **The move (November 2026).** Until then Suguru lived in the root. A Suguru app added to the home screen back then
 still opens the root; the front page sees that it runs as an app and forwards to `suguru/`. Games and statistics come
 along, because they are stored at the same address. The root `sw.js` replaces the old Suguru service worker: it deletes
-the old offline storage (`suguru-v1` … `suguru-v34`; the new Suguru starts at `suguru-v35`) and stores the front page,
+the old offline storage (`suguru-v1` … `suguru-v34`; the new Suguru's storage was `suguru-v35` and up, and is now named after the build) and stores the front page,
 so the old app can open without a network too. Shared links to the old address (`…/#SU1-…`) are forwarded as well.
 On an iPhone each app on the home screen has its own storage, so if you install Suguru again from `suguru/`, it starts
 empty: move the games with *Settings → Export/Import*, or keep the old icon, which works as before.
@@ -60,8 +61,13 @@ There is no build step. Scripts are loaded in the order they appear in `index.ht
 `http://localhost:8000/suguru/` or `http://localhost:8000/sudoku/`.
 
 **Publishing:** `.github/workflows/pages.yml` publishes `web/` to GitHub Pages on every push to `main`.
-It needs one setting: *Settings → Pages → Source: GitHub Actions*. If a file an app needs offline changes, the version
-in that app's `sw.js` must go up (`CACHE = "suguru-v…"` or `"sudoku-v…"`); changes in `shared/` apply to both.
+It needs one setting: *Settings → Pages → Source: GitHub Actions*.
+
+**Version:** both apps have one version, the build: the date and a letter per release that day (`2026-11-24c`). It is
+set in one place, `web/shared/js/build.js`; change it once for every release. Each app registers its service worker as
+`sw.js?b=<build>` and names its offline storage after the build, so a new build installs a fresh copy of every file
+and deletes the old one. The settings show the build, and the changelog headings use it. The front page has no version:
+its service worker always fetches the newest front page.
 
 ## Language
 

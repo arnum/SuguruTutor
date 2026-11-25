@@ -1,7 +1,9 @@
 // Service worker: makes the app available offline.
-// Its own files are fetched from the network first (at most 3 seconds), so a new version takes effect at once; without a network the stored copy is used.
-// So there is no version number to change when the files are updated.
-const CACHE = "suguru-v53";
+// Its own files are fetched from the network first (at most 3 seconds), so changes show at once; without a network the stored copy is used.
+// The build comes in the address (sw.js?b=<build>, from shared/js/build.js), and the offline storage is named after it.
+// A new build is a new address, so the browser installs this worker again and stores a fresh copy of every file.
+const BUILD = new URL(location.href).searchParams.get("b") || "dev";
+const CACHE = "suguru-" + BUILD;
 const FONTS = "suguru-fonts";
 const SHELL = [
   "./",
@@ -11,6 +13,7 @@ const SHELL = [
   "./manifest.webmanifest",
   "../shared/css/app.css",
   "./js/app.js",
+  "../shared/js/build.js",
   "./js/game.js",
   "./js/engine.js",
   "./js/gradew.js",
@@ -29,6 +32,7 @@ const SHELL = [
   "../shared/js/newgame.js",
   "../shared/js/store.js",
   "../shared/js/board.js",
+  "../shared/js/draw.js",
   "../shared/js/play.js",
   "../shared/js/stats.js",
   "../shared/js/analysis.js",
@@ -37,6 +41,8 @@ const SHELL = [
   "../shared/js/drillgen.js",
   "../shared/js/games.js",
   "../shared/js/drill.js",
+  "../shared/js/campaign.js",
+  "../shared/js/trial.js",
   "../shared/js/debug.js",
   "../shared/js/settings.js",
   "../shared/js/main.js",
@@ -94,7 +100,9 @@ self.addEventListener("fetch", (e) => {
     (async () => {
       const c = await caches.open(CACHE);
       try {
-        const r = await Promise.race([fetch(req), timeout(3000)]);
+        // revalidated with the server (no-cache), so a new build.js is seen at once rather than after the browser's own cache
+        const fresh = req.mode === "navigate" ? req : new Request(req, { cache: "no-cache" });
+        const r = await Promise.race([fetch(fresh), timeout(3000)]);
         if (r.ok) c.put(req, r.clone());
         return r;
       } catch (err) {

@@ -23,7 +23,36 @@ function streaks() {
   return { current, best, days };
 }
 const TAB = (k) => "\u0001" + k + "\u0001";
+// 4×4 is a game of its own in the statistics (core.js): a switch at the top picks which games everything is drawn from
 function renderStats() {
+  const hasMicro = SIZES.some((x) => x.r * x.c <= 16) && games.some(isMicro);
+  if (!hasMicro || ui.statScope !== "micro") ui.statScope = "main";
+  withScope(ui.statScope, renderStatsIn);
+  if (!hasMicro) return;
+  $("statsBody").insertAdjacentHTML(
+    "afterbegin",
+    `<div class="seg scopeseg" id="statScope" role="group" aria-label="${esc(tr("Which games"))}">` +
+      [
+        ["main", tr("5×5 and up")],
+        ["micro", tr("4×4")],
+      ]
+        .map(([k, t]) => `<button type="button" data-s="${k}" aria-pressed="${k === ui.statScope}">${t}</button>`)
+        .join("") +
+      `</div>`,
+  );
+  $("statScope")
+    .querySelectorAll("button")
+    .forEach(
+      (b) =>
+        (b.onclick = () => {
+          ui.statScope = b.dataset.s;
+          saveUi();
+          renderStats();
+          window.scrollTo(0, 0);
+        }),
+    );
+}
+function renderStatsIn() {
   const body = $("statsBody");
   const won = games.filter((g) => g.solved);
   if (!games.length) {

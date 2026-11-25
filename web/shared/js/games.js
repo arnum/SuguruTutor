@@ -5,14 +5,12 @@
 //  Sweep: a pattern is given; tap every cell that loses an option
 //  Count them: how many easy numbers are on the board?
 //  Quick call: true or false, as many as you can in 60 seconds (the one game with a clock: the pressure is the game)
-// Time is measured against your own curve, like the drills: an easy number costs what your curve says for singles.
+// Time is measured against par, like the drills (PAR in drill.js): a first look plus a time per find, fixed per game.
 
 const PRACTICE_GAMES = ["cascade", "changed", "sweep", "count", "quick"];
 const CASCADE_ENTRY_MS = 1000; // most of the time per number Cascade leaves out (tapping the number after the cell)
 const isGame = (k) => typeof k === "string";
 const gNm = (c, i) => "abcdefghij"[i % c.b.cols] + (Math.floor(i / c.b.cols) + 1);
-// seconds your curve expects for an easy number with n to choose from
-const easyU = (n = 1) => calTime(myCal(), 1, n, true);
 // the pencil marks on the board (only at the levels that show them)
 function gameCand(c, known) {
   const cand = {};
@@ -65,7 +63,6 @@ const PG = {
       c.inputMs = (c.inputMs || 0) + Math.min(CASCADE_ENTRY_MS, performance.now() - (c.selAt || performance.now()));
       const opts = c.tu.easyList(c.known).length;
       plog(c, "num", cell, opts);
-      c.exp += easyU(Math.max(1, opts));
       c.known[cell] = v;
       c.placed.push(cell);
       c.sel = null;
@@ -86,7 +83,7 @@ const PG = {
       if (c.placed.length + c.helped.length >= c.need) return drillFinish(c.helped.length * 2 >= c.need);
       renderDrill();
     },
-    expected: (c) => c.exp || easyU(1),
+    finds: (c) => c.need, // the numbers to place
     // the time that counts: until you tap the right cell, without choosing its number
     measured: (c, sec) => Math.max(0.5, sec - (c.inputMs || 0) / 1000),
     paceNote: () => tr("Choosing the number after tapping the cell is not counted (up to a second per number)."),
@@ -132,11 +129,18 @@ const PG = {
         mv = gNm(c, c.move.cell) + " = " + c.move.v;
       if (c.phase === "intro") return `<h3>${tr("What changed?")}</h3><p>${tr("Watch the board: one number is about to be placed.")}</p>`;
       if (c.phase === "done") {
-        const h = c.tu.explainMove(c.after, c.fresh[0].cell, c.fresh[0].v),
-          kv = h ? keyView(h) : null;
+        // why each new number is easy, not only the first
+        const many = c.fresh.length > 1,
+          why = c.fresh
+            .map((f) => {
+              const h = c.tu.explainMove(c.after, f.cell, f.v),
+                kv = h ? keyView(h) : null;
+              return viewText(kv) ? `<p>${many ? `<b>${gNm(c, f.cell)} = ${f.v}:</b> ` : ""}${esc(viewText(kv))}</p>` : "";
+            })
+            .join("");
         return (
           `<h3 class="${c.shown ? "" : "ok"}">${c.shown ? (c.fresh.length === 1 ? tr("Here it is:") : tr("Here they are:")) : "✓"} ${c.fresh.map((f) => gNm(c, f.cell) + " = " + f.v).join(", ")}</h3>` +
-          (kv && kv.text ? `<p>${esc(kv.text)}</p>` : "")
+          why
         );
       }
       return (
@@ -173,7 +177,7 @@ const PG = {
       c.found = c.fresh.slice();
       drillFinish(true);
     },
-    expected: (c) => easyU(1) * Math.max(1, c.fresh.length),
+    finds: (c) => c.fresh.length,
     view(c) {
       const placed = c.phase !== "intro";
       const marks = placed ? [{ c: c.move.cell, v: c.move.v, col: "var(--warn)" }] : [];
@@ -229,7 +233,7 @@ const PG = {
       c.hit = c.app.targets.map((t) => t.cell);
       drillFinish(true);
     },
-    expected: (c) => easyU(1) * (1 + c.app.targets.length),
+    finds: (c) => c.app.targets.length,
     view(c) {
       const cand = gameCand(c),
         strike = {};
@@ -268,17 +272,20 @@ const PG = {
     },
     pad: (c) => (c.phase === "done" ? "" : padHtml(9)),
     tap() {},
-    // one answer per board; a wrong count shows them all and counts as a miss
+    // one answer per board; a wrong count shows them all. Off by one is a near miss (in the log, all misses were off by one):
+    // it counts like a wrong tap (slower), not as a miss. Further off is a miss.
     padTap(c, k) {
       plog(c, "count", k, c.easy.length);
       c.answer = k;
-      drillFinish(k !== c.easy.length);
+      const off = Math.abs(k - c.easy.length);
+      if (off === 1) c.wrong = (c.wrong || 0) + 1;
+      drillFinish(off > 1);
     },
     show(c) {
       c.shown = true;
       drillFinish(true);
     },
-    expected: (c) => easyU(1) * (1 + 0.5 * c.easy.length),
+    finds: (c) => c.easy.length,
     // the numbers that become easy once the circled ones are in: one step later, so not counted
     next(c) {
       if (!c.afterEasy) {
@@ -314,10 +321,10 @@ const PG = {
 // with the same two options that do not see each other, a number with one more place than claimed. Every claim can be
 // checked with the basic options (the numbers already placed), the same as the pencil marks show.
 const QUICK_SECONDS = 60,
-  QUICK_COST = 5, // seconds a wrong answer costs
-  QUICK_PACE = 1.5; // a claim (read it, look, answer) is expected to take 1.5 times your curve's time for an easy number
-// right answers your curve expects in one run; more moves the level up, fewer down
-const quickExpected = () => Math.max(1, Math.round(QUICK_SECONDS / (QUICK_PACE * easyU(1))));
+  QUICK_COST = 5; // seconds a wrong answer costs
+// Par is a time per claim (PAR.quick). Right answers at par for your level in one run: more moves the level up, fewer down.
+const quickPer = (c) => PAR.quick.per * parSize(c);
+const quickExpected = (c) => Math.max(1, Math.round(QUICK_SECONDS / (quickPer(c) * Math.pow(LV_STEP, boardLv(c.lv) - (D && D.L === "quick" ? D.lv0 : drillOf("quick").lv)))));
 function quickPos(b) {
   const tu = createTutor(E.makeGeometry(b.rows, b.cols), b.region);
   const size = {};
@@ -334,25 +341,30 @@ function quickClaims(pos, types) {
   const easy = new Map(tu.easyList(known).map(([c, v]) => [c, v]));
   const T = [],
     F = [];
+  // Read under time pressure, so short: the board shows the claim's cells in blue, and the claim needs no cell names
+  // (with the setting "Cell names in explanations" it names them)
+  const NAMES = settings.coords;
+  const isEasy = (c, v) => (NAMES ? tr("{cell} = {v} is an easy number.", { cell: nm(c), v }) : tr("The blue cell is an easy {v}.", { v }));
+  const isPair = (a, c) => (NAMES ? tr("{a} and {b} are a pair.", { a: nm(a), b: nm(c) }) : tr("The blue cells are a pair."));
   if (types.includes(1)) {
     const ez = [...easy];
     if (ez.length) {
       const [c, v] = pick(ez);
-      T.push({ cells: [c], text: tr("{cell} = {v} is an easy number.", { cell: nm(c), v }), why: tr("{cell} = {v} could be seen directly.", { cell: nm(c), v }) });
+      T.push({ cells: [c], text: isEasy(c, v), why: NAMES ? tr("{cell} = {v} could be seen directly.", { cell: nm(c), v }) : tr("It could be seen directly.") });
     }
     // the right cell, the wrong number
     const wrongNum = ez.filter(([c, v]) => bits(cand[c]).some((x) => x !== v));
     if (wrongNum.length) {
       const [c, v] = pick(wrongNum),
         x = pick(bits(cand[c]).filter((y) => y !== v));
-      F.push({ cells: [c], text: tr("{cell} = {v} is an easy number.", { cell: nm(c), v: x }), why: tr("{cell} is an easy number, but it is {v}.", { cell: nm(c), v }) });
+      F.push({ cells: [c], text: isEasy(c, x), why: NAMES ? tr("{cell} is an easy number, but it is {v}.", { cell: nm(c), v }) : tr("It is an easy number, but it is {v}.", { v }) });
     }
     // a cell with two options left
     const two = empty.filter((i) => !easy.has(i) && bits(cand[i]).length === 2);
     if (two.length) {
       const c = pick(two),
         [a, a2] = bits(cand[c]);
-      F.push({ cells: [c], text: tr("{cell} = {v} is an easy number.", { cell: nm(c), v: pick([a, a2]) }), why: tr("{cell} can still be {a} or {b}.", { cell: nm(c), a, b: a2 }) });
+      F.push({ cells: [c], text: isEasy(c, pick([a, a2])), why: NAMES ? tr("{cell} can still be {a} or {b}.", { cell: nm(c), a, b: a2 }) : tr("It can still be {a} or {b}.", { a, b: a2 }) });
     }
   }
   // the kind of each claim (1 easy number, 2 pair, 3 only places), for the practice log
@@ -379,16 +391,17 @@ function quickClaims(pos, types) {
         if (c !== a && tu.peer(a, c) && bits(cand[c]).length === 3 && (cand[c] & cand[a]) === cand[a] && !hidden(a, c, cand[a])) loose.push([a, c]);
     if (pairs.length) {
       const [a, c] = pick(pairs);
-      T.push({ cells: [a, c], text: tr("{a} and {b} are a pair.", { a: nm(a), b: nm(c) }), why: tr("{a} and {b} see each other and can only be {vals}.", { a: nm(a), b: nm(c), vals: bits(cand[a]).join(" " + tr("and") + " ") }) });
+      const vals = bits(cand[a]).join(" " + tr("and") + " ");
+      T.push({ cells: [a, c], text: isPair(a, c), why: NAMES ? tr("{a} and {b} see each other and can only be {vals}.", { a: nm(a), b: nm(c), vals }) : tr("They see each other and can only be {vals}.", { vals }) });
     }
     if (apart.length) {
       const [a, c] = pick(apart);
-      F.push({ cells: [a, c], text: tr("{a} and {b} are a pair.", { a: nm(a), b: nm(c) }), why: tr("{a} and {b} have the same two options, but they do not see each other.", { a: nm(a), b: nm(c) }) });
+      F.push({ cells: [a, c], text: isPair(a, c), why: NAMES ? tr("{a} and {b} have the same two options, but they do not see each other.", { a: nm(a), b: nm(c) }) : tr("They have the same two options, but they do not see each other.") });
     }
     if (loose.length) {
       const [a, c] = pick(loose),
         extra = bits(cand[c] & ~cand[a])[0];
-      F.push({ cells: [a, c], text: tr("{a} and {b} are a pair.", { a: nm(a), b: nm(c) }), why: tr("{cell} can also be {v}.", { cell: nm(c), v: extra }) });
+      F.push({ cells: [a, c], text: isPair(a, c), why: NAMES ? tr("{cell} can also be {v}.", { cell: nm(c), v: extra }) : tr("One of them can also be {v}.", { v: extra }) });
     }
   }
   mark(2);
@@ -405,23 +418,25 @@ function quickClaims(pos, types) {
         const places = h.filter((i) => !known[i] && cand[i] & (1 << v));
         if (places.length < 2 || places.length > 3) continue;
         const where = (cells) =>
-          tu.king
-            ? tr("In their region, {v} can only go in {cells}.", { v, cells: list2(cells.map(nm)) })
-            : tr("In {unit}, {v} can only go in {cells}.", { unit: tu.houseName(u), v, cells: list2(cells.map(nm)) });
+          !NAMES
+            ? { box: tr("In their box, {v} can only go in the blue cells.", { v }), row: tr("In their row, {v} can only go in the blue cells.", { v }), column: tr("In their column, {v} can only go in the blue cells.", { v }), region: tr("In their region, {v} can only go in the blue cells.", { v }) }[tu.king ? "region" : tu.houseKey(u)]
+            : tu.king
+              ? tr("In their region, {v} can only go in {cells}.", { v, cells: list2(cells.map(nm)) })
+              : tr("In {unit}, {v} can only go in {cells}.", { unit: tu.houseName(u), v, cells: list2(cells.map(nm)) });
         if (!gotT) {
           T.push({ cells: places, u, v, text: where(places), why: tr("Those are the only places for {v} there.", { v }) });
           gotT = true;
         } else if (!gotF && places.length === 3) {
           const miss = pick(places),
             claim = places.filter((i) => i !== miss);
-          F.push({ cells: claim, u, v, text: where(claim), why: tr("{v} can also go in {cell}.", { v, cell: nm(miss) }) });
+          F.push({ cells: claim, u, v, miss, text: where(claim), why: NAMES ? tr("{v} can also go in {cell}.", { v, cell: nm(miss) }) : tr("{v} can also go in the yellow cell.", { v }) });
           gotF = true;
         } else if (!gotF) {
           const other = h.filter((i) => !known[i] && !(cand[i] & (1 << v)));
           if (other.length) {
             const o = pick(other),
               claim = [places[0], o].sort((x, y) => x - y);
-            F.push({ cells: claim, u, v, text: where(claim), why: tr("{cell} cannot be {v}.", { cell: nm(o), v }) });
+            F.push({ cells: claim, u, v, wrongCell: o, text: where(claim), why: NAMES ? tr("{cell} cannot be {v}.", { cell: nm(o), v }) : tr("One of the blue cells cannot be {v}.", { v }) });
             gotF = true;
           }
         }
@@ -537,12 +552,11 @@ PG.quick = {
   },
   tap() {},
   show() {},
-  // the score: right answers against what your curve expects (quickExpected)
+  // the score: your time per right answer against par per claim
   score(c) {
     const right = c.ans.filter((a) => a.right).length;
-    return QUICK_SECONDS / (QUICK_PACE * easyU(1)) / Math.max(0.5, right);
+    return QUICK_SECONDS / Math.max(0.5, right) / quickPer(c);
   },
-  expected: () => easyU(1),
   view(c) {
     const cl = c.phase === "find" ? c.claims[c.at] : c.phase === "done" ? c.ans.length && c.ans[c.ans.length - 1].claim : null;
     const pos = cl ? cl.pos : quickPos((c.b.batch || [c.b])[0]);
@@ -557,7 +571,7 @@ PG.quick = {
     const right = c.ans.filter((a) => a.right).length;
     return (
       `<div><b>${right}</b><span>${tr("right in {s} seconds", { s: QUICK_SECONDS })}</span>` +
-      `<span class="dexp">${tr("Your curve expects about {n}.", { n: quickExpected() })}</span></div>` +
+      `<span class="dexp">${tr("Par at your level: about {n}.", { n: quickExpected(c) })}</span></div>` +
       `<div class="dqdots big" role="img" aria-label="${esc(tr("{k} right and {w} wrong.", { k: right, w: c.ans.length - right }))}">${c.ans.map((a) => `<i class="${a.right ? "on" : "miss"}"></i>`).join("")}</div>`
     );
   },
@@ -572,7 +586,7 @@ PG.quick = {
     pos.known.forEach((v, i) => v && !pos.b.givens[i] && (color[i] = "var(--ink)"));
     return (
       `<div class="qmiss"><p><b>${esc(a.claim.text)}</b> ${a.claim.truth ? tr("True.") : tr("False.")} ${esc(a.claim.why)}</p>` +
-      miniBoard(pos.P2, pos.known, { pattern: a.claim.cells, cand: gameCand(fake) }, null, {}, { color, label: tr("The practice board") }) +
+      miniBoard(pos.P2, pos.known, { pattern: a.claim.cells, target: a.claim.miss != null ? [a.claim.miss] : [], cand: gameCand(fake) }, null, {}, { color, label: tr("The practice board") }) +
       `</div>`
     );
   },

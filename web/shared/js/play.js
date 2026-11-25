@@ -51,6 +51,7 @@ function input(d) {
   const pn = notes.reduce((a, x) => a + (x ? 1 : 0), 0);
   meta.moves.push(pn ? { c: selected, v: d, t: elapsed(), pn } : { c: selected, v: d, t: elapsed() });
   for (const j of peerSets[selected]) notes[j] &= ~(1 << d);
+  if (trialWrong(selected, d)) return;
   afterChange();
 }
 function erase() {
@@ -96,6 +97,11 @@ function afterChange() {
       done = false;
       break;
     }
+  if (done && !solved && meta && meta.trial) {
+    renderGrid();
+    trialEnd("solved");
+    return;
+  }
   if (done && !solved) {
     syncClock();
     clockAcc = elapsed();
@@ -107,6 +113,12 @@ function afterChange() {
     renderGrid();
     renderPad();
     renderStatus();
+    if (rec && rec.camp) {
+      setMsg(tr("Solved in {time}.", { time: fmt(rec.ms) }), rec.campOut === "practice" ? "" : "good");
+      startRoute(rec);
+      setTimeout(() => campResult(rec), 650);
+      return;
+    }
     setMsg(rec.solved ? tr("Solved in {time}.", { time: fmt(rec.ms) }) : tr("Filled in, but the solution was shown along the way."), rec.solved ? "good" : "");
     try {
       navigator.storage && navigator.storage.persist && navigator.storage.persist();
@@ -169,7 +181,7 @@ document.addEventListener("keydown", (e) => {
     renderGrid();
     renderPad();
     e.preventDefault();
-  } else if (e.key === "n" || e.key === "N") {
+  } else if ((e.key === "n" || e.key === "N") && !(meta && meta.trial)) {
     noteMode = !noteMode;
     renderPad();
   } else if ((e.ctrlKey || e.metaKey) && e.key === "z") {
@@ -178,7 +190,7 @@ document.addEventListener("keydown", (e) => {
   }
 });
 fastTap($("noteBtn"), () => {
-  if (solved) return;
+  if (solved || (meta && meta.trial)) return;
   noteMode = !noteMode;
   renderPad();
 });
@@ -191,6 +203,7 @@ $("menuBtn").onclick = showMenu;
 // ---------- Hint
 $("hintBtn").onclick = () => {
   if (solved) return;
+  if (meta && (meta.camp || meta.trial)) return;
   const wrongIdx = entries.findIndex((v, i) => v && v !== P.solution[i]);
   if (wrongIdx >= 0) {
     selected = wrongIdx;
@@ -252,6 +265,7 @@ function renderHint() {
   if (!hint.data) {
     $("hintTag").textContent = tr("Hint");
     $("hintText").textContent = tr("Finding the easiest next number …");
+    $("hintLegend").innerHTML = "";
     $("hintNav").hidden = true;
     $("hintGuide").hidden = true;
     $("hintChain").hidden = true;
@@ -264,9 +278,13 @@ function renderHint() {
   $("hintTag").textContent = v.nudge
     ? tr("Hint · {tech} · a nudge in the right direction", { tech: LEVEL_TECH[d.hardestLevel] })
     : tr("Hint") + " · " + v.title;
-  $("hintText").textContent = v.text;
+  // without cell names the text points at the board; a screen reader gets the version with cell names instead
+  $("hintText").innerHTML =
+    viewText(v) === (v.text || "") ? esc(viewText(v)) : `<span aria-hidden="true">${esc(viewText(v))}</span><span class="vh">${esc(v.text || "")}</span>`;
+  $("hintLegend").innerHTML = viewLegend(v);
   const ch = $("hintChain");
-  if (v.chain && v.chain.length) {
+  // the whole chain in words, step by step, goes with the cell names; without them the arrows on the board show it
+  if (v.chain && v.chain.length && (settings.coords || !v.links)) {
     ch.hidden = false;
     ch.open = false;
     $("hintChainSum").textContent = tr("See the whole chain ({n} steps)", { n: v.chain.length });
@@ -358,25 +376,38 @@ const IC = {
 function showMenu() {
   openSheet(
     `<div class="menu">` +
-      menuItem("mCheck", IC.check, tr("Check for errors"), (meta.checks ? tr("used {n}×", { n: meta.checks }) + " · " : "") + tr("counts as a hint")) +
-      menuItem("mReveal", IC.eye, reveal ? tr("Hide solution") : tr("Show solution"), reveal ? "" : tr("counts as given up")) +
+      (meta.camp || meta.trial
+        ? solved
+          ? ""
+          : menuItem("mReveal", IC.eye, tr("Give up"), meta.trial ? tr("counts as a time out") : tr("ends the board"))
+        : menuItem("mCheck", IC.check, tr("Check for errors"), (meta.checks ? tr("used {n}×", { n: meta.checks }) + " · " : "") + tr("counts as a hint")) +
+          menuItem("mReveal", IC.eye, reveal ? tr("Hide solution") : tr("Show solution"), reveal ? "" : tr("counts as given up"))) +
       menuItem("mRestart", IC.restart, tr("Start over")) +
       `</div><div class="menu">` +
       menuItem("mInfo", IC.info, tr("About the puzzle and its difficulty")) +
       menuItem("mShare", IC.share, tr("Share puzzle"), FRAMED ? tr("copy code") : "") +
       `</div><div class="menu">` +
-      menuItem("mAgain", IC.plus, tr("New puzzle with the same settings"), BAND[ui.level]) +
+      menuItem("mAgain", IC.plus, ui.mode === "manual" ? tr("New puzzle with the same settings") : tr("New puzzle in the same mode"), newSameLabel()) +
       menuItem("mNew", IC.sliders, tr("Choose a new puzzle")) +
       menuItem("mHome", IC.home, tr("Back to home")) +
       `</div>` +
       noteLink("play"),
     (b) => {
       bindNoteLinks(b, null, showMenu);
-      b.querySelector("#mCheck").onclick = () => {
+      const on = (id, f) => {
+        const x = b.querySelector("#" + id);
+        if (x) x.onclick = f;
+      };
+      on("mCheck", () => {
         closeSheet();
         checkErrors();
-      };
-      b.querySelector("#mReveal").onclick = () => {
+      });
+      on("mReveal", () => {
+        if (meta.camp || meta.trial) {
+          closeSheet();
+          setTimeout(meta.trial ? trialGiveUp : campGiveUp, 280);
+          return;
+        }
         if (reveal || solved || meta.revealed) {
           closeSheet();
           toggleReveal();
@@ -393,7 +424,7 @@ function showMenu() {
             }),
           280,
         );
-      };
+      });
       b.querySelector("#mRestart").onclick = () => {
         closeSheet();
         restart();
@@ -408,7 +439,7 @@ function showMenu() {
       };
       b.querySelector("#mAgain").onclick = () => {
         closeSheet();
-        setTimeout(() => replaceGame(generateFromUi), 280);
+        setTimeout(() => replaceGame(newSame), 280);
       };
       b.querySelector("#mNew").onclick = () => {
         closeSheet();
@@ -432,6 +463,7 @@ function logCheck(wrong) {
 }
 function checkErrors() {
   if (solved) return;
+  if (meta && (meta.camp || meta.trial)) return;
   checked = true;
   const wrong = entries.filter((v, i) => v && v !== P.solution[i]).length;
   logCheck(wrong);
@@ -443,6 +475,8 @@ function checkErrors() {
   saveCurrent();
 }
 function toggleReveal() {
+  if (meta && meta.camp && !solved && !reveal) return campGiveUp();
+  if (meta && meta.trial && !solved && !reveal) return trialGiveUp();
   reveal = !reveal;
   if (reveal && !solved) meta.revealed = true;
   renderGrid();
@@ -698,7 +732,7 @@ function profileHtml(g0) {
     `<p>${tr("The number is the heaviest step (peak) plus an addition for how many heavy steps there are (load). It measures effort, not which technique is used.")}</p>` +
     effortStrip(g) +
     `<dl class="profile">${rows}<dt><b>${f(total)}</b></dt><dd><b>${BAND[band]}</b>${total >= GW.cap ? " " + tr("(the scale stops at {max})", { max: dec(GW.cap) }) : ""}</dd></dl>` +
-    estLineHtml(g0.lv) +
+    estLineHtml(g0.lv, P ? P.rows * P.cols : undefined) +
     `<p>${tr("The weights are fitted to the first 17 rated puzzles. Keep answering “how did it feel?” so they can be adjusted again.")}</p>`
   );
 }
@@ -739,7 +773,7 @@ function showSolved(rec) {
             ? `<p class="sub mwait">${tr("Finding the moments worth a second look …")}</p>`
             : ""
       }</div>` +
-      `<div class="actions sbtns"><span id="sPractice"></span><button class="primary big" type="button" id="sNew">${tr("New puzzle")} · ${esc(BAND[ui.level])}</button></div>` +
+      `<div class="actions sbtns"><span id="sPractice"></span><button class="primary big" type="button" id="sNew">${tr("New puzzle")} · ${esc(newSameLabel())}</button></div>` +
       `<button class="routeline" type="button" id="routeLine">${routeLineHtml(rec)}</button>` +
       `<div id="concLine">${concWarnHtml(rec)}</div>` +
       `<p class="feltq">${tr("How did it feel compared with {v}?", { v: dec(gradeFor(rec)) })}</p><div class="seg felt" id="feltSeg">` +
@@ -753,7 +787,7 @@ function showSolved(rec) {
       }
       b.querySelector("#sNew").onclick = () => {
         closeSheet();
-        generateFromUi();
+        newSame();
       };
       b.querySelectorAll("#feltSeg button").forEach(
         (x) =>
