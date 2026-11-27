@@ -1,4 +1,6 @@
-// The home screen: continue, the daily puzzle and shortcuts.
+// The home screen: the main game first (continue, the daily puzzle, a new game), then the other ways to play one line each
+// (campaign, timed trial, practice), then statistics, guide and settings. Details live on their own screens (25 Nov. 2026):
+// the puzzle code and the rules are on New game, guest mode in Settings.
 
 function thumbSvg(p, ents, px = 64) {
   const S = 10,
@@ -36,12 +38,8 @@ function renderHome() {
   $("dailyDow").textContent = DOW[now.getDay()];
   $("dailyDay").textContent = now.getDate();
   $("dailyTitle").textContent = BAND[ds.level] + " · " + ds.cols + "×" + ds.rows;
-  const cl = campLine();
-  $("campTitle").textContent = cl.title;
-  $("campSub").textContent = cl.sub;
-  const tl = trialLine();
-  $("trialTitle").textContent = tl.title;
-  $("trialSub").textContent = tl.sub;
+  $("campStat").textContent = campStat();
+  $("trialStat").textContent = trialStat();
   const done = games.find((g) => g.daily === ds.key && g.solved);
   const st = streaks();
   const going = P && meta && meta.daily === ds.key && !solved;
@@ -50,8 +48,12 @@ function renderHome() {
       (st.current > 1 ? " &nbsp;" + tr("{n} days in a row", { n: st.current }) : "")
     : going
       ? tr("In progress") + " · " + fmt(elapsed())
-      : tr("A new puzzle every day, the same for everyone") +
-        (st.current ? " · " + (st.current === 1 ? tr("1 day in a row") : tr("{n} days in a row", { n: st.current })) : "");
+      : st.current
+        ? st.current === 1
+          ? tr("1 day in a row")
+          : tr("{n} days in a row", { n: st.current })
+        : "";
+  $("dailySub").hidden = !$("dailySub").innerHTML;
   const cont = P && !solved && meta && !(meta.daily === ds.key);
   $("contCard").hidden = !cont;
   if (cont) {
@@ -67,23 +69,10 @@ function renderHome() {
       tr("filled in") +
       (meta.hints ? " · " + (meta.hints === 1 ? tr("1 hint") : tr("{n} hints", { n: meta.hints })) : "");
   }
-  const n = games.filter((g) => g.solved).length;
-  let focus = "";
-  try {
-    const fd = withScope("main", focusData);
-    if (fd.base) {
-      const w = fd.rows.filter((f) => f.score < -0.25 && focusReasons(f, true).length).sort((a, b) => a.score - b.score)[0];
-      if (w) focus = tr("Focus: {tech}", { tech: LEVEL_TECH[w.L] });
-    }
-  } catch (e) {}
-  $("homeStatsSub").textContent = n
-    ? focus || tr("{n} solved", { n }) + (st.current ? " · " + tr("{n} in a row", { n: st.current }) : "")
-    : tr("No games yet");
   $("installCard").hidden = !(IOS && !STANDALONE && !FRAMED && !settings.installHidden);
-  $("homeGuest").textContent = GUEST ? tr("End guest mode") : tr("Let someone else play (guest mode)");
-  // practice shows up once you have played a game
-  if (games.length) renderPracticeCard();
-  else $("practiceSlot").innerHTML = "";
+  // practice shows up once you have played a game: the drill suggested by your last game
+  $("practiceRow").hidden = !games.length;
+  if (games.length) $("practiceStat").textContent = drillName(drillSuggest().L);
 }
 $("installX").onclick = () => {
   settings.installHidden = true;
@@ -98,6 +87,7 @@ $("contCard").onclick = () => go("game");
 $("dailyCard").onclick = () => startDaily();
 $("campCard").onclick = () => go("camp");
 $("trialCard").onclick = () => go("trial");
+$("practiceRow").onclick = () => drillChooser(drillSuggest());
 $("codeForm").addEventListener("submit", (e) => {
   e.preventDefault();
   const text = $("codeInput").value;
@@ -154,4 +144,4 @@ if (GUEST) {
     }
   });
 }
-$("homeGuest").onclick = () => (GUEST ? endGuest() : startGuest());
+

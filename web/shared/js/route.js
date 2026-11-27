@@ -1,9 +1,9 @@
 // Route analysis: replays the player's moves and compares each with the easiest one available at that moment.
 
 // Replay the player's moves and rate each placed number against the position just before.
-// The what-if family (levels 8-11) is one tier when a move is compared with the easiest: which what-if is easiest
-// is decided by length, not by kind (see whatIfCost in tutor.js)
-const tierOf = (L) => (L >= 8 && L <= 11 ? 8 : L);
+// The what-if family is one tier when a move is compared with the easiest: which what-if is easiest is decided by
+// length, not by kind (see whatIfCost in tutor.js). A tier is a place in the technique table's order (TT), so compare tiers.
+const tierOf = (L) => TT.rank(TT.family(L) === "whatif" ? TT.first("whatif") : L);
 // typ (optional): your typical seconds per level, to tell which route a long move most likely took
 function analyzeRoute(SE, p, moves, onProgress, typ) {
   const G = SE.makeGeometry(p.rows, p.cols),
@@ -69,7 +69,7 @@ function analyzeRoute(SE, p, moves, onProgress, typ) {
               ? "easy"
               : r.ahead && tierOf(r.ahead.level) <= tierOf(r.avail)
                 ? "ahead"
-                : r.direct >= 12 && !r.ahead
+                : r.direct === TT.GUESS && !r.ahead
                   ? "guess"
                   : "harder";
         }
@@ -89,11 +89,11 @@ function analyzeRoute(SE, p, moves, onProgress, typ) {
   // - A harder move is not harder than needed if solving on the easiest way would need a technique at least as hard before
   //   that cell is filled: it was needed anyway, only done early. It counts as one of the easiest, with its time for its
   //   own technique (early).
-  const easyT = out.filter((m) => m.cls === "easy" && m.avail === 1 && m.dt > 0).map((m) => m.dt).sort((a, b) => a - b);
+  const easyT = out.filter((m) => m.cls === "easy" && m.avail === TT.SINGLES && m.dt > 0).map((m) => m.dt).sort((a, b) => a - b);
   const easyMed = easyT.length ? easyT[Math.floor(easyT.length / 2)] / 1000 : 4;
-  const typAt = (L) => (typ && typ[L]) || (L === 1 ? easyMed : null);
+  const typAt = (L) => (typ && typ[L]) || (L === TT.SINGLES ? easyMed : null);
   const slowAhead = (m) => {
-    if (!m.ahead || m.ahead >= m.direct || !(m.dt > 0)) return false;
+    if (!m.ahead || !TT.harder(m.direct, m.ahead) || !(m.dt > 0)) return false;
     const sec = m.dt / 1000,
       tA = typAt(m.ahead),
       tD = typAt(m.direct);
@@ -103,7 +103,7 @@ function analyzeRoute(SE, p, moves, onProgress, typ) {
   out.forEach((m, i) => {
     if ((m.cls === "ahead" || m.cls === "harder") && slowAhead(m)) {
       m.aheadSlow = 1;
-      if (m.cls === "ahead") m.cls = m.direct >= 12 ? "guess" : "harder";
+      if (m.cls === "ahead") m.cls = m.direct === TT.GUESS ? "guess" : "harder";
     }
     if (m.cls === "harder" && pre[i] && tierOf(tu.hardestUntil(pre[i], m.c)) >= tierOf(ownLevel(m))) {
       m.cls = "easy";
@@ -202,7 +202,7 @@ function markEpisodes(list) {
 // Moves that count in rating the route: not hints, not follow-on errors and not moves placed on a wrong board
 const judged = (m) => m.cls !== "hint" && !m.amid && !m.unsure && !m.slip && !(m.cls === "wrong" && m.follow);
 // The level of the move itself: the route in your head if it was easier, unless the move took too long for that (aheadSlow)
-const ownLevel = (m) => (m.aheadSlow ? m.direct : Math.min(m.direct, m.ahead || 12));
+const ownLevel = (m) => (m.aheadSlow ? m.direct : TT.min(m.direct, m.ahead || TT.GUESS));
 // Which level the move really needed (the one the time is attributed to)
 function moveLevel(m) {
   return m.cls === "easy"
@@ -214,7 +214,7 @@ function moveLevel(m) {
       : m.cls === "harder"
         ? ownLevel(m)
         : m.cls === "guess"
-          ? 12
+          ? 13
           : 0;
 }
 function routeSummary(list) {

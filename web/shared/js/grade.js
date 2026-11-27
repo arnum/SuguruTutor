@@ -63,7 +63,7 @@ function stepEffort(s, pen = true) {
     openT = 0,
     workT = 0;
   if (v) {
-    if (T >= 2 && T <= 6) shapeT = GW.vis * (GW.shapeSize * Math.min(GW.shapeSizeCap, Math.max(0, v.size - 2)) + GW.shapeBent * v.bent);
+    if (TT.method(T).pattern) shapeT = GW.vis * (GW.shapeSize * Math.min(GW.shapeSizeCap, Math.max(0, v.size - 2)) + GW.shapeBent * v.bent);
     openT = GW.vis * GW.open * (GW.openMid - v.fill); // crowded gives a discount, open gives an addition
     workT = GW.vis * Math.max(GW.workLo, Math.min(GW.workHi, GW.workPer * (v.work - GW.workMid)));
   }
@@ -113,7 +113,7 @@ function gradeFromSteps(steps, pen = true) {
   });
   const top = ef[hi],
     hs = steps[hi];
-  const tech = Math.max(...steps.map((s) => s.L));
+  const tech = steps.reduce((m, s) => TT.max(m, s.L), 0);
   // Overview: the average number of places to make progress. singlesFirst > 0: only the first steps (Pelánek 2011: the number
   // of easy moves over the first 20-30 steps predicts the time best for easy Sudoku; later everything becomes easy).
   const SF = GW.singlesFirst || 0,
@@ -121,7 +121,7 @@ function gradeFromSteps(steps, pen = true) {
     avgOpts = early.reduce((a, s) => a + s.opts, 0) / early.length,
     narrow = steps.filter((s) => s.opts <= 1).length / N,
     nakedShare = steps.filter((s) => s.T === 0).length / N; // steps where only a naked single was possible
-  const advCount = steps.filter((s) => s.L >= 2).length;
+  const advCount = steps.filter((s) => TT.beyond(s.L)).length;
   let value,
     loadT = 0,
     earlyT = 0,
@@ -131,12 +131,12 @@ function gradeFromSteps(steps, pen = true) {
   // Load: the sum of the effort in all non-trivial steps beyond the heaviest. Repeats of the same technique count less and less.
   const seen = {};
   ef.forEach((x, i) => {
-    if (steps[i].L < 2) return;
+    if (!TT.beyond(steps[i].L)) return;
     nHard++;
     const k = (seen[steps[i].T] = (seen[steps[i].T] || 0) + 1);
     if (i !== hi) W += Math.max(0, x.e - GW.loadOver) / (1 + GW.loadTechRepeat * (k - 1));
   });
-  if (tech === 1) {
+  if (tech === TT.SINGLES) {
     // Only simple moves: the difficulty is how narrow the path is
     value =
       1 +
@@ -150,8 +150,8 @@ function gradeFromSteps(steps, pen = true) {
     peak = top.e + earlyT;
     value = peak + loadT;
   }
-  if (tech === 1) peak = value;
-  const load = tech === 1 ? 0 : Math.max(1, Math.min(10, Math.round(10 * (1 - Math.exp(-(W + Math.max(0, top.e - GW.loadOver)) / GW.loadCountScale)))));
+  if (tech === TT.SINGLES) peak = value;
+  const load = tech === TT.SINGLES ? 0 : Math.max(1, Math.min(10, Math.round(10 * (1 - Math.exp(-(W + Math.max(0, top.e - GW.loadOver)) / GW.loadCountScale)))));
   value = Math.max(1, Math.min(GW.cap, Math.round(value * 10) / 10));
   const band = Math.min(9, Math.floor(value)); // level 9 (Diabolical) covers everything from 9 up
   // The grade without pencil (the anchor, see tools/grade/weights.json) as a full grade object, so the explanation can show its own terms
@@ -208,7 +208,7 @@ function gradeFromSteps(steps, pen = true) {
     earlyT,
     peak: Math.round(Math.min(GW.cap, peak) * 10) / 10,
     load,
-    series: ef.map((x, i) => (steps[i].L < 2 ? 0 : Math.round(x.e * 10) / 10)),
+    series: ef.map((x, i) => (!TT.beyond(steps[i].L) ? 0 : Math.round(x.e * 10) / 10)),
     lv: steps.map((s) => s.L * 100 + Math.min(99, s.opts || 1)), // for the personal time estimate
   };
 }
@@ -239,14 +239,14 @@ const NUANCES = [
 ];
 // Generate for a level AND a decimal range. Runs both in the background worker and as a fallback in the page.
 function generateGraded(SE, d, onProgress) {
-  // d.level is a difficulty band (1-9); d.must is an optional technique (1-11) the puzzle must need.
+  // d.level is a difficulty band (1-9); d.must is an optional technique unit (a code, see TT) the puzzle must need.
   const t0 = Date.now(),
-    START = GAME.gradeStart || [0, 1, 2, 2, 3, 5, 6, 8, 9, 10]; // the technique level to start with per band
+    START = GAME.gradeStart || [0, 1, 2, 2, 3, 6, 7, 9, 10, 11]; // the technique level to start with per band (levels since 26 Nov. 2026)
   let best = null,
     bestKey = Infinity,
     tries = 0,
     seed = d.seed,
-    tt = d.must || START[d.level] || 2;
+    tt = d.must || START[d.level] || TT.code("neighbour");
   while (true) {
     const left = d.budget - (Date.now() - t0);
     const p = SE.generate(d.rows, d.cols, tt, seed++, Math.max(1200, Math.min(4000, left)), null, d.maxRegion || 5);
@@ -258,8 +258,11 @@ function generateGraded(SE, d, onProgress) {
     const gv = p.grade ? (d.np && p.grade.np ? p.grade.np.value : p.grade.value) : null;
     const band = p.grade ? Math.min(9, Math.floor(gv)) : p.rating.level,
       dec = p.grade ? Math.min(9, Math.round((gv - band) * 10)) : 0;
+    // d.startAt (training, campaign): the easiest way must use the technique, so the board can start where it is next.
+    // The way is the tutor's (by price), which can differ from the rater's level ladder.
+    const missL = d.startAt && !(steps && steps.some((s) => s.L === d.startAt));
     const key =
-      (d.must ? Math.abs(p.rating.level - d.must) * 100 : 0) +
+      (d.startAt ? (missL ? 100 : 0) : d.must ? Math.abs(TT.rank(p.rating.level) - TT.rank(d.must)) * 100 : 0) +
       Math.abs(band - d.level) * 10 +
       (dec < d.lo ? d.lo - dec : dec > d.hi ? dec - d.hi : 0) +
       (p.grade && d.kind === "kort" ? Math.max(0, p.grade.load - 3) : p.grade && d.kind === "lang" ? Math.max(0, 6 - p.grade.load) : 0);
@@ -270,8 +273,12 @@ function generateGraded(SE, d, onProgress) {
     if (onProgress) onProgress(tries, band, dec);
     if (key === 0 || Date.now() - t0 > d.budget) break;
     // Search for the technique that hits the band most often: too easy -> a harder technique, too hard -> an easier one
-    if (!d.must) tt = band < d.level ? Math.min(11, tt + 1) : band > d.level ? Math.max(d.level === 1 ? 1 : 2, tt - 1) : tt;
+    if (!d.must) tt = band < d.level ? TT.above(tt) : band > d.level ? TT.max(d.level === 1 ? TT.SINGLES : TT.code("neighbour"), TT.below(tt)) : tt;
   }
   best.nuance = d.nuance;
+  if (d.startAt) {
+    const q = startAtTechnique(SE, best, d.startAt);
+    if (q) return q;
+  }
   return best;
 }

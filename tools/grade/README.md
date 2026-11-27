@@ -90,6 +90,45 @@ about twice the links they can afford. JS and Java do the same, and the parity t
 **Region shapes:** a cell that touches every cell of a region one smaller than its own region is a single of its own kind
 (`shape`, score 0.5, technique 0). It builds on nothing on the board, so it has no dependencies inside what-if chains.
 
+**The mixed pair (26 Nov. 2026):** a naked pair's targets are split by how they see the two cells. A target that touches
+both, or shares a region with both, belongs to the ordinary pair (technique 3, level 3). A target that sees one cell
+through its region and the other only by touching belongs to the mixed pair (technique 14, level 4), which is harder to
+spot. In one player's moves a mixed pair took a median 69 s against 16 s for a pair the target touches (9 and 5 moves).
+Its recognition is set between the pair and the triple (2.6); the fit (r 0.744) hardly changes between 2.2 and 3.4,
+because the cheapest way seldom needs it (5 of 7,421 steps in 249 puzzles). Sudoku cannot have it: there a cell that
+sees both cells of a pair always shares one house with both. The levels from triples up moved one up (triples 5, chains
+6-8, what-ifs 9-12, 13 = cannot be done); the time curve uses a rung per level (`calL` in `calib.js`: the mixed pair 3.5,
+the rest as before), so the expected times of the other techniques did not change.
+
+## The technique table (27 Nov. 2026)
+
+`tools/grade/techniques.json` is the only place that knows the techniques' order. It has two lists:
+
+- **Units**, what a player learns and what the app shows as a level: a `code` that never changes (the level numbers of
+  26 Nov. 2026, frozen), an `id`, a `family` (basic, chain, whatif), a `rung` on the time curve, the flags `drill`,
+  `learn` and `rare`, `games` if only some games have it, and its `methods`. Their order in the list is the order from
+  easy to hard. Code 13 (`guess`) means "cannot be done without guessing" and ranks after every unit.
+- **Methods**, what the solver finds (the technique numbers 0-14, only ever appended to): the engine's `weight` and the
+  flags `pattern` (a shape in the board: visibility counts), `inner` (allowed inside a what-if with techniques), `chain`,
+  `byLength` (priced by length) and `within` (for a what-if: the unit it may use inside).
+
+`gen.py` writes the table and `techs.js` (the questions, `TT`) into both `gradew.js` files, and the same data as
+constants into `SuguruGrade.java` (with `rank`, `harder`, `max` and the rest written by hand next to them). The rule:
+**a code is a name, not a position.** No code compares codes as numbers; it asks the table: `TT.rank`, `TT.harder`,
+`TT.beyond` (harder than the singles), `TT.max`, `TT.list("drill")`, `TT.family`, `TT.rung`, and `TT.num` for the
+number shown to the player (the unit's place in that game's order, so Sudoku, which has no mixed pair, shows triples as 4).
+Stored data (games, drills, campaign, training) keeps the codes, so a new unit needs no migration.
+
+**Adding a technique:**
+- *A variant of one the player already knows:* a new method (the next number) in that unit's `methods`, a finder in both
+  tutors and both raters (`FIND`/`FINDERS` in JS, `find` in Java), its row in `weights.json`, and its label.
+- *A new unit:* the next free code (14 and up), placed in the list where it belongs, plus its texts: `LEVEL_TECH`,
+  `LEVEL_INFO`, `TECH_TIP` and the guide in each game. Tested on a copy: splitting the hidden pair into its own unit
+  after the pairs needed no code change; JS and Java gave the same grades on all 249 test puzzles, one 4×4 puzzle got
+  another grade, and the generator made puzzles for the new unit.
+- **Still by hand:** the texts per game (labels, descriptions, tips, guide anchors), and the two solvers in each
+  language (the generator's rater and the tutor), which do not always agree.
+
 ## How to calibrate
 
 1. Export the statistics from the app (Settings, "Export statistics") and put the file somewhere outside the repo.
@@ -109,3 +148,23 @@ A new feature needs code: compute it in `build` in both tutors (or in `solveProf
 to `stepEffort` in both files, a row in `weights.json` and `gen.py` (`PEN` or `SCALARS`), and an explanation in
 `penReason` (`web/shared/js/play.js`). Set the weight to 0 first and check that no grade changes; then the feature is
 cleanly added.
+
+## Checked against HoDoKu (Sudoku, 27 Nov. 2026)
+
+108 Sudoku puzzles from the app's generator, 12 per grade band, were graded by HoDoKu 2.2.0 (`/bs`, its level and
+score). The scripts are in `hodoku/` (`gen.js` makes the puzzles, `compare.py` runs HoDoKu and compares; the jar is not
+in the repo). Neither grader is the truth: this shows where they agree, not which is right.
+
+- **The order agrees overall:** Spearman 0.92 between the app's grade and HoDoKu's score. Band 1 is HoDoKu's Easy,
+  bands 2–4 its Medium, band 5 mostly Hard, bands 6–7 Hard to Extreme, bands 8–9 Extreme.
+- **Within a band they do not agree:** Spearman between −0.54 and 0.55 per band (about 12 puzzles each, so mostly
+  noise). The agreement comes from the technique ladder; the fine order inside a band is where the app's weights
+  (fitted to one player's times) and HoDoKu's fixed step scores differ, and only times can say which is better.
+- **The techniques line up:** the app's levels 1–5 use the same techniques as HoDoKu (singles, locked candidates,
+  naked pairs, naked triples). Where the app needs a single-number chain, HoDoKu mostly uses Skyscraper, X-Wing or
+  2-String Kite; a bivalue chain is mostly W-Wing or XY-Wing; where the app needs a what-if, HoDoKu uses long chains
+  (AIC, nice loops, XY-chains), and sometimes a fish: one puzzle the app grades 8.2 (single-number what-if) HoDoKu
+  solves with a Swordfish and calls Hard (600).
+- **So the app's ladder is coarser:** HoDoKu's named patterns (fish, wings, the short single-number chains, uniqueness)
+  fall inside the app's chains and what-ifs. That matters for teaching (players know the names) and for the grade of
+  puzzles a fish solves.

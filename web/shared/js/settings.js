@@ -98,6 +98,14 @@ function renderSettings() {
       : "") +
     menuItem("dReset", '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>', tr("Reset statistics"), "", "danger") +
     `</div>` +
+    `<div class="menu">` +
+    menuItem(
+      "dGuest",
+      '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.5a3.5 3.5 0 0 1 0 7M18.5 14a6.5 6.5 0 0 1 3 6"/>',
+      GUEST ? tr("End guest mode") : tr("Let someone else play"),
+      GUEST ? "" : tr("guest mode"),
+    ) +
+    `</div>` +
     shareSection() +
     `<p class="about">${tr("Data is only stored on this device and in this browser. Use export and import to move it.")}</p>` +
     `<p class="about">${APP.name} · ${tr("version {v}", { v: APP_BUILD })} · ${STANDALONE ? tr("running as an app") : FRAMED ? tr("running in Claude") : tr("running in the browser")}${GAME.aboutNote ? " · " + GAME.aboutNote : ""}</p>`;
@@ -171,6 +179,7 @@ function renderSettings() {
   $("dExport").onclick = exportData;
   $("dImport").onclick = importData;
   $("dStorage").onclick = storageSheet;
+  $("dGuest").onclick = () => (GUEST ? endGuest() : startGuest());
   if ($("dNotes")) $("dNotes").onclick = notesSheet;
   $("dReset").onclick = () =>
     confirmSheet({
@@ -193,13 +202,13 @@ const STORAGE_LIMIT = 2.5 * 1024 * 1024;
 // route analysis; the rest is in the archive with the size per game the archive has now (otherwise about 0.2 KB).
 function roomForGames(si) {
   const perArch = ARCH_N >= 20 ? ARCH_LEN / ARCH_N : 200;
-  const recentMax = ARCH_MAX * 1300 + 40 * 5300;
+  const recentMax = ARCH_MAX * 1300 + (settings.keepMoves ?? KEEP_MOVES) * 5300; // a cautious 5.3 KB per game with its moves
   return Math.max(0, Math.floor((STORAGE_LIMIT - (si.total - si.history) - ARCH_LEN - recentMax) / perArch));
 }
 function storageSheet() {
   const si = storageInfo();
-  const cur = settings.keepMoves ?? 40;
-  const opts = [40, 20, 10, 1]; // the latest game is always kept, so the analysis after solving works
+  const cur = settings.keepMoves ?? KEEP_MOVES;
+  const opts = [200, 40, 20, 10, 1]; // the latest game is always kept, so the analysis after solving works
   const pct = Math.min(100, Math.round((100 * si.total) / STORAGE_LIMIT));
   const row = (label, v, sub) => `<tr><td>${label}${sub ? `<br><small style="color:var(--mute)">${sub}</small>` : ""}</td><td style="text-align:right">${kb(v)}</td></tr>`;
   openSheet(
@@ -258,7 +267,7 @@ function storageSheet() {
   );
 }
 function exportData() {
-  const data = JSON.stringify({ app: APP.id, v: 1, build: APP_BUILD, exported: new Date().toISOString(), history: games, drills: store.get("drills", {}), practiceLog: store.get("practicelog", []), campaign: store.get("campaign", null), trials: store.get("trials", null) });
+  const data = JSON.stringify({ app: APP.id, v: 1, levelsV: LEVELS_V, build: APP_BUILD, exported: new Date().toISOString(), history: games, drills: store.get("drills", {}), practiceLog: store.get("practicelog", []), campaign: store.get("campaign", null), trials: store.get("trials", null), training: store.get("training", []) });
   openSheet(
     `<h2>${tr("Export statistics")}</h2><p>${tr("Copy the text and paste it under “Import” on the other device or version.")}</p>` +
       (noteCount().fresh ? `<p class="sub">${tr("The new debug notes come along and count as copied.")}</p>` : "") +
@@ -308,6 +317,11 @@ function importData() {
         if (!d || d.app !== APP.id || !Array.isArray(d.history)) {
           toast(tr("That is not a {name} export", { name: APP.name }));
           return;
+        }
+        // an export from before the levels were renumbered (26 Nov. 2026): moved along first (main.js)
+        if ((d.levelsV || 1) < LEVELS_V) {
+          d.history.forEach(levelsGame);
+          if (d.drills) d.drills = levelsDrills(d.drills);
         }
         const have = new Set(games.map((g) => g.id));
         const add = d.history.filter((g) => g && g.id && !have.has(g.id) && typeof g.ms === "number");

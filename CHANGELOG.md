@@ -5,6 +5,166 @@ the build you have. Before 22 November there were no builds, so those headings a
 timestamps of work files and screenshots. A change may be a day older than shown, and those days list only the main
 changes.
 
+## 2026-11-27a
+
+### Added
+- **Chains: colour and link options yourself.** A new button in the game, Chains, opens a bar with colour A, colour
+  B, a strong link, a weak link, and Clear.
+  - **Colours (simple colouring):** choose a number on the pad, then tap cells: that number's option gets colour A (a
+    blue disc) or B (an orange square). Tap again to remove it. A cell that sees both colours of a number loses it;
+    two cells of one colour that see each other mean that colour is false. The colours are blue and orange, which
+    colour-blind players can tell apart, and the shapes differ too.
+  - **Links:** tap two cells for a line between them: solid for a strong link (only two places, or only two
+    options), dashed for a weak one (they see each other). With a number chosen, the line goes between that number's
+    options; choosing another number between the two taps links a cell's two options. The same two ends again remove
+    it. Lines are slightly bent, so a link along a row does not run through the numbers between.
+  - **While it is on:** the pad chooses the number instead of placing one, the other pencil marks fade, and the cells
+    where that number is placed are picked out. Tapping cells does not move the selection.
+  - **They are notes:** they count towards the grade with pencil, are hidden while a hint is shown, are kept with the
+    game, and are undone with Undo. A placed number removes that number's colours from the cells it sees, as it does
+    with pencil marks. A timed trial has no chain tool, as it has no pencil.
+- **A new technique: the mixed pair (Suguru, level 4).** Two touching cells with the same two options are those two
+  numbers between them. When a cell sees one of them through its region and the other only by touching, that is
+  harder to spot than a pair it sees the same way, so it is now a technique of its own between pairs and triples.
+  - **Why:** in your 222 puzzles only 5 of the 177 pair steps were the simple pair inside one region, and 93 had a
+    target that saw the pair two ways. In your recorded moves those took a median 69 s against 16 s when the target
+    touched both (only 9 and 5 moves, so a hint, not proof).
+  - **The hint explains it:** "The blue cells touch, so they cannot be the same number: between them they are 2 and 3.
+    The yellow cell touches one of them and is in the outlined region with the other", with that region outlined. An
+    ordinary pair over two regions now also says why: the two cells touch.
+  - **"Easiest then" changes:** a mixed pair costs more than a pair, so the after-game analysis no longer calls it the
+    easiest move when a pair or a hidden pair would do. The cheapest way seldom needs a mixed pair: 5 of 7,421 steps in
+    249 puzzles.
+  - **Its own place everywhere:** the guide (a real 5×5 example), New game's technique list, the campaign (a new step
+    4), and a practice drill ("Find a mixed pair"). The "Next time" tip for pairs no longer describes only a pair
+    inside one region.
+  - **Levels from triples up moved one up:** triples 5, chains 6–8, what-ifs 9–12. Your statistics, practice levels,
+    campaign, trials and training are moved along once when the app starts, and older exports when imported. The grades
+    are recomputed (the triples drill keeps your level). The time curve places the mixed pair between pairs and
+    triples, so the other techniques' expected times are unchanged.
+  - **Grades:** most puzzles keep their grade; the fit to your times is the same (r 0.744). Java gives the same grades
+    (the parity test on 249 puzzles). Sudoku cannot have a mixed pair (a cell that sees both cells of a pair always
+    shares a house with both), so it has no step 4 inside, and it still shows its techniques as 1–11 (triples 4).
+  - **Not redone:** the route analysis of games you have already played keeps its verdicts from the old solver; new
+    games use the new one.
+- **Training: start where the technique is next.** Choose a technique in New game (from neighbour elimination or locked
+  candidates up) and switch on "Start where it is next". The board then starts part-solved, at the point where that
+  technique is the next step.
+  - **Once you have placed a number that needed the technique,** a bar under the board says so ("Single-number chain
+    found in 01:12", or "placed with a hint") and offers "Next board". You can also play on to the end.
+  - **A number that needs more than the technique** (a harder step, or a guess) does not count, and the board says so.
+  - **Not part of the statistics.** Training boards are kept in their own log (in the export), and the time curve,
+    grades and play modes never see them.
+  - **Practice** has the chains and what-ifs (levels 6–12) as training boards, below the drills. Each row shows how
+    many times you found it without a hint.
+  - **The campaign** counts them: for the chains and what-ifs, 5 training boards where you find the technique without a hint
+    unlock a new try, as do 3 puzzles that need it. Before, those levels had only puzzles as practice.
+  - **The generator** now looks for a board whose easiest way really uses the technique when it has to start there.
+    The campaign's part-solved boards use the same search. Before, in a sample of 6×6 boards, a third of those for the
+    single-number what-if and half of those for the what-if with singles could not start there, because the easiest way
+    (by price) used another technique.
+- **Campaign: a bar per step, filled by a rating.** Instead of three good boards in a row, each board moves a rating
+  for the step (Glicko-style, as chess and Lichess rate players), and a bar shows how far the step has come. A full bar
+  passes it.
+  - **How a board counts:** within your usual time counts fully, less the slower it was, nothing from 2.5 times it or
+    when it was not solved without help. Early boards move the bar a lot; it moves less as it settles. After a long
+    break it drops a little, until a board shows you still know the technique.
+  - **How many boards:** with nothing known, two quick clean boards pass a step; if you have already solved 3 games
+    that need the technique, one can. Slower boards need more. Over twice your usual time, or not solved without help,
+    still means practising outside the campaign first.
+  - **After a board** the sheet shows the bar with what that board added (lighter) or took away (red), and "one more
+    quick board can pass" or "at least 3 more". Boards played before keep counting: they are replayed into the rating.
+- **Campaign: an example board at the start of each step.** A real board where the technique is the next step, drawn as
+  the hints draw it (the pattern, what it rules out, the legend), with "Step by step" for the whole explanation. It is
+  on the campaign page, and on the sheet after the board that passes the step before. Open when the technique is new
+  to you; folded away to one line when you already know it (3 solved games that need it, or a board of the step
+  played). Found in the background the first time and kept on the device. The rarest Sudoku techniques (both ways,
+  what-if with techniques) may not be found in the time; they are then left out until the next time the app starts.
+- **Campaign: the first two boards of a step start part-solved, counted over the whole step.** A new try after
+  practice starts from the beginning: seeing when the technique is needed is part of the lesson. Before, each try
+  started with two part-solved boards.
+- **Sudoku: small boards, 4×4 and 6×6.** New game offers 4×4 (2×2 boxes, numbers 1–4) and 6×6 (2×3 boxes, numbers
+  1–6) next to 9×9.
+  - **4×4 is for speed:** every 4×4 Sudoku is solved with singles alone (checked on all 3.5 million with 4–7 givens),
+    so its grade stays under 2. New game says so, asks for no higher grade (no long search for what is not there),
+    and Learn requires no technique on it. Pencil marks sit two by two, like the boxes. 4×4 games are a statistics scope
+    of their own, as in Suguru; the other one is now called "6×6 and up".
+  - **6×6** reaches the chains and sometimes a what-if; grades up to about 6.
+  - **Codes:** SD1-6X6-… and SD1-4X4-…, and plain puzzles of 36 or 16 characters, load like the 9×9 ones.
+  - **Unchanged:** the daily puzzle, the drills, the guide and the timed trial stay 9×9. A size chosen before is kept:
+    the choice is now stored by its size, not its place in the list (in both games).
+
+### Changed
+- **Statistics, Concentration: a board instead of a chart.** The bar chart of lapses per 100 moves, with its colours,
+  dashed line and notes on how it is measured, is gone. Instead:
+  - **One sentence** on your last 20 games ("Fine…", or "In 2 of your last 20 games, easy numbers dragged on while
+    others were waiting, or errors crept in") and **what to do** in bold: stop after two games when most lapses came
+    in the 3rd game of a session or later, a short pause halfway when most came in the second half of a game,
+    otherwise a break when easy numbers start to drag.
+  - **The latest lapse on the board:** the number that took long ringed in orange, and the easy numbers that were
+    there to take ringed in blue, with the numbers already placed in grey ("00:58 for the orange number, while the blue
+    ones were just as easy").
+  - The game's own line after a game no longer compares "lapses per 100 moves" with your usual.
+- **The timed trial is rated with Glicko too,** instead of a fixed staircase (+0.25 in time, −0.25 otherwise, ±0.5
+  for the first 5 boards). Each board is a game against the board: a win when it is solved in time, against the
+  board's actual grade. The next board is at your rating, where you solve about half in time.
+  - **It moves as much as it is unsure:** the first board in time moves you about 0.6 grade, and after about 20 boards
+    a board moves you less than 0.1. After a break it moves more again. A wrong number in hardcore still leaves it.
+  - **The trial screen is short:** the index, the number of boards, the chart with the index's likely range as a band,
+    and the latest boards. The rules (one line) show only before a flavour's first board; the explanations of how the
+    index is found and what 100 means are gone. The sheet after a board only says whether the next is harder or easier.
+  - **Boards played before** are replayed into the rating once, so your index starts from your results so far, and
+    their history is redrawn with it (one measure on the chart, not the old staircase).
+- **Suguru 4×4 with regions of at most 4 cells:** asking for a grade above 4 now gives a 4 at once, instead of searching
+  for 20 seconds and saying it could not find one. New game already said 4 is the highest there.
+- **The route analysis is kept for your latest 200 games** instead of 40, to collect data for the grading
+  experiments (about 2.3 KB per game). A setting of 40 is raised once; a smaller choice is kept, and Storage offers
+  200, 40, 20, 10 or the latest only. When storage runs full, the old games' analysis is still removed first.
+- **"Practise the technique" in the statistics' focus area** starts a training board for the chains and what-ifs (it
+  used to open New game with the technique chosen). Singles to triples still open their drill.
+- **A drill's "Show me" outlines the region** its explanation talks about ("the outlined region"), as the hints do.
+- **Quick call's claims are a few big words under the board:** "Easy 4", "A pair", "Only places for 2". The board
+  shows the rest: the blue cells, and for "only places" the row, column, box or region outlined. Screen readers and
+  the list of misses afterwards keep the full sentence. With the setting "Cell names in explanations" the sentence
+  with names is shown small under the big words.
+- **Your time after a game, at a glance.** Under the heading: your time, a thin bar with a tick at the expected time,
+  and the percentage ("04:32 ▬▬▬▬▬|▬ 120 %", with "expected 03:50" under the tick). Before, the estimate was a sentence
+  ("Your estimate was 03:50. You took 1.2 times as long.") and the time sat among the facts. The campaign uses the same
+  line, and the timed trial shows it against the limit.
+- **The home screen is about playing.** At the top: Continue, the daily puzzle and New game. Below them, the other ways
+  to play share one list, one line each with a short status: Campaign ("Step 2 of 11"), Timed trial ("Soft · index
+  116") and Practice (the drill your last game suggests). Then one row with Statistics, Guide and Settings, without the
+  small print. Everything fits on one phone screen.
+  - **The daily puzzle** shows only the grade, the size and your days in a row (or "Solved").
+  - **Practice** opens a sheet with the suggested drill first and all the others below it (before: a card plus a "More
+    practice" link).
+  - **Moved off the home screen:**
+    - the puzzle code: to the bottom of New game ("Or load a puzzle code"), together with the rules;
+    - guest mode: to Settings ("Let someone else play"). The band at the bottom still ends it.
+
+### Changed (behind the scenes)
+- **One table of techniques.** The order of the techniques, their families (basic, chains, what-ifs), which have a drill,
+  which are rare and where they sit on the time curve now live in one table (`tools/grade/techniques.json`). The code
+  asks the table ("is it a what-if?", "has it a drill?", "is it harder?") instead of comparing level numbers (about
+  160 lines in 17 files), and the Java booklet generator reads the same table. A level's number is now a name that
+  never changes, and the order is looked up.
+  - **What it gives:** a new technique is an entry in the table, a finder and its texts, without renumbering or moving
+    your stored data. Tried on a copy: making the hidden pair a step of its own after the pairs needed no code change,
+    and JavaScript and Java still gave the same grades.
+  - **Nothing else changes:** grades, hints, the route analysis and generated puzzles are the same as before (compared
+    on 1,415 recorded results, the generator on fixed seeds, and Java on 249 puzzles), apart from the two fixes below.
+  - **The numbers shown are the place in the game's order:** Suguru 1–12, Sudoku 1–11, in New game, the statistics and
+    the guide.
+  - **A typical time for a technique you have no moves for** follows the time curve's rungs again (it had used the new
+    level numbers since the mixed pair came in).
+
+### Fixed
+- **Two slips from the mixed pair's renumbering (not in any build):**
+  - **A what-if with techniques** could use only up to pairs inside its assumption, not triples. With triples back, 3
+    of 249 test puzzles grade lower again, as in the last build (7.5 → 7.0, 7.6 → 7.2, 8.2 → 7.9).
+  - **The hardest technique in a hint** was the highest technique number, so a hint with a mixed pair and a triple or a
+    chain called the mixed pair the hardest. It now follows the table's order. No test puzzle's grade changed.
+
 ## 2026-11-25a
 
 ### New

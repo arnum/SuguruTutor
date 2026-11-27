@@ -219,27 +219,47 @@ public final class SuguruTutor {
         return out;
     }
 
-    List<App> nakedApps(St s, int k, boolean first) {
+    /** Pair targets (26 Nov. 2026, as tutor.js): a target that touches both cells or shares their region sees them the same way
+     *  (technique 3); one that sees one cell by the region and the other only by touching is a mixed pair (technique 14). */
+    boolean touches(int a, int b) { return Math.abs(a / cols - b / cols) <= 1 && Math.abs(a % cols - b % cols) <= 1; }
+    boolean sameWay(int t, int[] ch) {
+        boolean all = true;
+        for (int q : ch) if (!touches(t, q)) { all = false; break; }
+        if (all) return true;
+        for (int q : ch) if (region[q] != region[t]) return false;
+        return true;
+    }
+    static final int ALL = 0, SIMPLE = 1, MIXED = 2;
+    List<App> nakedApps(St s, int k, boolean first) { return nakedApps(s, k, first, ALL); }
+    List<App> nakedApps(St s, int k, boolean first, int want) {
         List<App> out = new ArrayList<>();
         List<Integer> l = new ArrayList<>();
         for (int c = 0; c < n; c++) { int b = pc(s.cand[c]); if (s.val[c] == 0 && b >= 2 && b <= k) l.add(c); }
-        nakedRec(s, SuguruEngine.toArray(l), k, 0, 0, 0, new int[k], out, first);
+        nakedRec(s, SuguruEngine.toArray(l), k, 0, 0, 0, new int[k], out, first, want);
         return out;
     }
-    boolean nakedRec(St s, int[] cs, int k, int st, int d, int m, int[] ch, List<App> out, boolean first) {
+    boolean nakedRec(St s, int[] cs, int k, int st, int d, int m, int[] ch, List<App> out, boolean first, int want) {
         if (d == k) {
             if (pc(m) != k) return false;
-            App a = new App();
+            List<Target> targets = new ArrayList<>();
             for (int p : peers[ch[0]]) {
                 boolean inCh = false;
                 for (int q : ch) if (q == p) inCh = true;
                 if (s.val[p] != 0 || inCh || (s.cand[p] & m) == 0) continue;
                 boolean all = true;
                 for (int q : ch) if (!peer(p, q)) { all = false; break; }
-                if (all) a.targets.add(new Target(p, s.cand[p] & m));
+                if (all) targets.add(new Target(p, s.cand[p] & m));
             }
-            if (!a.targets.isEmpty()) { a.tech = k == 2 ? 3 : 5; a.cells = ch.clone(); a.mask = m; out.add(a); return first; }
-            return false;
+            if (k == 3) {
+                if (targets.isEmpty()) return false;
+                App a = new App(); a.tech = 5; a.cells = ch.clone(); a.mask = m; a.targets = targets; out.add(a); return first;
+            }
+            App simple = new App(), mixed = new App();
+            for (Target t : targets) (sameWay(t.cell, ch) ? simple : mixed).targets.add(t);
+            boolean found = false;
+            if (want != MIXED && !simple.targets.isEmpty()) { simple.tech = 3; simple.cells = ch.clone(); simple.mask = m; out.add(simple); found = true; }
+            if (want != SIMPLE && !mixed.targets.isEmpty()) { mixed.tech = 14; mixed.cells = ch.clone(); mixed.mask = m; out.add(mixed); found = true; }
+            return found && first;
         }
         for (int i = st; i < cs.length; i++) {
             int c = cs[i], m2 = m | s.cand[c];
@@ -248,7 +268,7 @@ public final class SuguruTutor {
             for (int j = 0; j < d; j++) if (!peer(ch[j], c)) { ok = false; break; }
             if (!ok) continue;
             ch[d] = c;
-            if (nakedRec(s, cs, k, i + 1, d + 1, m2, ch, out, first)) return true;
+            if (nakedRec(s, cs, k, i + 1, d + 1, m2, ch, out, first, want)) return true;
         }
         return false;
     }
@@ -484,14 +504,16 @@ public final class SuguruTutor {
     Step chainStep(St s, int maxLevel, boolean early) {
         // What-if with techniques: if a neighbour elimination, a pair or a triple gives a contradiction straight away, it is taken first
         // (the same as tutor.js), so the short reasoning is found. Only in the first steps (early).
-        if (maxLevel >= 2 && early) {
-            List<List<App>> quick = new ArrayList<>();
-            quick.add(neighborApps(s, false));
-            if (maxLevel >= 3) { quick.add(nakedApps(s, 2, false)); quick.add(hiddenApps(s, 2, false)); }
-            if (maxLevel >= 4) { quick.add(nakedApps(s, 3, false)); quick.add(hiddenApps(s, 3, false)); }
-            for (List<App> l : quick) for (App a : l) {
-                St T = s.copy(); apply(T, a);
-                if (T.broken != null) return elimStep(s, a);
+        // the methods allowed inside: the units up to maxLevel in the table's order (as tutor.js)
+        List<Integer> upTo = new ArrayList<>();
+        for (int L : SuguruGrade.LADDER) { if (SuguruGrade.harder(L, maxLevel)) break; for (int m : SuguruGrade.methods(L)) upTo.add(m); }
+        if (!upTo.isEmpty() && early) {
+            for (int m : upTo) {
+                if (!SuguruGrade.METHOD_PATTERN[m]) continue;
+                for (App a : find(s, m, false)) {
+                    St T = s.copy(); apply(T, a);
+                    if (T.broken != null) return elimStep(s, a);
+                }
             }
         }
         List<Single> sg = singles(s);
@@ -503,16 +525,11 @@ public final class SuguruTutor {
                 if (spotsOf(s, r, 1 << v).isEmpty()) { if (s.broken == null) s.broken = new Broken(1, -1, r, v); return new Step((App) null); }
             }
         }
-        List<App> a;
-        if (maxLevel >= 2 && !(a = neighborApps(s, true)).isEmpty()) return elimStep(s, a.get(0));
-        if (maxLevel >= 3 && !(a = nakedApps(s, 2, true)).isEmpty()) return elimStep(s, a.get(0));
-        if (maxLevel >= 3 && !(a = hiddenApps(s, 2, true)).isEmpty()) return elimStep(s, a.get(0));
-        if (maxLevel >= 4 && !(a = nakedApps(s, 3, true)).isEmpty()) return elimStep(s, a.get(0));
-        if (maxLevel >= 4 && !(a = hiddenApps(s, 3, true)).isEmpty()) return elimStep(s, a.get(0));
-        if (maxLevel >= 5 && !(a = chainApps(s, true, 'x')).isEmpty()) return elimStep(s, a.get(0));
-        if (maxLevel >= 6 && !(a = chainApps(s, true, 'y')).isEmpty()) return elimStep(s, a.get(0));
-        if (maxLevel >= 7 && !(a = chainApps(s, true, 'a')).isEmpty()) return elimStep(s, a.get(0));
-        if (maxLevel >= 8 && !(a = nishioApps(s, true)).isEmpty()) return elimStep(s, a.get(0));
+        for (int m : upTo) {
+            if (!SuguruGrade.METHOD_INNER[m]) continue;
+            List<App> a = find(s, m, true);
+            if (!a.isEmpty()) return elimStep(s, a.get(0));
+        }
         return null;
     }
     Step elimStep(St s, App a) { apply(s, a); return new Step(a); }
@@ -565,7 +582,7 @@ public final class SuguruTutor {
             for (int v : bitsOf(s.cand[c])) {
                 TrialResult rc = runTrial(s, c, v, inner, maxSteps);
                 if (rc != null) {
-                    App a = new App(); a.tech = inner == 1 ? 11 : 13; a.cell = c; a.v = v; a.cells = new int[]{c}; a.relCount = rc.relCount; a.memPeak = rc.memPeak; a.innerMask = rc.innerMask;
+                    App a = new App(); a.tech = inner == SuguruGrade.SINGLES ? 11 : 13; a.cell = c; a.v = v; a.cells = new int[]{c}; a.relCount = rc.relCount; a.memPeak = rc.memPeak; a.innerMask = rc.innerMask;
                     a.targets.add(new Target(c, 1 << v));
                     out.add(a); if (first) return out;
                 }
@@ -655,11 +672,11 @@ public final class SuguruTutor {
     // ------------------------------------------------------------------ the what-if family (as in tutor.js)
     // Levels 8-11 are compared on effort (the grade's "as you used to play"), not on kind: a short what-if with a pair is easier
     // than a long one with singles. len = support steps + the assumption + the chain's relevant steps.
-    static final int WHATIF_L = 8;
+    static final int WHATIF_L = SuguruGrade.first("whatif"); // the first unit of the what-if family: from there the family is compared as one
     /** The lowest price a technique level can have (its easiest method's recognition), as tutor.js. */
     static double levelFloor(int L) {
         double m = Double.POSITIVE_INFINITY;
-        for (int T = 0; T < TECH_LEVEL.length; T++) if (TECH_LEVEL[T] == L) m = Math.min(m, T >= 7 ? costOf(T, T >= 7 && T <= 9 ? 2 : 0, 2) : costOf(T, 0, 1));
+        for (int T : SuguruGrade.methods(L)) m = Math.min(m, SuguruGrade.METHOD_BYLENGTH[T] ? costOf(T, SuguruGrade.METHOD_CHAIN[T] ? 2 : 0, 2) : costOf(T, 0, 1));
         return m;
     }
     /** whatIfCost for a bare technique (no techniques inside): used for the floors and the caps. */
@@ -677,7 +694,7 @@ public final class SuguruTutor {
         WhatIf(App a, Single x, boolean fromS0, int len, double key) { this.a = a; this.x = x; this.fromS0 = fromS0; this.len = len; this.key = key; } }
     List<App> whatIfBase(St s, double cap) {
         List<App> l = nishioApps(s, false);
-        if (relMax(11, cap) >= 0) l.addAll(trialApps(s, 1, false, relMax(11, cap) == Integer.MAX_VALUE ? 400 : 2 * relMax(11, cap) + 2));
+        if (relMax(11, cap) >= 0) l.addAll(trialApps(s, SuguruGrade.SINGLES, false, relMax(11, cap) == Integer.MAX_VALUE ? 400 : 2 * relMax(11, cap) + 2));
         if (relMax(12, cap) >= 0) l.addAll(bothWaysApps(s, false, relMax(12, cap) == Integer.MAX_VALUE ? 400 : 2 * relMax(12, cap) + 2));
         return l;
     }
@@ -728,7 +745,7 @@ public final class SuguruTutor {
             St[] states = steps.isEmpty() ? new St[]{S} : new St[]{S0, S};
             boolean[] from = steps.isEmpty() ? new boolean[]{false} : new boolean[]{true, false};
             for (int k = 0; k < states.length; k++)
-                for (App a : trialApps(states[k], 4, false, Math.max(2, 2 * lim + 2)))
+                for (App a : trialApps(states[k], SuguruGrade.code("triples"), false, Math.max(2, 2 * lim + 2)))
                     if (a.relCount < lim) whatIfConsider(steps, states[k], a, from[k], raw, cap);
         }
         raw.sort((p, q) -> Double.compare(p.lb, q.lb));
@@ -742,20 +759,30 @@ public final class SuguruTutor {
         return best;
     }
 
-    List<App> levelApps(St s, int L) {
-        switch (L) {
-            case 2: return neighborApps(s, false);
-            case 3: { List<App> l = nakedApps(s, 2, false); l.addAll(hiddenApps(s, 2, false)); return l; }
-            case 4: { List<App> l = nakedApps(s, 3, false); l.addAll(hiddenApps(s, 3, false)); return l; }
-            case 5: return chainApps(s, false, 'x');
-            case 6: return chainApps(s, false, 'y');
-            case 7: return chainApps(s, false, 'a');
-            case 8: return nishioApps(s, false);
-            case 9: return trialApps(s, 1, false);
-            case 10: return bothWaysApps(s, false);
-            case 11: return trialApps(s, 8, false);
+    /** a method's finder (as FIND in tutor.js) */
+    List<App> find(St s, int m, boolean first) {
+        switch (m) {
+            case 2: return neighborApps(s, first);
+            case 3: return nakedApps(s, 2, first, SIMPLE);
+            case 4: return hiddenApps(s, 2, first);
+            case 14: return nakedApps(s, 2, first, MIXED);
+            case 5: return nakedApps(s, 3, first);
+            case 6: return hiddenApps(s, 3, first);
+            case 7: return chainApps(s, first, 'x');
+            case 8: return chainApps(s, first, 'y');
+            case 9: return chainApps(s, first, 'a');
+            case 10: return nishioApps(s, first);
+            case 11: return trialApps(s, SuguruGrade.METHOD_WITHIN[11], first);
+            case 12: return bothWaysApps(s, first);
+            case 13: return trialApps(s, SuguruGrade.METHOD_WITHIN[13], first);
             default: return new ArrayList<>();
         }
+    }
+    /** everything a unit's methods find, in the table's order */
+    List<App> levelApps(St s, int L) {
+        List<App> l = new ArrayList<>();
+        for (int m : SuguruGrade.methods(L)) l.addAll(find(s, m, false));
+        return l;
     }
 
     // ------------------------------------------------------------------ replay
@@ -774,7 +801,7 @@ public final class SuguruTutor {
             }
             return b.targets.isEmpty() ? null : b;
         }
-        if (a.tech == 3 || a.tech == 5) {
+        if (a.tech == 3 || a.tech == 5 || a.tech == 14) {
             int u = 0;
             for (int c : a.cells) { if (T.val[c] != 0) return null; u |= T.cand[c]; }
             if ((u & ~a.mask) != 0) return null;
@@ -817,7 +844,7 @@ public final class SuguruTutor {
             return b.targets.isEmpty() ? null : b;
         }
         if (T.val[a.cell] != 0 || (T.cand[a.cell] & (1 << a.v)) == 0) return null;
-        TrialResult rc = a.tech == 10 ? nishioRun(T, a.cell, a.v) : runTrial(T, a.cell, a.v, a.tech == 11 ? 1 : 8);
+        TrialResult rc = a.tech == 10 ? nishioRun(T, a.cell, a.v) : runTrial(T, a.cell, a.v, SuguruGrade.METHOD_WITHIN[a.tech]);
         if (rc == null) return null;
         App b = a.copy(); b.relCount = rc.relCount; b.memPeak = rc.memPeak; b.innerMask = rc.innerMask;
         return b;
@@ -861,8 +888,8 @@ public final class SuguruTutor {
         double base = stepsKey(steps);
         Plan best = null;
         boolean triedOn = false, onWay = false; // onWay: best is where the option-removing steps lead (what-ifs already compared there)
-        for (int L = 2; L <= 11; L++) {
-            if (best != null && (L > WHATIF_L || levelFloor(L) >= best.key || (L == WHATIF_L && onWay))) continue;
+        for (int L : SuguruGrade.LADDER) {
+            if (best != null && (SuguruGrade.harder(L, WHATIF_L) || levelFloor(L) >= best.key || (L == WHATIF_L && onWay))) continue;
             if (L == WHATIF_L) {
                 WhatIf w = whatIfBest(S0, S, steps, best != null ? best.key : Double.POSITIVE_INFINITY);
                 if (w != null) {
@@ -954,7 +981,7 @@ public final class SuguruTutor {
         int hardest = kind == NAKED || kind == SHAPE ? 0 : 1;
         int[] support = new int[steps.size()];
         int len = 0;
-        for (int i = 0; i < steps.size(); i++) { hardest = Math.max(hardest, steps.get(i).tech); support[i] = steps.get(i).relCount; len += 1 + support[i]; }
+        for (int i = 0; i < steps.size(); i++) { if (SuguruGrade.harderMethod(steps.get(i).tech, hardest)) hardest = steps.get(i).tech; support[i] = steps.get(i).relCount; len += 1 + support[i]; }
         Hint h = new Hint(cell, v, hardest, singles(S0).size(), support, outerPeak(S0, steps, cell, v), len);
         for (App a : steps) if (a.tech == hardest) h.innerMask |= a.innerMask;
         {
@@ -984,7 +1011,7 @@ public final class SuguruTutor {
                 StringBuilder sb = new StringBuilder().append(a.tech).append(':');
                 for (int k = 0; k < own.size(); k++) sb.append(k > 0 ? "," : "").append(own.get(k));
                 sb.append(':');
-                if (a.tech >= 3 && a.tech <= 6) sb.append(a.mask);
+                if ((a.tech >= 3 && a.tech <= 6) || a.tech == 14) sb.append(a.mask);
                 else if (a.tech == 2 || a.tech == 10 || a.tech == 11 || a.tech == 13) sb.append(a.v);
                 h.sig = sb.toString();
             }

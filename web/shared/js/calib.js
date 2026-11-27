@@ -1,6 +1,6 @@
 // Personal time curve: how long a move takes you, from which technique it needed, how many places there were to find it,
 // and how big the board is.
-//   time ≈ a · L^k · n^b · (cells/ref)^s      (L = technique level 1–11, n = number of possible moves at that level)
+//   time ≈ a · R^k · n^b · (cells/ref)^s      (R = the rung of the technique level, calL; n = number of possible moves at that level)
 // A bigger board takes longer to scan for every move: in one player's 3,900 moves (Nov. 2026) about √cells (s ≈ 0.45),
 // from 0.6 of the 6×6 time on 4×4 to 1.3 times on 10×8. ref is the board the starting values are for (6×6, Sudoku 9×9).
 // a, k, b and s are fitted to your own moves. The starting values (priors) come from one real player's 838 Suguru moves (Nov. 2026), so
@@ -12,6 +12,9 @@ const CAL_PRIOR = Object.assign({ c: Math.log(3.1), k: 2.0, b: -0.31, s: 0.45, c
 const CAL_STRENGTH = { c: 3, k: 25, b: 25, s: 50 }; // how many "moves" the priors count as
 const calCells = (cells) => Math.log((cells || CAL_PRIOR.cells) / CAL_PRIOR.cells);
 const CAL_SHRINK = 4; // a technique with n moves gets n/(n+4) of its measured deviation
+// The rung on the time ladder per technique: the table's rung (tools/grade/techniques.json). The mixed pair came in on
+// 26 Nov. 2026 between pairs and triples (rung 3.5), so the curve for the other techniques is the same as before.
+const calL = (L) => TT.rung(L);
 
 // Moves that can be used for the curve: timed, not a hint, not an error and not placed while an error stood on the board
 function calibRows(gs) {
@@ -22,7 +25,7 @@ function calibRows(gs) {
       const lc = calCells(g.rows * g.cols),
         t = +new Date(g.end) || 0;
       g.route.ctx.forEach(([L, ds, n]) => {
-        if (L > 11 || !(ds > 0)) return;
+        if (!TT.known(L) || !(ds > 0)) return;
         rows.push({ L, y: Math.log(Math.max(0.5, ds / 10)), ln: Math.log(Math.max(1, n || 1)), lc, t, dt: ds / 10, one: (n || 1) <= 1 });
       });
       return;
@@ -34,7 +37,7 @@ function calibRows(gs) {
     g.moves.forEach((m) => {
       if (!judged(m) || m.cls === "wrong" || m.cls === "hint" || !(m.dt > 0)) return;
       const L = moveLevel(m);
-      if (!L || L > 11) return;
+      if (!TT.known(L)) return;
       rows.push({ L, y: Math.log(Math.max(0.5, m.dt / 1000)), ln: Math.log(Math.max(1, m.nAvail || 1)), lc, t, dt: m.dt / 1000, one: (m.nAvail || 1) <= 1 });
     });
   });
@@ -48,7 +51,7 @@ function fitCalib(rows) {
     lam = [CAL_STRENGTH.c, CAL_STRENGTH.k, CAL_STRENGTH.b, CAL_STRENGTH.s];
   const A = [0, 1, 2, 3].map(() => [0, 0, 0, 0, 0]);
   rows.forEach((r) => {
-    const x = [1, Math.log(r.L), r.ln, r.lc || 0];
+    const x = [1, Math.log(calL(r.L)), r.ln, r.lc || 0];
     for (let i = 0; i < N; i++) {
       for (let j = 0; j < N; j++) A[i][j] += x[i] * x[j];
       A[i][N] += x[i] * r.y;
@@ -73,7 +76,7 @@ function fitCalib(rows) {
     const e = (lvl[r.L] = lvl[r.L] || { n: 0, sum: 0, n1: 0 });
     e.n++;
     if (r.one) e.n1++;
-    e.sum += r.y - (c + k * Math.log(r.L) + b * r.ln + s * (r.lc || 0));
+    e.sum += r.y - (c + k * Math.log(calL(r.L)) + b * r.ln + s * (r.lc || 0));
   });
   for (const L in lvl) {
     const e = lvl[L];
@@ -84,8 +87,8 @@ function fitCalib(rows) {
   // a sum of many moves must use the mean, which is exp(s2/2) times larger. s2 is measured for easy (1) and harder (2+) moves separately.
   const sq = [0, 0, 0, 0];
   rows.forEach((r) => {
-    const g = r.L === 1 ? 0 : 2,
-      d = r.y - (c + k * Math.log(r.L) + b * r.ln + s * (r.lc || 0) + (lvl[r.L] ? lvl[r.L].r : 0));
+    const g = r.L === TT.SINGLES ? 0 : 2,
+      d = r.y - (c + k * Math.log(calL(r.L)) + b * r.ln + s * (r.lc || 0) + (lvl[r.L] ? lvl[r.L].r : 0));
     sq[g] += d * d;
     sq[g + 1]++;
   });
@@ -97,15 +100,15 @@ function fitCalib(rows) {
 // own=true adds your own deviation for the technique on top.
 function calTime(cal, L, n = 1, own = true, cells) {
   const r = own && cal.lvl[L] ? cal.lvl[L].r : 0;
-  return Math.exp(cal.c + cal.k * Math.log(L) + cal.b * Math.log(Math.max(1, n)) + (cal.s || 0) * calCells(cells) + r);
+  return Math.exp(cal.c + cal.k * Math.log(calL(L)) + cal.b * Math.log(Math.max(1, n)) + (cal.s || 0) * calCells(cells) + r);
 }
-// How much more each rung on the ladder costs (from level L to L+1), as a number to show
-const calStep = (cal, L) => Math.pow((L + 1) / L, cal.k);
+// How much more each rung on the ladder costs (from technique L to the next), as a number to show
+const calStep = (cal, L) => Math.pow(calL(TT.next(L)) / calL(L), cal.k);
 
 // Your curve from your latest moves of each technique: the latest 1,000 easy numbers and the latest 60 moves of every other
 // technique, recomputed when new games come in. Not the latest games: after a spell of easy games those would hold
 // almost no pairs or chains, and the curve would forget your speed with them.
-const CAL_KEEP = (L) => (L === 1 ? 1000 : 60);
+const CAL_KEEP = (L) => (L === TT.SINGLES ? 1000 : 60);
 let CAL = null;
 function myCal() {
   const own = ownGames(),
@@ -132,7 +135,7 @@ function stepCodes(steps) {
 function sumOfMeans(cal, lv, cells) {
   return lv.reduce((a, x) => {
     const L = Math.floor(x / 100);
-    return a + calTime(cal, L, x % 100, true, cells) * Math.exp((L === 1 ? cal.s2[0] : cal.s2[1]) / 2);
+    return a + calTime(cal, L, x % 100, true, cells) * Math.exp((L === TT.SINGLES ? cal.s2[0] : cal.s2[1]) / 2);
   }, 0);
 }
 // Puzzle times are skewed: a few long searches pull the average up, so most puzzles come in under the sum of the average
@@ -160,11 +163,25 @@ function estimateSec(cal, lv, cells) {
 
 // Estimate and comparison as text (used in the "why" sheet, after solving and in the statistics)
 const estFmt = (sec) => fmt(Math.max(10, Math.round(sec / 10) * 10) * 1000);
-function estCompare(ms, est) {
-  const r = ms / 1000 / est;
-  if (r >= 1.15) return tr("You took {x} times as long.", { x: dec(r) });
-  if (r <= 0.87) return tr("You were faster: {pct}% of the estimate.", { pct: Math.round(100 * r) });
-  return tr("That was about right.");
+// After a game: your time against the expectation in one quiet line (26 Nov. 2026): the time, a thin bar with a tick at
+// the expected time, and the percentage of it. refLabel names the tick ("expected", or "limit" in a timed trial).
+function timeMeterHtml(ms, refSec, refLabel) {
+  const t = ms / 1000,
+    pct = Math.round((100 * t) / refSec),
+    max = Math.max(t, refSec) * 1.12,
+    at = (x) => Math.min(100, (100 * x) / max);
+  const tick = at(refSec),
+    // the label under the tick stays inside the bar: right-aligned to the tick when it sits far right
+    align = tick > 62 ? "translateX(-100%)" : tick < 38 ? "none" : "translateX(-50%)";
+  const tip = tr("{t} · {pct} % of {label} {ref}", { t: fmt(ms), pct, label: refLabel, ref: estFmt(refSec) });
+  return (
+    `<div class="tmeter" role="img" aria-label="${esc(tip)}" data-tip="${esc(tip)}">` +
+    `<b class="tm-t">${fmt(ms)}</b>` +
+    `<span class="tm-bar"><span class="tm-track"><span class="tm-fill" style="width:${at(t).toFixed(1)}%"></span>` +
+    `<span class="tm-ref" style="left:${tick.toFixed(1)}%"></span></span>` +
+    `<span class="tm-lab" style="left:${tick.toFixed(1)}%;transform:${align}">${esc(refLabel)} ${estFmt(refSec)}</span></span>` +
+    `<b class="tm-p">${pct} %</b></div>`
+  );
 }
 function estLineHtml(lv, cells) {
   const cal = myCal(),
@@ -197,6 +214,8 @@ function estStats(k = 12) {
 // Tested on 46 real puzzles (Nov. 2026): 0.80 against 0.72. A forward test on 40 new puzzles gave no gain, so
 // the deviation is now strongly damped (n + 12) and needs at least 5 puzzles with the same hardest technique.
 let PGM = null;
+// The personal grade's groups: each technique on its own, but bivalue chains and everything harder in one group (few puzzles each)
+const calGroup = (tech) => TT.min(tech, TT.code("chain2"));
 function personalModel() {
   const key = (microNow() ? "4x4:" : "") + games.length + ":" + (games.length ? games[games.length - 1].id : "");
   if (PGM && PGM.key === key) return PGM.m;
@@ -219,7 +238,7 @@ function personalModel() {
     if (b >= 0.15) {
       const grp = {};
       hist.forEach((g, i) => {
-        const k = Math.min(g.tech, 6),
+        const k = calGroup(g.tech),
           e = (grp[k] = grp[k] || { n: 0, sum: 0 });
         e.n++;
         e.sum += (y[i] - a) / b - x[i]; // how many grades the puzzle felt above or below its grade (measured in time)
@@ -235,7 +254,7 @@ function personalModel() {
 function personalGrade(value, tech) {
   const m = personalModel();
   if (!m || !tech) return null;
-  const e = m.grp[Math.min(tech, 6)];
+  const e = m.grp[calGroup(tech)];
   if (!e || e.n < 5) return null;
   return { value: Math.max(1, Math.min(GW.cap, Math.round((value + e.adj) * 10) / 10)), adj: e.adj, n: e.n };
 }
@@ -247,7 +266,7 @@ function personalLineHtml(value, tech) {
       ? `<p class="estline">${tr("After 10 puzzles solved without hints, the app can tell how a puzzle will probably feel for you ({n} so far).", { n: solvedClean })}</p>`
       : "";
   }
-  const name = LEVEL_TECH[Math.min(tech, 6)] + (tech >= 6 ? " " + tr("or harder") : "");
+  const name = LEVEL_TECH[calGroup(tech)] + (calGroup(tech) === TT.code("chain2") ? " " + tr("or harder") : "");
   const why =
     pg.adj >= 0.2
       ? tr("Puzzles where {tech} is the hardest technique have taken you longer than their grade says ({n} puzzles).", { tech: name, n: pg.n })

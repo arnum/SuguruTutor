@@ -25,12 +25,15 @@ self.onmessage = (e) => {
     self.postMessage({ type: "drill", id: d.id, board: findDrill(SE, d) });
     return;
   }
+  if (d.type === "example") {
+    self.postMessage({ type: "drill", id: d.id, board: findExample(SE, d) });
+    return;
+  }
   if (d.type === "route") {
     self.postMessage({ type: "route", list: analyzeRoute(SE, d.puzzle, d.moves, null, d.typ) });
     return;
   }
   let puzzle = generateGraded(SE, d, (tries, level, decimal) => self.postMessage({ type: "progress", tries, level, decimal }));
-  // campaign: start where the technique is the next step
-  if (d.startAt) puzzle = startAtTechnique(SE, puzzle, d.startAt) || puzzle;
+  // campaign and training: generateGraded starts the board where the technique is the next step (startAt)
   self.postMessage({ type: "done", puzzle });
 };

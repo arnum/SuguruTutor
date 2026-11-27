@@ -3,6 +3,7 @@
 
   Suguru: tools/grade/weights.json -> web/suguru/js/gradew.js and java/src/SuguruGrade.java
   Sudoku: tools/grade/sudoku.json  -> web/sudoku/js/gradew.js
+  Both:   tools/grade/techniques.json (the technique table) and tools/grade/techs.js (its questions, TT) -> the same files
 
 The numbers sit between the markers "<gen:weights>" and "</gen:weights>"; nothing else in the files is touched.
 To calibrate: edit weights.json (raise "fit"), run this script, run the parity test (JS and Java must give the same grade).
@@ -29,7 +30,9 @@ GAMES = {
     "suguru": (SRC, JS, JAVA),
     "sudoku": (os.path.join(ROOT, "tools", "grade", "sudoku.json"), os.path.join(ROOT, "web", "sudoku", "js", "gradew.js"), None),
 }
-NTECH = 14
+TECHS_SRC = os.path.join(ROOT, "tools", "grade", "techniques.json")
+TECHS_JS = os.path.join(ROOT, "tools", "grade", "techs.js")
+NTECH = 15
 SCALARS = ["cap", "inner", "vis", "shapeSize", "shapeSizeCap", "shapeBent", "open", "openMid", "workPer", "workMid", "workLo", "workHi",
            "len", "loadOver", "loadTechRepeat", "loadScale", "loadWeight", "loadCountScale", "early",
            "singlesK", "singlesOptsW", "singlesOptsMid", "singlesOptsSpan", "singlesNarrowW", "singlesNarrowSpan",
@@ -61,6 +64,27 @@ def load(zero=(), src=SRC):
     return w
 
 
+def load_techs():
+    t = json.load(open(TECHS_SRC, encoding="utf-8"))
+    codes = [u["code"] for u in t["units"]]
+    assert len(set(codes)) == len(codes) and t["guess"] not in codes, "unit codes must be unique and not the guess code"
+    ms = [m for u in t["units"] for m in u["methods"]]
+    assert sorted(ms) == list(range(NTECH)), "every method belongs to exactly one unit"
+    assert [m["m"] for m in t["methods"]] == list(range(NTECH)), "methods are listed in order 0..NTECH-1"
+    for m in t["methods"]:
+        if "within" in m:
+            assert m["within"] in codes
+    return t
+
+
+def techs_js(t):
+    """the table as compact JS data (the _about and _fields notes left out), followed by the questions (techs.js)"""
+    units = [{k: v for k, v in u.items()} for u in t["units"]]
+    methods = [{k: v for k, v in m.items() if k != "m"} for m in t["methods"]]
+    data = json.dumps({"guess": t["guess"], "units": units, "methods": methods}, ensure_ascii=False, separators=(", ", ": "))
+    return ["// The technique table, from tools/grade/techniques.json:", "const TECHS = " + data + ";"] + open(TECHS_JS, encoding="utf-8").read().rstrip("\n").split("\n")
+
+
 def js_block(w, src=SRC):
     arr = lambda a: "[" + ", ".join(num(x) for x in a) + "]"
     L = [f"// <gen:weights> Written by tools/grade/gen.py from tools/grade/{os.path.basename(src)}. Edit there, not here.",
@@ -78,6 +102,7 @@ def js_block(w, src=SRC):
     L.append(f"    multiCap: {num(w['pencil']['multiCap'])},")
     L.append("  },")
     L.append("};")
+    L += techs_js(load_techs())
     L.append("// </gen:weights>")
     return "\n".join(L)
 
@@ -95,6 +120,29 @@ def java_block(w):
     for k in PEN:
         L.append(f"    static final double[][] P_{k} = {{{arr(w['pencil'][k][0])}, {arr(w['pencil'][k][1])}, {arr(w['pencil'][k][2])}}};")
     L.append(f"    static final double P_multiCap = {num(w['pencil']['multiCap'])};")
+    t = load_techs()
+    ia = lambda a: "{" + ", ".join(str(int(x)) for x in a) + "}"
+    ba = lambda a: "{" + ", ".join("true" if x else "false" for x in a) + "}"
+    unit_of = [0] * NTECH
+    for u in t["units"]:
+        for m in u["methods"]:
+            unit_of[m] = u["code"]
+    M = t["methods"]
+    L += ["    // The technique table, from tools/grade/techniques.json: units in teaching order (codes never change; the order",
+          "    // is the only order), and per method (technique number) its unit and flags. See rank() below.",
+          f"    static final int GUESS = {t['guess']};",
+          f"    static final int[] UNIT_ORDER = {ia([u['code'] for u in t['units']])};",
+          "    static final int[][] UNIT_METHODS = {" + ", ".join(ia(u["methods"]) for u in t["units"]) + "};",
+          "    static final String[] UNIT_ID = {" + ", ".join('"' + u["id"] + '"' for u in t["units"]) + "};",
+          "    static final String[] UNIT_FAMILY = {" + ", ".join('"' + u["family"] + '"' for u in t["units"]) + "};",
+          "    static final String[] UNIT_GAMES = {" + ", ".join('"' + ",".join(u.get("games", [])) + '"' for u in t["units"]) + "};",
+          f"    static final int[] METHOD_UNIT = {ia(unit_of)};",
+          f"    static final int[] METHOD_WEIGHT = {ia([m['weight'] for m in M])};",
+          f"    static final boolean[] METHOD_PATTERN = {ba([m.get('pattern') for m in M])};",
+          f"    static final boolean[] METHOD_INNER = {ba([m.get('inner') for m in M])};",
+          f"    static final boolean[] METHOD_CHAIN = {ba([m.get('chain') for m in M])};",
+          f"    static final boolean[] METHOD_BYLENGTH = {ba([m.get('byLength') for m in M])};",
+          f"    static final int[] METHOD_WITHIN = {ia([m.get('within', 0) for m in M])};"]
     L.append("    // </gen:weights>")
     return "\n".join(L)
 

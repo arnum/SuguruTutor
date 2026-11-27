@@ -58,7 +58,11 @@ const LOOK = {
     "The last resort: assume a number and use all techniques until a contradiction appears.",
   ],
 };
-const LEVEL_OF = [1, 1, 2, 3, 3, 4, 4, 5, 6, 7, 8, 9, 10, 11];
+// The technique table (tools/grade/techniques.json): each method's unit, and Sudoku's units in order (the place shown)
+const TECHS = JSON.parse(fs.readFileSync(path.join(ROOT, "tools", "grade", "techniques.json"), "utf8"));
+const LEVEL_OF = [];
+TECHS.units.forEach((u) => u.methods.forEach((m) => (LEVEL_OF[m] = u.code)));
+const ORDER = TECHS.units.filter((u) => !u.games || u.games.includes("sudoku")).map((u) => u.code);
 const IDS = ["eneste-kandidat", "eneste-plads", "laaste-kandidater", "noegent-par", "skjult-par", "noegen-trippel", "skjult-trippel", "kaede-et-tal", "kaede-to-muligheder", "kaede", "hvis-saa-et-tal", "hvis-saa-kort", "begge-veje", "hvis-saa-dyb"];
 
 // ---------- 1. Find examples. They are scored on the Danish texts (score() counts text length), so the choice of
@@ -194,7 +198,7 @@ const missEn = (M) =>
 const MISS_DA = MISSING_T.length
   ? ` Der mangler endnu et eksempel på ${listOf(DA, MISSING_T, "og")}: den er så sjælden i Sudoku, at hverken generatoren eller kendte svære opgaver har vist den. Spillets hints forklarer den, hvis den dukker op.`
   : "";
-const LEDE = "The fourteen techniques the game's difficulty rating uses, from the easiest to the hardest. Tap the drawing or Next to go one step forward.";
+const LEDE = "The fifteen techniques the game's difficulty rating uses, from the easiest to the hardest. Tap the drawing or Next to go one step forward.";
 const ledeEn = (M) => `${COUNT_EN} the game's difficulty rating uses, from the easiest to the hardest. Tap the drawing or Next to go one step forward.${missEn(M)}`;
 const LEDE_DA = `${COUNT_DA}, som spillets sværhedsvurdering bruger, fra de letteste til de sværeste. Tryk på tegningen eller på Næste for at gå et trin frem.${MISS_DA}`;
 // [Suguru's text in the template, Sudoku's text in English, in Danish]
@@ -247,6 +251,7 @@ function page(lang, data, M) {
     t = t.replace('<html lang="en">', '<html lang="da">');
   }
   t = t.replace("__DATA__", JSON.stringify(data));
+  t = t.replace("__ORDER__", JSON.stringify(ORDER).split(",").join(", "));
   const realTag = `'<span class="real">${lang === "da" ? "Fra en rigtig opgave" : "From a real puzzle"}</span>'`;
   if (!t.includes(realTag)) throw new Error("the tag is not in the template");
   t = t.split(realTag).join(

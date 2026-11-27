@@ -105,7 +105,7 @@ section.practice p { margin: 8px 0 0; color: var(--mute); font-size: 13.5px; }
   <header>
     <div class="stamp" aria-hidden="true">数</div>
     <h1>Suguru strategies</h1>
-    <p class="lede">The fourteen techniques the game's difficulty rating uses, from the easiest to the hardest. Tap the drawing or Next to go one step forward.</p>
+    <p class="lede">The fifteen techniques the game's difficulty rating uses, from the easiest to the hardest. Tap the drawing or Next to go one step forward.</p>
   </header>
 
   <div class="legend" aria-label="How to read the drawings">
@@ -138,7 +138,9 @@ section.practice p { margin: 8px 0 0; color: var(--mute); font-size: 13.5px; }
 
 <script>
 const EXAMPLES = __DATA__;
-const LEVELS = ["", "Easy", "Medium", "Hard", "Very hard", "Chain: one number", "Chain: two options", "Chain: mixed", "What-if: one number", "What-if: singles", "Both ways", "What-if: techniques"];
+const LEVELS = ["", "Easy", "Medium", "Hard", "Pair: mixed", "Very hard", "Chain: one number", "Chain: two options", "Chain: mixed", "What-if: one number", "What-if: singles", "Both ways", "What-if: techniques"];
+const ORDER = __ORDER__; // the technique units in the table's order (tools/grade/techniques.json) for this game
+const num = (L) => ORDER.indexOf(L) + 1; // the place shown, from easy to hard
 const NS = "http://www.w3.org/2000/svg";
 const NOTE = { 1: [24, 24], 2: [76, 24], 3: [50, 50], 4: [24, 76], 5: [76, 76] };
 const COLS = "abcdefgh";
@@ -244,14 +246,14 @@ function build(saved) {
     pos[ex.id] = saved && saved[ex.id] !== undefined ? Math.min(saved[ex.id], ex.frames.length - 1) : 0;
     const link = document.createElement("a");
     link.href = "#" + ex.id;
-    link.innerHTML = `<b>${ex.level}</b>${ex.name}`;
+    link.innerHTML = `<b>${num(ex.level)}</b>${ex.name}`;
     toc.appendChild(link);
-    const dots = Array.from({ length: 11 }, (_, j) => `<i class="${j < ex.level ? "on" : ""}"></i>`).join("");
+    const dots = Array.from({ length: ORDER.length }, (_, j) => `<i class="${j < num(ex.level) ? "on" : ""}"></i>`).join("");
     const a = document.createElement("article");
     a.id = ex.id;
     a.innerHTML = `
       ${i ? "<hr>" : ""}
-      <div class="kicker"><span class="dots" aria-hidden="true">${dots}</span>Level ${ex.level} · ${LEVELS[ex.level]}${ex.real ? '<span class="real">From a real puzzle</span>' : ""}</div>
+      <div class="kicker"><span class="dots" aria-hidden="true">${dots}</span>Level ${num(ex.level)} · ${LEVELS[ex.level]}${ex.real ? '<span class="real">From a real puzzle</span>' : ""}</div>
       <h2>${ex.name}</h2>
       <p class="rule">${ex.rule}</p>
       <figure>

@@ -23,6 +23,12 @@ function sizeIcon(s) {
 const MODES = ["manual", "relax", "challenge", "learn"];
 const modeName = (m) => ({ manual: tr("Manual"), relax: tr("Relax"), challenge: tr("Challenge"), learn: tr("Learn") })[m];
 const sizeKey = (s) => s.c + "x" + s.r;
+// The highest grade a 4×4 can have: a Suguru 4×4 with regions of at most 4 cells goes no higher than 4, and a Sudoku 4×4
+// needs only singles (GAME.microTop)
+const microTop = (s) => (s.r * s.c > 16 ? 9.9 : GAME.microTop || (ui.maxRegion === 4 ? 4.9 : 9.9));
+// What New game says about that (empty when nothing)
+const microNote = (s) =>
+  s.r * s.c > 16 ? "" : GAME.microNote || (ui.maxRegion === 4 ? tr("On 4×4 with regions of at most 4 cells, grade 4 is the highest. Allow bigger regions for more.") : "");
 function usualGrade(s) {
   const micro = s.r * s.c <= 16, // 4×4 is a game of its own (core.js): its usual grade only from 4×4
     clean = games.filter((g) => g.solved && !g.hints && !g.replay && g.value && isMicro(g) === micro);
@@ -36,11 +42,11 @@ function learnTech() {
     const fd = focusData();
     if (fd.base) {
       const w = fd.rows.filter((f) => f.score < -0.25 && focusReasons(f, true).length).sort((a, b) => a.score - b.score)[0];
-      if (w && w.L >= 2 && w.L <= 11) return { L: w.L, focus: true };
+      if (w && TT.known(w.L) && TT.beyond(w.L)) return { L: w.L, focus: true };
     }
   } catch (e) {}
   const cal = myCal(),
-    L = [2, 3, 4, 5, 6].sort((a, b) => ((cal.lvl[a] || {}).n || 0) - ((cal.lvl[b] || {}).n || 0))[0];
+    L = TT.list("learn").sort((a, b) => ((cal.lvl[a] || {}).n || 0) - ((cal.lvl[b] || {}).n || 0))[0];
   return { L, focus: false };
 }
 function modePlan(mode) {
@@ -62,6 +68,10 @@ function modePlan(mode) {
       (u ? tr("A little above {usual}.", { usual }) : tr("A little above where you start.")) +
       " " +
       tr("It moves after each game: up after a solve without hints at or under your estimate, down after a slow solve, hints or giving up.");
+  } else if (mode === "learn" && microTop(s) < 2) {
+    // nothing beyond singles fits on this board (a 4×4 Sudoku): no technique to require
+    t = base;
+    why = GAME.microNote || "";
   } else if (mode === "learn") {
     const lt = withScope(s.r * s.c <= 16 ? "micro" : "main", learnTech);
     must = lt.L;
@@ -70,8 +80,7 @@ function modePlan(mode) {
       ? tr("Puzzles that need {tech}, your focus area, around {usualg}.", { tech: LEVEL_TECH[must], usualg: dec(t) })
       : tr("Puzzles that need {tech}, the technique you have met least, around {usualg}.", { tech: LEVEL_TECH[must], usualg: dec(t) });
   }
-  // a 4×4 with regions of at most 4 cells goes no higher than grade 4
-  const top = s.r * s.c <= 16 && ui.maxRegion === 4 ? 4.9 : 9.9;
+  const top = microTop(s);
   t = Math.round(Math.min(top, Math.max(1, t)) * 10) / 10;
   return { mode, t, level: Math.floor(t), must, why };
 }
@@ -145,7 +154,7 @@ function renderNew() {
   games.forEach((g) => {
     if (g.solved) solvedBy[gBand(g)] = (solvedBy[gBand(g)] || 0) + 1;
   });
-  // with only one size (Sudoku: 9×9) there is nothing to choose: hide the choice and its heading
+  // with only one size there is nothing to choose: hide the choice and its heading
   const oneSize = SIZES.length < 2,
     sizeHead = $("sizes").previousElementSibling;
   $("sizes").hidden = oneSize;
@@ -161,6 +170,7 @@ function renderNew() {
         (b.onclick = () => {
           ui.sizeIdx = +b.dataset.i;
           const s = SIZES[ui.sizeIdx];
+          ui.size = s.r + "x" + s.c;
           if (ui.maxRegion === 4 && s.r * s.c > 49) ui.maxRegion = 5;
           saveUi();
           renderNew();
@@ -195,13 +205,24 @@ function renderNew() {
         g.levels
           .map(
             (l) =>
-              `<button class="lvl" type="button" data-l="${l}" aria-pressed="${l === ui.must}"><span class="n">${l}</span><span class="t">${E.LEVELS[l]}</span>` +
+              `<button class="lvl" type="button" data-l="${l}" aria-pressed="${l === ui.must}"><span class="n">${TT.num(l)}</span><span class="t">${E.LEVELS[l]}</span>` +
               `<span class="d">${LEVEL_INFO[l]}</span><span class="c"></span><span class="r" aria-hidden="true"></span></button>`,
           )
           .join("") +
         `</div>`,
     ).join("") +
-    `</details>`;
+    `</details>` +
+    // training: start the board where the technique is the next step (train.js); not for singles, which come first anyway
+    (TT.beyond(ui.must)
+      ? `<div class="group trainset"><div class="set"><span>${tr("Start where it is next")}</span><small>${tr("Training: not part of the statistics.")}</small>` +
+        `<button class="switch" type="button" role="switch" id="startAtSw" aria-checked="${!!ui.startAt}" aria-label="${esc(tr("Start where it is next"))}"></button></div></div>`
+      : "");
+  if ($("startAtSw"))
+    $("startAtSw").onclick = () => {
+      ui.startAt = !ui.startAt;
+      saveUi();
+      renderNew();
+    };
   $("musts")
     .querySelectorAll(".lvl")
     .forEach(
@@ -248,14 +269,15 @@ function renderNew() {
     );
   const s = SIZES[ui.sizeIdx];
   $("newNote").textContent = ui.mode !== "manual"
-    ? s.r * s.c <= 16 && ui.maxRegion === 4
-      ? tr("On 4×4 with regions of at most 4 cells, grade 4 is the highest. Allow bigger regions for more.")
-      : ""
+    ? microNote(s)
+    : TT.beyond(ui.must) && ui.startAt
+    ? tr("The board starts part-solved, where {tech} is the next step. Once you have used it, you can skip to the next board.", { tech: LEVEL_TECH[ui.must] }) +
+      (TT.is(ui.must, "rare") ? " " + GAME.rareNote : "")
     : ui.must
     ? tr("The puzzle will require {tech}. The difficulty will be as close to {g} as possible.", { tech: LEVEL_TECH[ui.must], g: ui.level }) +
-      (ui.must >= 10 ? " " + GAME.rareNote : "")
-    : s.r * s.c <= 16 && ui.maxRegion === 4 && ui.level > 4
-      ? tr("On 4×4 with regions of at most 4 cells, grade 4 is the highest. Allow bigger regions for more.")
+      (TT.is(ui.must, "rare") ? " " + GAME.rareNote : "")
+    : microNote(s) && ui.level > Math.floor(microTop(s))
+      ? microNote(s)
       : ui.level >= 8
       ? tr("The highest grades are rare, especially on small boards. It can take up to 20 seconds, and you get the closest one found.")
       : ui.level === 2
@@ -274,7 +296,10 @@ function renderNew() {
           renderNew();
         }),
     );
-  $("startBtn").textContent = tr("Start") + " · " + (ui.mode === "manual" ? BAND[ui.level] : modeName(ui.mode)) + " · " + s.c + "×" + s.r;
+  $("startBtn").textContent =
+    ui.mode === "manual" && TT.beyond(ui.must) && ui.startAt
+      ? tr("Start training") + " · " + s.c + "×" + s.r
+      : tr("Start") + " · " + (ui.mode === "manual" ? BAND[Math.min(ui.level, Math.floor(microTop(s)))] : modeName(ui.mode)) + " · " + s.c + "×" + s.r;
 }
 $("startBtn").onclick = () => replaceGame(() => (ui.mode === "manual" ? generateFromUi() : startMode()));
 // "New puzzle" after a game and in the menu: the same settings, or the same mode
@@ -326,14 +351,17 @@ $("busyCancel").onclick = () => {
   syncClock();
 };
 
-function generateFromUi() {
+// trainL: a training board for that technique (train.js); otherwise from the switch "Start where it is next"
+function generateFromUi(trainL) {
   const s = SIZES[ui.sizeIdx],
-    nu = NUANCES.find((x) => x.id === ui.nuance) || NUANCES[0];
+    nu = NUANCES.find((x) => x.id === ui.nuance) || NUANCES[0],
+    tL = trainL || (ui.mode === "manual" && ui.startAt && TT.beyond(ui.must) ? ui.must : 0);
   const req = {
     rows: s.r,
     cols: s.c,
-    level: ui.level,
-    must: ui.must || 0,
+    level: Math.min(ui.level, Math.floor(microTop(s))), // a 4×4 cannot go higher: no long search for what is not there
+    must: tL || ui.must || 0,
+    startAt: tL,
     seed: (Math.random() * 1e9) >>> 0,
     budget: 20000,
     lo: nu.lo,
@@ -343,9 +371,13 @@ function generateFromUi() {
     maxRegion: ui.maxRegion,
     np: noPen(), // hit the band for the grade without pencil
   };
+  if (tL) {
+    generate(req, tr("Looking for a board where {tech} is next …", { tech: LEVEL_TECH[tL] }), (p) => trainLoad(p, tL, "new"));
+    return;
+  }
   generate(
     req,
-    tr("Looking for grade {g}", { g: ui.level }) +
+    tr("Looking for grade {g}", { g: req.level }) +
       (ui.must ? " " + tr("with {tech}", { tech: LEVEL_TECH[ui.must] }) : "") +
       (nu.id !== "alle" ? " (" + nu.label.toLowerCase() + ")" : "") +
       " …",
@@ -403,6 +435,21 @@ function replaceGame(then) {
   }
   const empty = P.givens.filter((g) => !g).length,
     filled = entries.filter(Boolean).length;
+  if (meta && meta.train) {
+    // a training board is not in the statistics: nothing to lose but the board
+    confirmSheet({
+      title: tr("You have a training board in progress"),
+      text: tr("{time} spent, {pct} % filled in. Training boards are not part of the statistics.", { time: fmt(elapsed()), pct: Math.round((100 * filled) / empty) }),
+      ok: tr("Start new"),
+      cancel: tr("Continue the old one"),
+      onOk: () => {
+        recordGame(false);
+        then();
+      },
+      onCancel: () => go("game"),
+    });
+    return;
+  }
   confirmSheet({
     title: tr("You have a game in progress"),
     text: tr("{grade} {v}, {time} spent, {pct} % filled in. If you start a new one, the old one counts as abandoned in your statistics.", {

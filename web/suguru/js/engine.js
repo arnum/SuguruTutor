@@ -11,71 +11,61 @@ function engineFactory() {
     6: [2, 3, 3, 4, 4, 5, 5, 5, 6, 6, 6],
   };
   const TECH = [
-    { level: 1, weight: 1, label: tr("Naked single"), desc: tr("The cell has only one possible number left.|suguru") },
-    { level: 1, weight: 1, label: tr("Hidden single|suguru"), desc: tr("A number can only go in one place in its region.") },
+    { label: tr("Naked single"), desc: tr("The cell has only one possible number left.|suguru") },
+    { label: tr("Hidden single|suguru"), desc: tr("A number can only go in one place in its region.") },
     {
-      level: 2,
-      weight: 4,
       label: tr("Neighbour elimination"),
       desc: tr("Every possible place for a number in a region touches the same cell outside it. That cell cannot hold the number."),
     },
     {
-      level: 3,
-      weight: 8,
       label: tr("Naked pair"),
       desc: tr("Two cells that see each other have only two possible numbers between them. Cells that see both cannot hold them."),
     },
     {
-      level: 3,
-      weight: 10,
       label: tr("Hidden pair"),
       desc: tr("Two numbers in a region can only go in the same two cells. Those cells cannot hold any other number."),
     },
-    { level: 4, weight: 15, label: tr("Naked triple"), desc: tr("Like a naked pair, but with three cells and three numbers.|suguru") },
-    { level: 4, weight: 18, label: tr("Hidden triple"), desc: tr("Like a hidden pair, but with three numbers and three cells.|suguru") },
+    { label: tr("Naked triple"), desc: tr("Like a naked pair, but with three cells and three numbers.|suguru") },
+    { label: tr("Hidden triple"), desc: tr("Like a hidden pair, but with three numbers and three cells.|suguru") },
     {
-      level: 5,
-      weight: 20,
       label: tr("Single-number chain"),
       desc: tr("Follow one number: if x is not here, it must be there (two places in a region), and then x cannot be in the cells around it. Either the start or the end is x, so cells that see both cannot be x."),
     },
     {
-      level: 6,
-      weight: 22,
       label: tr("Bivalue chain"),
       desc: tr("A chain of cells with only two options: if the first cell is not a, the rest are forced until the last cell becomes a. Cells that see both ends cannot be a."),
     },
     {
-      level: 7,
-      weight: 24,
       label: tr("Mixed chain"),
       desc: tr("A chain that mixes both kinds of link: cells with two options and numbers with two places in a region."),
     },
     {
-      level: 8,
-      weight: 26,
       label: tr("Single-number what-if"),
       desc: tr("Assume a cell is x and follow only the number x: where can x go in the other regions? If a region has no room left for x, the assumption was wrong."),
     },
     {
-      level: 9,
-      weight: 30,
       label: tr("What-if with singles"),
       desc: tr("If the cell were v, simple moves with all numbers would lead to a contradiction. So it is not v."),
     },
     {
-      level: 10,
-      weight: 40,
       label: tr("Both ways"),
       desc: tr("A cell with two options (or a number with two places): try both ways with simple moves. If both give the same result, it is true."),
     },
-    { level: 11, weight: 60, label: tr("What-if with techniques"), desc: tr("Like the what-if with singles, but the path to the contradiction needs harder techniques along the way, such as pairs or chains.") },
+    { label: tr("What-if with techniques"), desc: tr("Like the what-if with singles, but the path to the contradiction needs harder techniques along the way, such as pairs or chains.") },
+    // 14 (26 Nov. 2026): a naked pair where a cell sees one of the two by its region and the other only by touching
+    {
+      label: tr("Mixed pair"),
+      desc: tr("Two touching cells with the same two options are those two numbers. A cell in the same region as one of them that touches the other cannot hold them."),
+    },
   ];
+  // each technique's unit (its "level") and weight come from the technique table (TT, tools/grade/techniques.json)
+  TECH.forEach((t, m) => Object.assign(t, { level: TT.unitOf(m), weight: TT.method(m).weight }));
   const LEVELS = [
     "",
     tr("Easy"),
     tr("Medium"),
     tr("Hard"),
+    tr("Pair: mixed"),
     tr("Very hard"),
     tr("Chain: one number"),
     tr("Chain: two options"),
@@ -516,7 +506,19 @@ function engineFactory() {
       }
       return false;
     }
-    function nakedSubset(s, k) {
+    // mode for pairs (k = 2): "simple" only removes from cells that see both cells the same way (both touching, or the same
+    // region), "mixed" only from cells that see one by the region and the other only by touching (the mixed pair, level 4)
+    const touches = (a, b) => Math.abs(Math.floor(a / cols) - Math.floor(b / cols)) <= 1 && Math.abs((a % cols) - (b % cols)) <= 1;
+    const sameWay = (p, ch, k) => {
+      let t = true,
+        r = true;
+      for (let i = 0; i < k; i++) {
+        if (!touches(p, ch[i])) t = false;
+        if (region[ch[i]] !== region[p]) r = false;
+      }
+      return t || r;
+    };
+    function nakedSubset(s, k, mode) {
       const cs = [];
       for (let c = 0; c < n; c++) {
         const b = popcount(s.cand[c]);
@@ -534,7 +536,7 @@ function engineFactory() {
                 all = false;
                 break;
               }
-            if (all) progress = eliminate(s, p, mask) || progress;
+            if (all && (!mode || sameWay(p, chosen, k) === (mode === "simple"))) progress = eliminate(s, p, mask) || progress;
           }
           return progress;
         }
@@ -787,6 +789,23 @@ function engineFactory() {
       }
       return false;
     }
+    // each method's finder in this rater (true if it removed something); the order comes from the technique table
+    const FINDERS = {
+      2: (s) => neighborElimination(s),
+      3: (s) => nakedSubset(s, 2, "simple"),
+      4: (s) => hiddenSubset(s, 2),
+      14: (s) => nakedSubset(s, 2, "mixed"),
+      5: (s) => nakedSubset(s, 3),
+      6: (s) => hiddenSubset(s, 3),
+      7: (s) => chainElim(s, "x"),
+      8: (s) => chainElim(s, "xy"),
+      9: (s) => chainElim(s, "all"),
+      10: (s) => nishio(s),
+      11: (s) => contradiction(s, TT.method(11).within),
+      12: (s) => bothWays(s),
+      13: (s) => contradiction(s, TT.method(13).within),
+    };
+    const LADDER = TT.all().filter((c) => c !== TT.unitOf(0));
     function step(s, maxLevel) {
       let u;
       if ((u = nakedSingles(s)) > 0) {
@@ -797,71 +816,32 @@ function engineFactory() {
         lastUses = u;
         return 1;
       }
-      if (maxLevel >= 2 && neighborElimination(s)) {
-        lastUses = 1;
-        return 2;
-      }
-      if (maxLevel >= 3 && nakedSubset(s, 2)) {
-        lastUses = 1;
-        return 3;
-      }
-      if (maxLevel >= 3 && hiddenSubset(s, 2)) {
-        lastUses = 1;
-        return 4;
-      }
-      if (maxLevel >= 4 && nakedSubset(s, 3)) {
-        lastUses = 1;
-        return 5;
-      }
-      if (maxLevel >= 4 && hiddenSubset(s, 3)) {
-        lastUses = 1;
-        return 6;
-      }
-      if (maxLevel >= 5 && chainElim(s, "x")) {
-        lastUses = 1;
-        return 7;
-      }
-      if (maxLevel >= 6 && chainElim(s, "xy")) {
-        lastUses = 1;
-        return 8;
-      }
-      if (maxLevel >= 7 && chainElim(s, "all")) {
-        lastUses = 1;
-        return 9;
-      }
-      if (maxLevel >= 8 && nishio(s)) {
-        lastUses = 1;
-        return 10;
-      }
-      if (maxLevel >= 9 && contradiction(s, 1)) {
-        lastUses = 1;
-        return 11;
-      }
-      if (maxLevel >= 10 && bothWays(s)) {
-        lastUses = 1;
-        return 12;
-      }
-      if (maxLevel >= 11 && contradiction(s, 8)) {
-        lastUses = 1;
-        return 13;
+      // the units after the singles, in the table's order, up to maxLevel; within a unit its methods in order
+      for (const L of LADDER) {
+        if (TT.harder(L, maxLevel)) break;
+        for (const m of TT.methods(L))
+          if (FINDERS[m](s)) {
+            lastUses = 1;
+            return m;
+          }
       }
       return -1;
     }
-    function rate(givens, maxLevel = 11) {
+    function rate(givens, maxLevel = TT.last()) {
       const s = newState();
       for (let c = 0; c < n; c++) if (givens[c]) place(s, c, givens[c]);
       const uses = new Array(TECH.length).fill(0);
       let score = 0,
-        hardest = 1;
+        hardest = TT.unitOf(0);
       while (!s.broken && !isSolved(s)) {
         const t = step(s, maxLevel);
         if (t < 0) break;
         uses[t] += lastUses;
         score += TECH[t].weight * lastUses;
-        hardest = Math.max(hardest, TECH[t].level);
+        hardest = TT.max(hardest, TECH[t].level);
       }
       const solved = !s.broken && isSolved(s);
-      return { level: solved ? hardest : 12, score, solved, uses };
+      return { level: solved ? hardest : TT.GUESS, score, solved, uses };
     }
     // The next number a human solver can find from the current position + which techniques it took.
     function nextPlacement(known) {
@@ -872,10 +852,10 @@ function engineFactory() {
       const used = new Set();
       let hardest = 0;
       while (!s.broken && !isSolved(s)) {
-        const t = step(s, 11);
+        const t = step(s, TT.last());
         if (t < 0) return null;
         used.add(t);
-        hardest = Math.max(hardest, TECH[t].level);
+        hardest = TT.max(hardest, TECH[t].level);
         for (let c = 0; c < n; c++) if (!before[c] && s.val[c]) return { cell: c, value: s.val[c], used: [...used], hardest };
       }
       return null;
@@ -908,8 +888,8 @@ function engineFactory() {
           givens[c] = 0;
           if (!rater.rate(givens, target).solved) givens[c] = saved;
         }
-        const rating = rater.rate(givens, 11);
-        const dist = Math.abs(rating.level - target);
+        const rating = rater.rate(givens, TT.last());
+        const dist = Math.abs(TT.rank(rating.level) - TT.rank(target)); // steps apart in the table's order
         if (dist < bestDist) {
           bestDist = dist;
           best = { rows, cols, region, solution, givens, rating, target, seed, tries, maxRegion };

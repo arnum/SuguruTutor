@@ -19,6 +19,7 @@ function conflicts() {
   return bad;
 }
 const NOTE_POS5 = { 1: [24, 24], 2: [76, 24], 3: [50, 50], 4: [24, 76], 5: [76, 76] };
+const NOTE_POS4 = { 1: [30, 30], 2: [70, 30], 3: [30, 70], 4: [70, 70] }; // a 4×4 Sudoku: two by two, like its boxes
 const NOTE_POS6 = { 1: [22, 30], 2: [50, 30], 3: [78, 30], 4: [22, 72], 5: [50, 72], 6: [78, 72] };
 const NOTE_POS9 = { 1: [22, 26], 2: [50, 26], 3: [78, 26], 4: [22, 54], 5: [50, 54], 6: [78, 54], 7: [22, 82], 8: [50, 82], 9: [78, 82] };
 let NOTE_POS = NOTE_POS5;
@@ -39,16 +40,21 @@ function renderGrid() {
     const wrong = !P.givens[i] && entries[i] && checked && entries[i] !== P.solution[i];
     if (values[i] && (bad.has(i) || wrong)) color[i] = "var(--bad)";
     if (wrong) crossed.add(i);
+    if (chainTool) {
+      // the chain tool: no selection (a tap colours or links); the number worked on is picked out where it is placed
+      if (chainD && values[i] === chainD) fill[i] = "var(--same)";
+      continue;
+    }
     if (!hv && settings.peers && selected >= 0 && peerSets[selected].has(i) && !P.givens[i]) fill[i] = "var(--peer)";
     if (!hv && settings.same && selVal && values[i] === selVal) fill[i] = "var(--same)";
     if (i === selected) fill[i] = "var(--sel)";
   }
   const parts = boardParts(
     { rows: G.rows, cols: G.cols, region: P.region, givens: P.givens, values, color, crossed, notes, reveal: reveal ? P.solution : null, maxR: P.maxRegion },
-    Object.assign(viewLayers(hv), {
+    Object.assign(viewLayers(hv), hv ? {} : chainLayer(), {
       fill,
       dashed: hintCell,
-      ring: selected >= 0 ? { c: selected, warn: !!(pendingOverwrite && pendingOverwrite.cell === selected) } : null,
+      ring: selected >= 0 && !chainTool ? { c: selected, warn: !!(pendingOverwrite && pendingOverwrite.cell === selected) } : null,
       flash: solved,
       aria: true,
     }),
@@ -66,6 +72,7 @@ function renderPad() {
   pad.style.setProperty("--padn", top);
   pad.style.setProperty("--padl", top > 6 ? Math.ceil(top / 2) : top); // in landscape 1-9 go in two rows (see app.css)
   pad.classList.toggle("notes", noteMode);
+  pad.classList.toggle("chain", !!chainTool);
   const max = selected >= 0 ? digitMax(selected) : top,
     locked = selected < 0 || !!P.givens[selected] || solved;
   for (let d = 1; d <= top; d++) {
@@ -73,6 +80,16 @@ function renderPad() {
     b.type = "button";
     b.id = "pad-" + d;
     b.textContent = d;
+    // the chain tool: the numbers choose the number to colour or link, whatever cell is selected
+    if (chainTool && !solved) {
+      if (chainD === d) {
+        b.classList.add("cur");
+        b.setAttribute("aria-pressed", "true");
+      }
+      b.dataset.d = d;
+      pad.appendChild(b);
+      continue;
+    }
     b.disabled = locked || d > max;
     if (!locked && !noteMode && entries[selected] === d) {
       b.classList.add("cur");
@@ -99,6 +116,8 @@ function renderPad() {
   // cell can have, etc.) only for new players (the first BEGINNER_GAMES games), not for those who know the game.
   $("padhint").textContent = solved
     ? ""
+    : chainTool
+    ? chainPadHint()
     : noteMode && stake
       ? stake.left === PEN_MIN
         ? tr("Pencil: from note {k} on, the puzzle counts as {a} instead of {b}.", { k: PEN_MIN, a: dec(stake.pen), b: dec(stake.nopen) })
@@ -117,9 +136,11 @@ function renderPad() {
             ? tr("The cell has {v}.", { v: entries[selected] }) + (settings.confirm ? " " + tr("Tap a different number twice to change it.") : "")
             : GAME.cellRange(max);
   $("noteBtn").setAttribute("aria-pressed", noteMode);
-  ["noteBtn", "eraseBtn", "undoBtn", "hintBtn"].forEach((id) => ($(id).disabled = solved));
+  renderChain(); // the chain tool's button and bar (chains.js)
+  ["noteBtn", "chainBtn", "eraseBtn", "undoBtn", "hintBtn"].forEach((id) => ($(id).disabled = solved));
+  if (chainTool) $("eraseBtn").disabled = true; // the chain tool has its own Clear
   $("hintBtn").hidden = !!(meta && (meta.camp || meta.trial)); // the campaign and the timed trials have no hints
-  $("noteBtn").hidden = !!(meta && meta.trial); // ... and a trial has no pencil
+  $("noteBtn").hidden = $("chainBtn").hidden = !!(meta && meta.trial); // ... and a trial has no pencil, nor colours
   $("eraseBtn").hidden = $("undoBtn").hidden = !!(meta && meta.trial && meta.trial.fl === "hard"); // hardcore: nothing to correct
 }
 function pillPersonal() {
@@ -133,16 +154,20 @@ function renderStatus() {
   $("levelPill").innerHTML =
     `${esc(BAND[lv])} <span class="val">${levelValue(P)}</span>${pillPersonal()}<svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>`;
   // Hardest technique, peak and load (the size can be seen on the board, and the puzzle's number says nothing during the game)
-  $("gameSub").textContent = LEVEL_TECH[P.rating.level] + (P.grade ? " · " + plText(P.grade) : "") + (meta && meta.daily ? " · " + tr("Daily") : "");
+  $("gameSub").textContent =
+    (meta && meta.train ? tr("Training · {tech}", { tech: LEVEL_TECH[meta.train.L] }) : LEVEL_TECH[P.rating.level]) +
+    (P.grade ? " · " + plText(P.grade) : "") +
+    (meta && meta.daily ? " · " + tr("Daily") : "");
   $("status").innerHTML =
     `<span class="dots" aria-label="${tr("Grade {g} of 9", { g: lv })}">${dots}</span>` +
-    (P.seed != null && P.target && lv !== P.target ? `<span style="color:var(--bad)">${tr("wanted {g}", { g: P.target })}</span>` : "") +
+    (P.seed != null && P.target && lv !== P.target && !P.startAt ? `<span style="color:var(--bad)">${tr("wanted {g}", { g: P.target })}</span>` : "") +
     (meta && meta.hints ? `<span>${meta.hints === 1 ? tr("1 hint") : tr("{n} hints", { n: meta.hints })}</span>` : "") +
     (meta && meta.trial
       ? `<span class="timer${meta.trial.lim * 1000 - elapsed() < 30000 ? " short" : ""}" id="timer">${fmt(Math.max(0, meta.trial.lim * 1000 - elapsed()))}</span>` // the time left
       : settings.timer
         ? `<span class="timer" id="timer">${fmt(elapsed())}</span>`
         : `<span class="timer" id="timer" hidden></span>`);
+  renderTrain();
 }
 function renderAll() {
   if (!P) return;

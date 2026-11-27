@@ -1,10 +1,20 @@
 // The game: input, hints, menu, explanation of the difficulty and the solved sheet.
 
 function pushUndo() {
-  undoStack.push({ entries: entries.slice(), notes: notes.slice() });
+  undoStack.push({ entries: entries.slice(), notes: notes.slice(), chain: chainSnapshot() });
   if (undoStack.length > 300) undoStack.shift();
 }
+// a note written (a pencil mark, or a colour or link of the chain tool): it counts towards the grade with pencil
+function penAdded() {
+  const stake = penStake();
+  meta.pen = (meta.pen || 0) + 1; // used to choose the grade with/without pencil
+  if (stake && stake.left === 1) {
+    toast(tr("This game now counts as played with pencil: {a}.", { a: dec(stake.pen) }));
+    renderStatus(); // the heading switches to the grade with pencil
+  }
+}
 function input(d) {
+  if (chainTool && !solved) return chainPad(d); // the chain tool: the numbers choose the number to colour or link (chains.js)
   if (selected < 0 || P.givens[selected] || solved || d > digitMax(selected)) return;
   const cur = entries[selected];
   if (noteMode) {
@@ -17,14 +27,7 @@ function input(d) {
     hintCell = -1;
     pendingOverwrite = null;
     notes[selected] ^= 1 << d;
-    if (notes[selected] & (1 << d)) {
-      const stake = penStake();
-      meta.pen = (meta.pen || 0) + 1; // used to choose the grade with/without pencil
-      if (stake && stake.left === 1) {
-        toast(tr("This game now counts as played with pencil: {a}.", { a: dec(stake.pen) }));
-        renderStatus(); // the heading switches to the grade with pencil
-      }
-    }
+    if (notes[selected] & (1 << d)) penAdded();
     afterChange();
     return;
   }
@@ -46,13 +49,18 @@ function input(d) {
   checked = false;
   hintCell = -1;
   pendingOverwrite = null;
+  // a training board: did this number need the technique? (train.js) The numbers known before the move are needed.
+  const tKnown = meta.train && meta.train.part && !meta.train.used && d === P.solution[selected] ? trainKnown() : null;
   entries[selected] = d;
   // pn: how many cells had pencil notes when the number was placed
   const pn = notes.reduce((a, x) => a + (x ? 1 : 0), 0);
   meta.moves.push(pn ? { c: selected, v: d, t: elapsed(), pn } : { c: selected, v: d, t: elapsed() });
   for (const j of peerSets[selected]) notes[j] &= ~(1 << d);
+  chainPlaced(selected, d);
   if (trialWrong(selected, d)) return;
+  const tNote = tKnown ? trainCheck(selected, d, tKnown) : "";
   afterChange();
+  if (tNote && !solved) setMsg(tNote, "");
 }
 function erase() {
   if (selected < 0 || P.givens[selected] || solved) return;
@@ -61,6 +69,7 @@ function erase() {
   pushUndo();
   entries[selected] = 0;
   notes[selected] = 0;
+  chainClearCell(selected);
   checked = false;
   pendingOverwrite = null;
   afterChange();
@@ -74,6 +83,7 @@ function undo() {
   });
   entries = h.entries;
   notes = h.notes;
+  chainRestore(h.chain);
   checked = false;
   hintCell = -1;
   pendingOverwrite = null;
@@ -119,6 +129,13 @@ function afterChange() {
       setTimeout(() => campResult(rec), 650);
       return;
     }
+    if (rec && rec.train) {
+      setMsg(tr("Solved in {time}.", { time: fmt(rec.ms) }), "good");
+      startRoute(rec);
+      setTimeout(() => trainResult(rec), 650);
+      return;
+    }
+    if (!rec) return; // already recorded (a board left and then finished)
     setMsg(rec.solved ? tr("Solved in {time}.", { time: fmt(rec.ms) }) : tr("Filled in, but the solution was shown along the way."), rec.solved ? "good" : "");
     try {
       navigator.storage && navigator.storage.persist && navigator.storage.persist();
@@ -150,6 +167,7 @@ fastTap(svg, (e) => {
   if (!P) return;
   const i = cellAt(e);
   if (i < 0) return;
+  if (chainTool && !solved) return chainTap(+i); // the chain tool: a tap colours or links (chains.js)
   selected = +i === selected ? -1 : +i;
   if (pendingOverwrite) {
     pendingOverwrite = null;
@@ -183,6 +201,7 @@ document.addEventListener("keydown", (e) => {
     e.preventDefault();
   } else if ((e.key === "n" || e.key === "N") && !(meta && meta.trial)) {
     noteMode = !noteMode;
+    if (noteMode && chainTool) chainSetTool(null);
     renderPad();
   } else if ((e.ctrlKey || e.metaKey) && e.key === "z") {
     undo();
@@ -192,6 +211,7 @@ document.addEventListener("keydown", (e) => {
 fastTap($("noteBtn"), () => {
   if (solved || (meta && meta.trial)) return;
   noteMode = !noteMode;
+  if (noteMode && chainTool) chainSetTool(null); // the pencil and the chain tool are one or the other
   renderPad();
 });
 fastTap($("eraseBtn"), erase);
@@ -495,6 +515,7 @@ function restart() {
   });
   entries = entries.map(() => 0);
   notes = notes.map(() => 0);
+  chainClearAll();
   checked = false;
   hintCell = -1;
   reveal = false;
@@ -564,7 +585,7 @@ function showRating() {
 }
 // The effort step by step through the whole solution: one spike or a plateau?
 function effortStrip(g) {
-  if (!g.series || g.tech === 1) return "";
+  if (!g.series || g.tech === TT.SINGLES) return "";
   const n = g.series.length,
     W = 320,
     H = 54,
@@ -590,7 +611,7 @@ function visText(h) {
     f = (x) => (x < -0.04 ? "−" : "+") + dec(Math.abs(x)),
     parts = [];
   parts.push(tr("the pattern itself {x}", { x: f(h.base) }));
-  if (h.T >= 2 && h.T <= 6)
+  if (TT.method(h.T).pattern)
     parts.push(
       (v.size === 1
         ? tr("1 cell")
@@ -675,7 +696,7 @@ function profileHtml(g0) {
   const bar = Array.from({ length: 9 }, (_, i) => `<i class="${i < band ? "on" : ""}"></i>`).join("");
   const row = (num, lead, text) => `<dt>${num}</dt><dd>${lead ? "<b>" + lead + "</b> " : ""}${text}</dd>`;
   let rows;
-  if (g.tech === 1) {
+  if (g.tech === TT.SINGLES) {
     const way = g.avgOpts < 2 ? tr("Narrow path.") : g.avgOpts < 3.5 ? tr("Some options.") : tr("Many options.");
     rows =
       row(dec(1), tr("Only simple moves."), tr("Every number can be found directly from the numbers in the grid.")) +
@@ -702,7 +723,7 @@ function profileHtml(g0) {
       row("+" + f(h.lenT), tr("Length."), h.len === 1 ? tr("The reasoning has 1 link.") : tr("The reasoning has {n} links.", { n: h.len })) +
       (h.innerT
         ? row("+" + f(h.innerT), tr("Along the way."), tr("Along the way in the assumption you need {tech}.", { tech: list2((h.inner || []).map((t) => esc(E.TECH[t].label.toLowerCase()))) }))
-        : h.T === 11 || h.T === 13
+        : TT.method(h.T).within != null
           ? row("+0", tr("Along the way."), tr("Along the way in the assumption there are only singles."))
           : "") +
       (h.spot
@@ -757,14 +778,14 @@ function showSolved(rec) {
     esc(BAND[gBand(rec)]) + " " + dec(gradeFor(rec)),
     rec.cols + "×" + rec.rows,
     rec.daily ? tr("Daily puzzle") : "",
-    fmt(rec.ms),
+    rec.est && rec.solved ? "" : fmt(rec.ms), // with an estimate the time has its own line below
     rec.hints ? (rec.hints === 1 ? tr("1 hint") : tr("{n} hints", { n: rec.hints })) : tr("no hints"),
     st.current > 1 ? tr("{n} days in a row", { n: st.current }) : "",
   ].filter(Boolean);
   openSheet(
     `<div class="solved v2"><div class="shead"><div class="smallstamp" aria-hidden="true">解</div>` +
       `<div><h2>${rec.solved ? tr("Solved!") : tr("Filled in")}</h2><p class="sub">${facts.join(" · ")}</p></div></div>${record}` +
-      (rec.est && rec.solved ? `<p class="sub estcmp">${tr("Your estimate was {t}.", { t: estFmt(rec.est) })} ${estCompare(rec.ms, rec.est)}</p>` : "") +
+      (rec.est && rec.solved ? timeMeterHtml(rec.ms, rec.est, tr("expected")) : "") +
       (rec.solved ? "" : `<p class="sub">${tr("The solution was shown along the way, so it doesn't count as solved.")}</p>`) +
       `<div id="takeaway">${
         gNow && gNow.moves && !gNow.routePending
@@ -828,7 +849,7 @@ function fillPractice(root, g) {
   let L = null;
   try {
     const t = takeaway(g);
-    const m = t && t.moments.find((x) => x.L >= 1 && x.L <= 4);
+    const m = t && t.moments.find((x) => DRILL_TECHS.includes(x.L));
     if (m) L = m.L;
   } catch (e) {}
   slot.innerHTML = L ? `<button class="secondary big" type="button" id="sPractise">${tr("Practise {tech}", { tech: LEVEL_TECH[L] })}</button>` : "";

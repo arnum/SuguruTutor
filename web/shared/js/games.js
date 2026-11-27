@@ -350,21 +350,22 @@ function quickClaims(pos, types) {
     const ez = [...easy];
     if (ez.length) {
       const [c, v] = pick(ez);
-      T.push({ cells: [c], text: isEasy(c, v), why: NAMES ? tr("{cell} = {v} could be seen directly.", { cell: nm(c), v }) : tr("It could be seen directly.") });
+      T.push({ cells: [c], cv: v, text: isEasy(c, v), why: NAMES ? tr("{cell} = {v} could be seen directly.", { cell: nm(c), v }) : tr("It could be seen directly.") });
     }
     // the right cell, the wrong number
     const wrongNum = ez.filter(([c, v]) => bits(cand[c]).some((x) => x !== v));
     if (wrongNum.length) {
       const [c, v] = pick(wrongNum),
         x = pick(bits(cand[c]).filter((y) => y !== v));
-      F.push({ cells: [c], text: isEasy(c, x), why: NAMES ? tr("{cell} is an easy number, but it is {v}.", { cell: nm(c), v }) : tr("It is an easy number, but it is {v}.", { v }) });
+      F.push({ cells: [c], cv: x, text: isEasy(c, x), why: NAMES ? tr("{cell} is an easy number, but it is {v}.", { cell: nm(c), v }) : tr("It is an easy number, but it is {v}.", { v }) });
     }
     // a cell with two options left
     const two = empty.filter((i) => !easy.has(i) && bits(cand[i]).length === 2);
     if (two.length) {
       const c = pick(two),
         [a, a2] = bits(cand[c]);
-      F.push({ cells: [c], text: isEasy(c, pick([a, a2])), why: NAMES ? tr("{cell} can still be {a} or {b}.", { cell: nm(c), a, b: a2 }) : tr("It can still be {a} or {b}.", { a, b: a2 }) });
+      const x = pick([a, a2]);
+      F.push({ cells: [c], cv: x, text: isEasy(c, x), why: NAMES ? tr("{cell} can still be {a} or {b}.", { cell: nm(c), a, b: a2 }) : tr("It can still be {a} or {b}.", { a, b: a2 }) });
     }
   }
   // the kind of each claim (1 easy number, 2 pair, 3 only places), for the practice log
@@ -445,6 +446,13 @@ function quickClaims(pos, types) {
     }
   }
   mark(3);
+  // The claim as it is shown during the run (25 Nov. 2026 → 26 Nov.): a few big words next to the board, which shows
+  // the rest (the blue cells, and the house outlined for "only places"). The full sentence stays for screen readers,
+  // the misses afterwards and the setting "Cell names in explanations".
+  T.concat(F).forEach((x) => {
+    x.short = x.kind === 1 ? tr("Easy {v}", { v: x.cv }) : x.kind === 2 ? tr("A pair") : tr("Only places for {v}", { v: x.v });
+    if (x.kind === 3) x.house = tu.houses[x.u];
+  });
   // about half true; up to four claims per board, shuffled
   const out = [];
   T.sort(() => Math.random() - 0.5);
@@ -544,7 +552,11 @@ PG.quick = {
       );
     if (c.phase === "done") return `<h3 class="ok">${tr("Time!")}</h3><p>${tr("{k} right and {w} wrong.", { k: right, w: wrong })}</p>`;
     const cl = c.claims[c.at];
-    return `<p class="dclaim">${cl ? esc(cl.text) : "…"}</p>`;
+    if (!cl) return `<p class="dclaim big">…</p>`;
+    return (
+      `<p class="dclaim big" aria-label="${esc(cl.text)}">${esc(cl.short || cl.text)}</p>` +
+      (settings.coords ? `<p class="dclaim full" aria-hidden="true">${esc(cl.text)}</p>` : "")
+    );
   },
   pad(c) {
     if (c.phase !== "find") return "";
@@ -565,7 +577,7 @@ PG.quick = {
     c.known = pos.known;
     c.tu = pos.tu;
     c.b = Object.assign({}, pos.b, { batch: c.b.batch });
-    return { hv: { pattern: cl ? cl.cells : [], target: [], bad: [], cand: gameCand(c) } };
+    return { hv: { pattern: cl ? cl.cells : [], outline: cl && cl.house ? cl.house : [], target: [], bad: [], cand: gameCand(c) } };
   },
   scoreHtml(c) {
     const right = c.ans.filter((a) => a.right).length;
@@ -586,7 +598,7 @@ PG.quick = {
     pos.known.forEach((v, i) => v && !pos.b.givens[i] && (color[i] = "var(--ink)"));
     return (
       `<div class="qmiss"><p><b>${esc(a.claim.text)}</b> ${a.claim.truth ? tr("True.") : tr("False.")} ${esc(a.claim.why)}</p>` +
-      miniBoard(pos.P2, pos.known, { pattern: a.claim.cells, target: a.claim.miss != null ? [a.claim.miss] : [], cand: gameCand(fake) }, null, {}, { color, label: tr("The practice board") }) +
+      miniBoard(pos.P2, pos.known, { pattern: a.claim.cells, outline: a.claim.house || [], target: a.claim.miss != null ? [a.claim.miss] : [], cand: gameCand(fake) }, null, {}, { color, label: tr("The practice board") }) +
       `</div>`
     );
   },

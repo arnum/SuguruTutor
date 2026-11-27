@@ -1,0 +1,50 @@
+{
+  "_about": "The technique table (27 Nov. 2026). Units are what a player learns (New game's technique list, campaign steps, drills, training), in teaching order: the order of this list is the only order there is. Each unit has a code that never changes and is never reused: stored data names units by code, so a unit can be inserted anywhere by giving it the next free code. Methods are what the solver applies (the technique numbers 0-14 in the weights, append-only as well), each belonging to one unit. Edit here, then run tools/grade/gen.py (it writes the table into the games' gradew.js and into java/src/SuguruGrade.java).",
+  "_fields": {
+    "unit.code": "stable identity (1-12 are the old level numbers; 13 is taken by 'cannot be done without guessing')",
+    "unit.family": "basic | chain | whatif: the groups in New game's list; the what-if family is compared on effort as one tier",
+    "unit.rung": "where the unit sits on the time curve (calib.js): time grows with rung^k",
+    "unit.drill": "has a practice drill; otherwise practice is training boards that start where it is next",
+    "unit.learn": "Learn mode may pick it",
+    "unit.rare": "puzzles that need it are rare: New game warns that the search can take long",
+    "unit.games": "only in these games (default: all)",
+    "method.weight": "the solver's preference within a unit (lower first)",
+    "method.pattern": "a pattern on the board (neighbour elimination and the subsets): the grade's shape term, and tried first inside a what-if",
+    "method.inner": "usable inside a what-if with techniques",
+    "method.chain": "a chain (drawn as one)",
+    "method.byLength": "priced by its length, like the what-ifs",
+    "method.within": "a what-if: the unit whose techniques it uses along the way"
+  },
+  "guess": 13,
+  "units": [
+    { "code": 1, "id": "singles", "family": "basic", "rung": 1, "drill": true, "methods": [0, 1] },
+    { "code": 2, "id": "neighbour", "family": "basic", "rung": 2, "drill": true, "learn": true, "methods": [2] },
+    { "code": 3, "id": "pairs", "family": "basic", "rung": 3, "drill": true, "learn": true, "methods": [3, 4] },
+    { "code": 4, "id": "mixedPair", "family": "basic", "rung": 3.5, "drill": true, "learn": true, "games": ["suguru"], "methods": [14] },
+    { "code": 5, "id": "triples", "family": "basic", "rung": 4, "drill": true, "learn": true, "methods": [5, 6] },
+    { "code": 6, "id": "chain1", "family": "chain", "rung": 5, "learn": true, "methods": [7] },
+    { "code": 7, "id": "chain2", "family": "chain", "rung": 6, "learn": true, "methods": [8] },
+    { "code": 8, "id": "chainMixed", "family": "chain", "rung": 7, "methods": [9] },
+    { "code": 9, "id": "whatIf1", "family": "whatif", "rung": 8, "methods": [10] },
+    { "code": 10, "id": "whatIfSingles", "family": "whatif", "rung": 9, "methods": [11] },
+    { "code": 11, "id": "bothWays", "family": "whatif", "rung": 10, "rare": true, "methods": [12] },
+    { "code": 12, "id": "whatIfTech", "family": "whatif", "rung": 11, "rare": true, "methods": [13] }
+  ],
+  "methods": [
+    { "m": 0, "id": "nakedSingle", "weight": 1 },
+    { "m": 1, "id": "hiddenSingle", "weight": 1 },
+    { "m": 2, "id": "neighbour", "weight": 4, "pattern": true, "inner": true },
+    { "m": 3, "id": "nakedPair", "weight": 8, "pattern": true, "inner": true },
+    { "m": 4, "id": "hiddenPair", "weight": 10, "pattern": true, "inner": true },
+    { "m": 5, "id": "nakedTriple", "weight": 15, "pattern": true, "inner": true },
+    { "m": 6, "id": "hiddenTriple", "weight": 18, "pattern": true, "inner": true },
+    { "m": 7, "id": "chain1", "weight": 20, "chain": true, "byLength": true, "inner": true },
+    { "m": 8, "id": "chain2", "weight": 22, "chain": true, "byLength": true, "inner": true },
+    { "m": 9, "id": "chainMixed", "weight": 24, "chain": true, "byLength": true, "inner": true },
+    { "m": 10, "id": "whatIf1", "weight": 26, "byLength": true, "inner": true },
+    { "m": 11, "id": "whatIfSingles", "weight": 30, "byLength": true, "within": 1 },
+    { "m": 12, "id": "bothWays", "weight": 40, "byLength": true },
+    { "m": 13, "id": "whatIfTech", "weight": 60, "byLength": true, "within": 9 },
+    { "m": 14, "id": "mixedPair", "weight": 12, "pattern": true, "inner": true }
+  ]
+}

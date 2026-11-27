@@ -17,7 +17,7 @@ public final class SuguruEngine {
     public static final String[] TECH_LABEL = {
         "Naked single", "Hidden single", "Neighbour elimination", "Naked pair", "Hidden pair",
         "Naked triple", "Hidden triple", "Single-number chain", "Bivalue chain", "Mixed chain",
-        "Single-number what-if", "What-if with singles", "Both ways", "What-if with techniques"
+        "Single-number what-if", "What-if with singles", "Both ways", "What-if with techniques", "Mixed pair"
     };
     public static final String[] TECH_DESC = {
         "The cell has only one possible number left.",
@@ -33,13 +33,16 @@ public final class SuguruEngine {
         "Assume a cell is x and follow only the number x. If a region has no room left for x, the assumption was wrong.",
         "Assume a number and follow simple moves with all numbers. If it ends in a contradiction, the assumption was wrong.",
         "Try both options in a cell (or both places for a number). Whatever both ways give is true.",
-        "Like the what-if with singles, but the path to the contradiction needs harder techniques along the way, such as pairs or chains."
+        "Like the what-if with singles, but the path to the contradiction needs harder techniques along the way, such as pairs or chains.",
+        "Two touching cells with the same two options are those two numbers. A cell in the same region as one of them that touches the other cannot hold them."
     };
-    public static final int[] TECH_LEVEL = {1, 1, 2, 3, 3, 4, 4, 5, 6, 7, 8, 9, 10, 11};
-    public static final int[] TECH_WEIGHT = {1, 1, 4, 8, 10, 15, 18, 20, 22, 24, 26, 30, 40, 60};
-    public static final String[] LEVELS = {"", "Easy", "Medium", "Hard", "Very hard", "Chain: one number",
+    /** Levels since 26 Nov. 2026: the mixed pair (technique 14) is level 4, so triples and up moved one up; 13 = cannot be done. */
+    // each technique's unit (its "level") and weight come from the technique table (SuguruGrade, tools/grade/techniques.json)
+    public static final int[] TECH_LEVEL = SuguruGrade.METHOD_UNIT;
+    public static final int[] TECH_WEIGHT = SuguruGrade.METHOD_WEIGHT;
+    public static final String[] LEVELS = {"", "Easy", "Medium", "Hard", "Pair: mixed", "Very hard", "Chain: one number",
         "Chain: two options", "Chain: mixed", "What-if: one number", "What-if: singles", "Both ways", "What-if: techniques", "Needs guessing"};
-    public static final int TOP_LEVEL = 11;
+    public static final int TOP_LEVEL = SuguruGrade.last();
 
     private static final int[][] TARGET_SIZES = new int[7][];
     static {
@@ -399,19 +402,28 @@ public final class SuguruEngine {
             }
             return false;
         }
-        boolean nakedSubset(S s, int k) {
+        boolean touches(int a, int b) { return Math.abs(a / cols - b / cols) <= 1 && Math.abs(a % cols - b % cols) <= 1; }
+        /** p sees all chosen cells the same way: it touches all of them, or it is in their region */
+        boolean sameWay(int p, int[] ch, int k) {
+            boolean t = true, r = true;
+            for (int i = 0; i < k; i++) { if (!touches(p, ch[i])) t = false; if (region[ch[i]] != region[p]) r = false; }
+            return t || r;
+        }
+        boolean nakedSubset(S s, int k) { return nakedSubset(s, k, 0); }
+        /** mode for pairs: 0 all, 1 only cells that see both the same way (level 3), 2 only the mixed pair's cells (level 4) */
+        boolean nakedSubset(S s, int k, int mode) {
             List<Integer> l = new ArrayList<>();
             for (int c = 0; c < n; c++) { int b = popcount(s.cand[c]); if (s.val[c] == 0 && b >= 2 && b <= k) l.add(c); }
-            return nakedRec(s, toArray(l), k, 0, 0, 0, new int[k]);
+            return nakedRec(s, toArray(l), k, 0, 0, 0, new int[k], mode);
         }
-        boolean nakedRec(S s, int[] cs, int k, int start, int depth, int mask, int[] chosen) {
+        boolean nakedRec(S s, int[] cs, int k, int start, int depth, int mask, int[] chosen, int mode) {
             if (depth == k) {
                 if (popcount(mask) != k) return false;
                 boolean progress = false;
                 for (int p : peers[chosen[0]]) {
                     boolean all = true;
                     for (int i = 1; i < k; i++) if (!P(p, chosen[i])) { all = false; break; }
-                    if (all) progress = eliminate(s, p, mask) || progress;
+                    if (all && (mode == 0 || sameWay(p, chosen, k) == (mode == 1))) progress = eliminate(s, p, mask) || progress;
                 }
                 return progress;
             }
@@ -422,7 +434,7 @@ public final class SuguruEngine {
                 for (int j = 0; j < depth; j++) if (!P(chosen[j], c)) { ok = false; break; }
                 if (!ok) continue;
                 chosen[depth] = c;
-                if (nakedRec(s, cs, k, i + 1, depth + 1, m2, chosen)) return true;
+                if (nakedRec(s, cs, k, i + 1, depth + 1, m2, chosen, mode)) return true;
             }
             return false;
         }
@@ -600,22 +612,34 @@ public final class SuguruEngine {
             return false;
         }
 
+        /** a method's finder in this rater: true if it removed something */
+        boolean find(S s, int m) {
+            switch (m) {
+                case 2: return neighborElimination(s);
+                case 3: return nakedSubset(s, 2, 1);
+                case 4: return hiddenSubset(s, 2);
+                case 14: return nakedSubset(s, 2, 2);
+                case 5: return nakedSubset(s, 3);
+                case 6: return hiddenSubset(s, 3);
+                case 7: return chainElim(s, 'x');
+                case 8: return chainElim(s, 'y');
+                case 9: return chainElim(s, 'a');
+                case 10: return nishio(s);
+                case 11: return contradiction(s, SuguruGrade.METHOD_WITHIN[11]);
+                case 12: return bothWays(s);
+                case 13: return contradiction(s, SuguruGrade.METHOD_WITHIN[13]);
+                default: return false;
+            }
+        }
         int step(S s, int maxLevel) {
             int u;
             if ((u = nakedSingles(s)) > 0) { lastUses = u; return 0; }
             if ((u = hiddenSingles(s)) > 0) { lastUses = u; return 1; }
-            if (maxLevel >= 2 && neighborElimination(s)) { lastUses = 1; return 2; }
-            if (maxLevel >= 3 && nakedSubset(s, 2)) { lastUses = 1; return 3; }
-            if (maxLevel >= 3 && hiddenSubset(s, 2)) { lastUses = 1; return 4; }
-            if (maxLevel >= 4 && nakedSubset(s, 3)) { lastUses = 1; return 5; }
-            if (maxLevel >= 4 && hiddenSubset(s, 3)) { lastUses = 1; return 6; }
-            if (maxLevel >= 5 && chainElim(s, 'x')) { lastUses = 1; return 7; }
-            if (maxLevel >= 6 && chainElim(s, 'y')) { lastUses = 1; return 8; }
-            if (maxLevel >= 7 && chainElim(s, 'a')) { lastUses = 1; return 9; }
-            if (maxLevel >= 8 && nishio(s)) { lastUses = 1; return 10; }
-            if (maxLevel >= 9 && contradiction(s, 1)) { lastUses = 1; return 11; }
-            if (maxLevel >= 10 && bothWays(s)) { lastUses = 1; return 12; }
-            if (maxLevel >= 11 && contradiction(s, 8)) { lastUses = 1; return 13; }
+            // the units after the singles in the table's order, up to maxLevel; within a unit its methods in order
+            for (int L : SuguruGrade.LADDER) {
+                if (SuguruGrade.harder(L, maxLevel)) break;
+                for (int m : SuguruGrade.methods(L)) if (find(s, m)) { lastUses = 1; return m; }
+            }
             return -1;
         }
 
@@ -626,15 +650,15 @@ public final class SuguruEngine {
             S s = newState();
             for (int c = 0; c < n; c++) if (givens[c] != 0) place(s, c, givens[c]);
             int[] uses = new int[TECH_LABEL.length];
-            int score = 0, hardest = 1;
+            int score = 0, hardest = SuguruGrade.SINGLES;
             while (!s.broken && !isSolved(s)) {
                 int t = step(s, maxLevel);
                 if (t < 0) break;
                 uses[t] += lastUses; score += TECH_WEIGHT[t] * lastUses;
-                hardest = Math.max(hardest, TECH_LEVEL[t]);
+                hardest = SuguruGrade.max(hardest, TECH_LEVEL[t]);
             }
             boolean solved = !s.broken && isSolved(s);
-            return new Rating(solved ? hardest : TOP_LEVEL + 1, score, solved, uses);
+            return new Rating(solved ? hardest : SuguruGrade.GUESS, score, solved, uses);
         }
     }
 
@@ -677,7 +701,7 @@ public final class SuguruEngine {
                     if (!rater.rate(givens, target).solved) givens[c] = saved;
                 }
                 Rating rating = rater.rate(givens, TOP_LEVEL);
-                int dist = Math.abs(rating.level - target);
+                int dist = Math.abs(SuguruGrade.rank(rating.level) - SuguruGrade.rank(target));
                 if (dist < bestDist) {
                     bestDist = dist;
                     best = new Puzzle(rows, cols, region, solution, givens, rating, target, seed, tries, maxRegion);
@@ -723,7 +747,7 @@ public final class SuguruEngine {
         } catch (java.io.UnsupportedEncodingException ignored) { /* keep the default */ }
     }
 
-    /** java SuguruEngine [rows] [columns] [level 1-11] [max region size 4-6] [seed] */
+    /** java SuguruEngine [rows] [columns] [level 1-12] [max region size 4-6] [seed] */
     public static void main(String[] args) {
         fixConsoleEncoding();
         int rows = args.length > 0 ? Integer.parseInt(args[0]) : 6;

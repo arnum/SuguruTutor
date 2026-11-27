@@ -10,7 +10,7 @@ function takeaway(g) {
   const base = baseline(g.id),
     r = g.route || routeSummary(list);
   const nm = (c) => "abcdefghij"[c % g.cols] + (Math.floor(c / g.cols) + 1);
-  const usual = (L) => (base[L] ? base[L].med : L === 1 ? 4 : 8 * L * L);
+  const usual = (L) => (base[L] ? base[L].med : L === TT.SINGLES ? 4 : 8 * TT.rung(L) ** 2);
   const primary = list.map((m, i) => Object.assign({ i }, m)).filter((m) => m.cls === "wrong" && !m.follow && !m.slip);
 
   // ---------- Good
@@ -56,7 +56,7 @@ function takeaway(g) {
         ? tr("{num} ({tech}) was waiting during {parts}.", { num: tag, tech, parts: lessonParts(L) })
         : tr("You searched {time} for {num} ({tech}).", { num: tag, tech, time: fmt(L.selfDt * 1000) });
     // advice about exactly this number when there is some, otherwise how to spot the technique
-    const tip = (e.L === 1 && spotTip(g, e, L.parts[0].i)) || TECH_TIP[e.L] || null;
+    const tip = (e.L === TT.SINGLES && spotTip(g, e, L.parts[0].i)) || TECH_TIP[e.L] || null;
     cands.push({ cost: L.cost, prio: 2, mode: L.mode, i: L.board, L: e.L, cell: e.c, text, head, tip });
   });
   const c = concGet(g);
@@ -120,7 +120,7 @@ function lapseInfo(g, i) {
     if (known.unsure.length) return { tip: GAME.stuckTip };
     const h = P2.tu.easiest(known);
     const nm = (c) => "abcdefghij"[c % P2.d.cols] + (Math.floor(c / P2.d.cols) + 1);
-    const t = h && h.hardestLevel === 1 ? spotTip(g, { c: h.cell, v: h.v, L: 1 }, i) : null;
+    const t = h && h.hardestLevel === TT.SINGLES ? spotTip(g, { c: h.cell, v: h.v, L: TT.SINGLES }, i) : null;
     const ex = settings.coords ? tr("For example {cell} = {v}:", { cell: nm(h.cell), v: h.v }) : tr("For example {num}:", { num: cvTag(nm, h.cell, h.v, "var(--indigo)") });
     return t ? { tip: ex + " " + t, cell: h.cell } : { tip: GAME.stuckTip };
   } catch (e) {
@@ -131,7 +131,7 @@ function lapseInfo(g, i) {
 const momentSwitch = (mode, L) =>
   ({
     cmp: [tr("Your move"), tr("Easier then")],
-    easy: [tr("What you found"), L > 1 ? tr("Just as easy then") : tr("Easy numbers then")],
+    easy: [tr("What you found"), TT.beyond(L) ? tr("Just as easy then") : tr("Easy numbers then")],
     err: [tr("What you placed"), tr("The right number")],
   })[mode] || null;
 // The board comes first: up to three moments, each on its board, with what happened in one line. On a phone one board at a

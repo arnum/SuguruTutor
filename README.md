@@ -24,7 +24,7 @@ web/
     js/game.js       the game's rules for the shared code: houses, neighbours, texts, levels, techniques (GAME, boardModel)
     js/engine.js     regions, solver, technique rater and generator
     js/code.js       puzzle codes
-    js/gradew.js     the weights for the difficulty (generated, see below)
+    js/gradew.js     the weights for the difficulty and the technique table (generated, see below)
     js/worker.js     background work: generation and analysis
   sudoku/            the same files for Sudoku, plus css/sudoku.css (colour and stamp)
   shared/
@@ -101,8 +101,9 @@ stored data and links, so they were left as they are.
 - **Suguru:** `python3 tools/guide/build.py` (the template, hand-made examples and `da.json` with the Danish texts).
 - **Sudoku:** `node tools/guide/build_sudoku.js`. The examples are found by solving real puzzles with the app's own
   tutor, so the texts are the same as the game's hints show. It takes about ten minutes (`GUIDE_SECONDS`, default 600).
-  The well-known puzzle AI Escargot (Arto Inkala, 2006) is used for the deepest technique. All 14 techniques have an
-  example; "both ways" was found for the first time in November 2026. If a technique is not found within the time, it
+  The well-known puzzle AI Escargot (Arto Inkala, 2006) is used for the deepest technique. All 14 of Sudoku's techniques
+  have an example; "both ways" was found for the first time in November 2026. (Suguru has a 15th, the mixed pair, which
+  Sudoku cannot have.) If a technique is not found within the time, it
   is left out, and hints about it should not link there (`null` in `GUIDE_IDS` in `sudoku/js/game.js`).
 
 `guide.html` is the English guide and `guide-da.html` the Danish one.
@@ -142,6 +143,8 @@ used to play" for old games where it is not known. The grade can go above 10; le
 The weights are in `tools/grade/weights.json` (Suguru) and `tools/grade/sudoku.json` (Sudoku).
 `python3 tools/grade/gen.py` writes them into `web/suguru/js/gradew.js`, `web/sudoku/js/gradew.js` and
 `java/src/SuguruGrade.java`, so JavaScript and Java are always the same. See `tools/grade/README.md`.
+The techniques' order, families and flags are in one table, `tools/grade/techniques.json`; `gen.py` writes it into the
+same files. Code asks the table (`TT` in JavaScript) instead of comparing level numbers.
 
 The Suguru weights are fitted to measured solving times. The Sudoku weights are an estimate based on the established
 Sudoku raters (Sudoku Explainer, HoDoKu) and research into what makes Sudoku hard for people, until there are measured times.

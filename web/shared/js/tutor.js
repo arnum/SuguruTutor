@@ -13,10 +13,16 @@ function theHouse(M, u) {
 // Finds the easiest next number from a position and explains the way there step by step.
 function createTutor(G, region) {
   const { n, cols } = G;
-  const TECH_NAMES = TECH_LABELS; // the game's names for the 14 techniques (the game's game.js)
-  const TECH_LEVEL = [1, 1, 2, 3, 3, 4, 4, 5, 6, 7, 8, 9, 10, 11];
-  const TECH_WEIGHT = [1, 1, 4, 8, 10, 15, 18, 20, 22, 24, 26, 30, 40, 60];
-  const isChain = (t) => t >= 7 && t <= 9;
+  const TECH_NAMES = TECH_LABELS; // the game's names for the 15 techniques (the game's game.js)
+  // The techniques come from the technique table (tools/grade/techniques.json, TT in gradew.js, 27 Nov. 2026): units (what
+  // a player learns, named by a code that never changes, in the table's order) and methods (what the solver applies, the
+  // technique numbers). "Level" below means a unit's code; levels are compared by the table's order (TT), never as numbers.
+  const TECH_LEVEL = TECHS.methods.map((_, m) => TT.unitOf(m)); // per method: its unit
+  const TECH_WEIGHT = TECHS.methods.map((m) => m.weight);
+  const isChain = (t) => !!TT.method(t).chain;
+  const SINGLES = TT.unitOf(0);
+  // the units the solver tries after the singles, in order
+  const LADDER = TT.all().filter((c) => c !== SINGLES);
   const CHAIN_MODE = { 7: "x", 8: "xy", 9: "all" };
   // The game's rules come from the game's model (boardModel in the game's game.js): houses (RC: regions, or rows,
   // columns and boxes), which houses a cell lies in, the largest number per cell, and cells that may not have the same number.
@@ -173,7 +179,12 @@ function createTutor(G, region) {
   }
   // the places all see one cell outside their house (the pattern exists even if that cell has nothing to lose)
   const seenByOne = (spots, r) => peers[spots[0]].some((x) => !RC[r].includes(x) && spots.every((sp) => peer(x, sp)));
-  function nakedApps(s, k, first, all) {
+  // Naked pairs and triples. A pair's targets come in two kinds (26 Nov. 2026): a target that sees both cells the same way
+  // (one house holds all three, or it touches both) is an ordinary pair (technique 3); a target that sees one cell only by
+  // its house and the other only by touching is a mixed pair (technique 14, level 4), which is harder to spot.
+  // want: "simple" (only technique 3), "mixed" (only 14), or anything else for both.
+  const sameWay = (t, cells) => cells.every((q) => touch(t, q)) || unitsOf[t].some((u) => cells.every((q) => unitsOf[q].includes(u)));
+  function nakedApps(s, k, first, all, want) {
     const out = [],
       cs = [];
     for (let c = 0; c < n; c++) {
@@ -189,11 +200,25 @@ function createTutor(G, region) {
           if (s.val[p] || ch.includes(p) || !(s.cand[p] & m)) continue;
           if (ch.every((q) => peer(p, q))) targets.push({ cell: p, mask: s.cand[p] & m });
         }
-        if (targets.length || all) {
-          out.push({ tech: k === 2 ? 3 : 5, cells: ch.slice(), mask: m, targets });
-          return first;
+        if (k === 3) {
+          if (targets.length || all) {
+            out.push({ tech: 5, cells: ch.slice(), mask: m, targets });
+            return first;
+          }
+          return false;
         }
-        return false;
+        const simple = targets.filter((t) => sameWay(t.cell, ch)),
+          mixed = targets.filter((t) => !sameWay(t.cell, ch));
+        let found = false;
+        if (want !== "mixed" && (simple.length || all)) {
+          out.push({ tech: 3, cells: ch.slice(), mask: m, targets: simple });
+          found = true;
+        }
+        if (want !== "simple" && mixed.length) {
+          out.push({ tech: 14, cells: ch.slice(), mask: m, targets: mixed });
+          found = true;
+        }
+        return found && first;
       }
       for (let i = st; i < cs.length; i++) {
         const c = cs[i],
@@ -584,18 +609,10 @@ function createTutor(G, region) {
     // What-if with techniques: if a pair, a triple or a neighbour elimination gives a contradiction straight away (a cell without
     // options), it is taken first. Then the short reasoning is found, not only the one the singles lead to. Only in the
     // first steps (early): that is where the short reasoning is.
-    if (maxLevel >= 2 && early) {
-      const quick = [() => neighborApps(s, false)];
-      if (maxLevel >= 3)
-        quick.push(
-          () => nakedApps(s, 2, false),
-          () => hiddenApps(s, 2, false),
-        );
-      if (maxLevel >= 4)
-        quick.push(
-          () => nakedApps(s, 3, false),
-          () => hiddenApps(s, 3, false),
-        );
+    // the methods allowed inside (the units up to maxLevel, in order), as finders
+    const upTo = LADDER.filter((L) => !TT.harder(L, maxLevel)).flatMap((L) => TT.methods(L));
+    if (upTo.length && early) {
+      const quick = upTo.filter((m) => TT.method(m).pattern).map((m) => () => FIND[m](s, false));
       for (const f of quick)
         for (const a of f()) {
           const T = clone(s);
@@ -623,22 +640,7 @@ function createTutor(G, region) {
         }
       }
     }
-    const tries = [];
-    if (maxLevel >= 2) tries.push(() => neighborApps(s, true));
-    if (maxLevel >= 3)
-      tries.push(
-        () => nakedApps(s, 2, true),
-        () => hiddenApps(s, 2, true),
-      );
-    if (maxLevel >= 4)
-      tries.push(
-        () => nakedApps(s, 3, true),
-        () => hiddenApps(s, 3, true),
-      );
-    if (maxLevel >= 5) tries.push(() => chainApps(s, true, "x"));
-    if (maxLevel >= 6) tries.push(() => chainApps(s, true, "xy"));
-    if (maxLevel >= 7) tries.push(() => chainApps(s, true, "all"));
-    if (maxLevel >= 8) tries.push(() => nishioApps(s, true));
+    const tries = upTo.filter((m) => TT.method(m).inner).map((m) => () => FIND[m](s, true));
     for (const f of tries) {
       const a = f();
       if (a.length) {
@@ -736,7 +738,7 @@ function createTutor(G, region) {
           const r = runTrial(s, c, v, inner, maxSteps);
           if (r) {
             out.push({
-              tech: inner === 1 ? 11 : 13,
+              tech: inner === SINGLES ? 11 : 13, // with singles only, or with techniques
               cell: c,
               v,
               chain: r.chain,
@@ -751,11 +753,11 @@ function createTutor(G, region) {
       }
     return out;
   }
-  // ---------- The what-if family (levels 8-11: single-number what-if, with singles, both ways, with techniques) is compared
+  // ---------- The what-if family (the units of family "whatif": single-number what-if, with singles, both ways, with techniques) is compared
   // on effort, not on kind: a short what-if with a pair is easier than a long one with singles. The effort is the grade's
   // (stepEffort in grade.js, "as you used to play"): recognition + the length of the whole reasoning + the techniques inside the chain +
   // memory, with the game's weights (GW). len = support steps + the assumption + the chain's relevant steps.
-  const WHATIF_L = 8;
+  const WHATIF_L = TT.first("whatif"); // the first unit of the what-if family: from there the family is compared as one
   const innerTechs = (a) => (a.chain || []).filter((st) => st && st.rel !== false && st.kind === "elim" && st.app).map((st) => st.app.tech);
   function whatIfCost(a, len) {
     const W = typeof GW !== "undefined" ? GW : null;
@@ -779,22 +781,28 @@ function createTutor(G, region) {
   const levelFloor = (L) => {
     if (floorOf[L] !== undefined) return floorOf[L];
     let m = Infinity;
-    for (let T = 0; T < TECH_LEVEL.length; T++)
-      if (TECH_LEVEL[T] === L) m = Math.min(m, T >= 7 ? whatIfCost({ tech: T, memPeak: isChain(T) ? 2 : 0 }, 2) : whatIfCost({ tech: T }, 1));
+    for (const T of TT.methods(L)) m = Math.min(m, TT.method(T).byLength ? whatIfCost({ tech: T, memPeak: isChain(T) ? 2 : 0 }, 2) : whatIfCost({ tech: T }, 1));
     return (floorOf[L] = m);
   };
+  // Each method's finder: (s, first, all) -> applications. all: also patterns that give nothing (drills, Quick call).
+  const FIND = {
+    2: (s, first, all) => neighborApps(s, first, all),
+    3: (s, first, all) => nakedApps(s, 2, first, all, "simple"),
+    4: (s, first, all) => hiddenApps(s, 2, first, all),
+    14: (s, first, all) => nakedApps(s, 2, first, all, "mixed"),
+    5: (s, first, all) => nakedApps(s, 3, first, all),
+    6: (s, first, all) => hiddenApps(s, 3, first, all),
+    7: (s, first) => chainApps(s, first, "x"),
+    8: (s, first) => chainApps(s, first, "xy"),
+    9: (s, first) => chainApps(s, first, "all"),
+    10: (s, first) => nishioApps(s, first),
+    11: (s, first) => trialApps(s, TT.method(11).within, first),
+    12: (s, first) => bothWaysApps(s, first),
+    13: (s, first) => trialApps(s, TT.method(13).within, first),
+  };
+  // everything a unit's methods find, in the table's order
   function levelApps(s, L) {
-    if (L === 2) return neighborApps(s, false);
-    if (L === 3) return nakedApps(s, 2, false).concat(hiddenApps(s, 2, false));
-    if (L === 4) return nakedApps(s, 3, false).concat(hiddenApps(s, 3, false));
-    if (L === 5) return chainApps(s, false, "x");
-    if (L === 6) return chainApps(s, false, "xy");
-    if (L === 7) return chainApps(s, false, "all");
-    if (L === 8) return nishioApps(s, false);
-    if (L === 9) return trialApps(s, 1, false);
-    if (L === 10) return bothWaysApps(s, false);
-    if (L === 11) return trialApps(s, 8, false);
-    return [];
+    return TT.methods(L).flatMap((m) => (FIND[m] ? FIND[m](s, false) : []));
   }
 
   // ---------- validity on replay (after pruning)
@@ -809,7 +817,7 @@ function createTutor(G, region) {
       const targets = a.targets.filter((t) => !T.val[t.cell] && T.cand[t.cell] & bit && spots.every((sp) => peer(t.cell, sp)));
       return targets.length ? { ...a, spots, targets } : null;
     }
-    if (a.tech === 3 || a.tech === 5) {
+    if (a.tech === 3 || a.tech === 5 || a.tech === 14) {
       if (a.cells.some((c) => T.val[c])) return null;
       const u = a.cells.reduce((m, c) => m | T.cand[c], 0);
       if (u & ~a.mask) return null;
@@ -865,7 +873,7 @@ function createTutor(G, region) {
     }
     // what-if
     if (T.val[a.cell] || !(T.cand[a.cell] & (1 << a.v))) return null;
-    const r = a.tech === 10 ? nishioRun(T, a.cell, a.v) : runTrial(T, a.cell, a.v, a.tech === 11 ? 1 : 8);
+    const r = a.tech === 10 ? nishioRun(T, a.cell, a.v) : runTrial(T, a.cell, a.v, TT.method(a.tech).within);
     return r ? { ...a, chain: r.chain, broken: r.broken, relCount: r.relCount, memPeak: r.memPeak } : null;
   }
   function replay(S0, list, cell, v) {
@@ -911,7 +919,7 @@ function createTutor(G, region) {
       raw.push({ a, x, fromS0, rel, lb, ub: fromS0 ? 1 + rel : steps.length + 1 + rel });
     };
     const base = (St) =>
-      nishioApps(St, false).concat(relMax(11) >= 0 ? trialApps(St, 1, false, run(11)) : [], relMax(12) >= 0 ? bothWaysApps(St, false, run(12)) : []);
+      nishioApps(St, false).concat(relMax(11) >= 0 ? trialApps(St, SINGLES, false, run(11)) : [], relMax(12) >= 0 ? bothWaysApps(St, false, run(12)) : []);
     for (const a of base(S)) consider(S, a, false);
     if (steps.length) for (const a of base(S0)) consider(S0, a, true);
     if (!raw.length) return null;
@@ -922,7 +930,7 @@ function createTutor(G, region) {
     const lim = Math.min(...raw.map((r) => r.ub), relMax(13) + 1) - 1; // relCount < lim
     if (lim > 0)
       for (const [St, fromS0] of steps.length ? [[S0, true], [S, false]] : [[S, false]])
-        for (const a of trialApps(St, 4, false, Math.max(2, 2 * lim + 2))) if ((a.relCount || 0) < lim) consider(St, a, fromS0);
+        for (const a of trialApps(St, TT.code("triples"), false, Math.max(2, 2 * lim + 2))) if ((a.relCount || 0) < lim) consider(St, a, fromS0);
     // the support steps that are actually needed (as in finish: remove one at a time as long as the number still holds)
     const support = (r) => {
       if (r.fromS0 || !steps.length) return 0;
@@ -975,8 +983,8 @@ function createTutor(G, region) {
       let best = null,
         triedOn = false,
         onWay = false; // best is where the option-removing steps lead: that search already compared the what-ifs
-      for (let L = 2; L <= 11; L++) {
-        if (best && (L > WHATIF_L || levelFloor(L) >= best.key || (L === WHATIF_L && onWay))) continue;
+      for (const L of LADDER) {
+        if (best && (TT.harder(L, WHATIF_L) || levelFloor(L) >= best.key || (L === WHATIF_L && onWay))) continue;
         if (L === WHATIF_L) {
           const w = whatIfBest(S0, S, steps, want, best ? best.key : Infinity);
           if (w) {
@@ -1076,6 +1084,15 @@ function createTutor(G, region) {
     common(a, b).find((r) => !st || (RC[r].filter((c) => !st.val[c] && st.cand[c] & (1 << d)).length === 2 && !RC[r].some((c) => st.val[c] === d))) ??
     common(a, b)[0];
 
+  // A mixed pair's target: the pair cell in the same house (byHouse) and the one it only touches (byTouch)
+  const mixedSides = (a, t) => {
+    const byHouse = a.cells.find((q) => unitsOf[q].some((u) => unitsOf[t].includes(u)));
+    return { byHouse, byTouch: a.cells.find((q) => q !== byHouse), house: unitsOf[t].find((u) => unitsOf[byHouse].includes(u)) };
+  };
+  const mixedWhy = (a, t) => {
+    const m = mixedSides(a, t.cell);
+    return tr("{cell} touches {a} and is in the same region as {b}, so it {cannot}.", { cell: nm(t.cell), a: nm(m.byTouch), b: nm(m.byHouse), cannot: cannot(t.mask) });
+  };
   function stepText(a, st) {
     if (a.tech === 2) {
       const sp = list(a.spots.map(nm)),
@@ -1093,7 +1110,7 @@ function createTutor(G, region) {
             : tr("{cells} sees {all}, so it cannot be {v}.", { cells: tg, all, v: a.v }))
       );
     }
-    if (a.tech === 3 || a.tech === 5) {
+    if (a.tech === 3 || a.tech === 5 || a.tech === 14) {
       const kk = a.cells.length,
         cs = list(a.cells.map(nm));
       const shared = a.cells.reduce((acc, c) => acc.filter((u) => unitsOf[c].includes(u)), unitsOf[a.cells[0]]);
@@ -1102,10 +1119,14 @@ function createTutor(G, region) {
           ? KING
             ? tr("{cells} are in the same region and between them can only be {vals}.", { cells: cs, vals: vals(a.mask) })
             : tr("{cells} lie in {unit} and between them can only be {vals}.", { cells: cs, unit: regionName(shared[0]), vals: vals(a.mask) })
-          : tr("{cells} see each other and between them can only be {vals}.", { cells: cs, vals: vals(a.mask) })) +
+          : KING && kk === 2
+            ? tr("{cells} touch, so they cannot be the same number. Between them they can only be {vals}.", { cells: cs, vals: vals(a.mask) })
+            : tr("{cells} see each other and between them can only be {vals}.", { cells: cs, vals: vals(a.mask) })) +
         " " +
         (kk === 2 ? tr("So those two numbers are used up by exactly those two cells.") : tr("So those three numbers are used up by exactly those three cells.")) +
         " ";
+      // a mixed pair: how each target sees the two cells, one by the region and the other by touching
+      if (a.tech === 14) return s + a.targets.map((t) => mixedWhy(a, t)).join(" ");
       s += groupByMask(a.targets)
         .map(([m, cs]) =>
           kk === 2
@@ -1455,18 +1476,40 @@ function createTutor(G, region) {
         legend: { pattern: tr("where {v} must go", { v: a.v }), outline: theKind(a.region), target: tr("loses {v}", { v: a.v }) },
       };
     }
-    if (a.tech === 3 || a.tech === 5) {
+    if (a.tech === 3 || a.tech === 5 || a.tech === 14) {
       const kk = a.cells.length,
         opts = {};
       a.cells.forEach((c) => (opts[c] = a.mask & st.cand[c]));
       const shared = a.cells.reduce((acc, c) => acc.filter((u) => unitsOf[c].includes(u)), unitsOf[a.cells[0]]);
+      // why the cells use up the numbers: a pair in two regions is only held together by touching
+      const why =
+        kk === 2 && !shared.length && KING
+          ? tr("The blue cells touch, so they cannot be the same number: between them they are {vals}.", { vals: vals(a.mask) })
+          : kk === 2
+            ? tr("The blue cells can only be {vals} between them, so those two numbers are used up there.", { vals: vals(a.mask) })
+            : tr("The blue cells can only be {vals} between them, so those three numbers are used up there.", { vals: vals(a.mask) });
+      if (a.tech === 14) {
+        // the outline: the region the yellow cell shares with one of the pair
+        const houses = [...new Set(a.targets.map((t) => mixedSides(a, t.cell).house))];
+        return {
+          say:
+            yellowLose(a.targets) +
+            " " +
+            why +
+            " " +
+            (nT === 1
+              ? tr("The yellow cell touches one of them and is in the outlined region with the other.")
+              : tr("Each yellow cell touches one of them and is in an outlined region with the other.")),
+          opts,
+          outline: houses.map((u) => ({ cells: RC[u] })),
+          legend: { pattern: tr("the pair"), opts: tr("their numbers"), outline: houses.length === 1 ? tr("the yellow cell's region") : tr("the yellow cells' regions"), target: tr("loses options") },
+        };
+      }
       return {
         say:
           yellowLose(a.targets) +
           " " +
-          (kk === 2
-            ? tr("The blue cells can only be {vals} between them, so those two numbers are used up there.", { vals: vals(a.mask) })
-            : tr("The blue cells can only be {vals} between them, so those three numbers are used up there.", { vals: vals(a.mask) })) +
+          why +
           " " +
           (kk === 2 ? (nT === 1 ? tr("The yellow cell sees both of them.") : tr("The yellow cells see both of them.")) : nT === 1 ? tr("The yellow cell sees all three.") : tr("The yellow cells see all three.")),
         opts,
@@ -1601,7 +1644,8 @@ function createTutor(G, region) {
       return "?";
     };
     const finalTech = res.kind === "naked" || res.kind === "shape" ? 0 : 1;
-    const hardest = steps.reduce((m, a) => Math.max(m, a.tech), finalTech);
+    // the hardest technique in the table's order (not the highest method number: the mixed pair, 14, is easier than a triple)
+    const hardest = steps.reduce((m, a) => (TT.harderMethod(a.tech, m) ? a.tech : m), finalTech);
     const view = [];
     // 0: a nudge without the answer
     if (!steps.length) {
@@ -1916,7 +1960,8 @@ function createTutor(G, region) {
   // ---------- route analysis: how hard was exactly this move, and what was the easiest possible at that moment?
   // One round: use techniques up to level L, lowest first. true if something changed.
   function sweepTo(S, L) {
-    for (let l = 2; l <= L; l++) {
+    for (const l of LADDER) {
+      if (TT.harder(l, L)) break;
       const apps = levelApps(S, l);
       if (!apps.length) continue;
       const before = S.cand.join();
@@ -1933,20 +1978,21 @@ function createTutor(G, region) {
   function availLevel(S0) {
     const cnt = (S) => new Set(singles(S).map((x) => x.cell)).size;
     let n = cnt(S0);
-    if (n) return { level: 1, n };
-    for (let L = 2; L <= 11; L++) {
+    if (n) return { level: SINGLES, n };
+    for (const L of LADDER) {
       const S = clone(S0);
       for (let g = 0; g < 300; g++) {
         if ((n = cnt(S))) return { level: L, n };
         if (!sweepTo(S, L)) break;
       }
     }
-    return { level: 12, n: 0 };
+    return { level: TT.GUESS, n: 0 };
   }
   // The lowest level at which exactly (cell, v) can be seen directly, without placing other numbers first
-  function directLevel(S0, cell, v) {
-    if (singleHolds(S0, cell, v)) return 1;
-    for (let L = 2; L <= 11; L++) {
+  function directLevel(S0, cell, v, maxL = TT.last()) {
+    if (singleHolds(S0, cell, v)) return SINGLES;
+    for (const L of LADDER) {
+      if (TT.harder(L, maxL)) break;
       const S = clone(S0);
       for (let g = 0; g < 300; g++) {
         if (S.broken || !(S.cand[cell] & (1 << v))) break;
@@ -1954,7 +2000,7 @@ function createTutor(G, region) {
         if (!sweepTo(S, L)) break;
       }
     }
-    return 12;
+    return TT.GUESS;
   }
   // The lowest level up to maxL at which (cell, v) can be found by first placing other numbers in your head.
   // placed = the smallest number of other numbers that must be placed (greedily pruned, each number still justified).
@@ -1977,12 +2023,12 @@ function createTutor(G, region) {
         depth++;
         continue;
       }
-      if (L === 1 || !sweepTo(S, L)) return null;
+      if (L === SINGLES || !sweepTo(S, L)) return null;
     }
     return null;
   }
   function aheadLevel(S0, cell, v, maxL) {
-    for (let L = 1; L <= maxL; L++) {
+    for (const L of TT.upTo(maxL)) {
       const r = closureWith(S0, cell, v, L, null);
       if (!r) continue;
       let keep = new Set(r.order),
@@ -2008,18 +2054,18 @@ function createTutor(G, region) {
   // numbers the easiest technique makes visible (the same count as routeMove's nAvail)
   function readyList(known) {
     const S0 = fromKnown(known);
-    if (S0.broken) return { level: 12, list: [] };
+    if (S0.broken) return { level: TT.GUESS, list: [] };
     const pick = (S) => singles(S).map((x) => [x.cell, x.v]);
     let l = pick(S0);
-    if (l.length) return { level: 1, list: l };
-    for (let L = 2; L <= 11; L++) {
+    if (l.length) return { level: SINGLES, list: l };
+    for (const L of LADDER) {
       const S = clone(S0);
       for (let g = 0; g < 300; g++) {
         if ((l = pick(S)).length) return { level: L, list: l };
         if (!sweepTo(S, L)) break;
       }
     }
-    return { level: 12, list: [] };
+    return { level: TT.GUESS, list: [] };
   }
   function easyList(known) {
     const S0 = fromKnown(known);
@@ -2053,7 +2099,7 @@ function createTutor(G, region) {
             spots: list(a.spots.map(nm)),
           });
         const cs = list((a.cells || []).map(nm));
-        if (a.tech === 3 || a.tech === 5) {
+        if (a.tech === 3 || a.tech === 5 || a.tech === 14) {
           const kk = a.cells.length;
           const shared = a.cells.reduce((acc, c) => acc.filter((u) => unitsOf[c].includes(u)), unitsOf[a.cells[0]]);
           return (
@@ -2112,11 +2158,11 @@ function createTutor(G, region) {
   // eliminations are joined, and so are their texts, so the board and the text show everything those cells do.
   function drillApps(known, L) {
     const S = fromKnown(known);
-    if (S.broken || L < 2 || L > 4) return [];
+    // the drill units with patterns (not the singles)
+    if (S.broken || !TT.is(L, "drill") || L === SINGLES) return [];
     const before = new Set(singles(S).map((x) => x.cell * 16 + x.v));
     const groups = new Map();
-    const every =
-      L === 2 ? neighborApps(S, false, true) : nakedApps(S, L === 3 ? 2 : 3, false, true).concat(hiddenApps(S, L === 3 ? 2 : 3, false, true));
+    const every = TT.methods(L).flatMap((m) => FIND[m](S, false, true));
     for (const a of every) {
       const cells = (a.tech === 2 ? a.spots : a.cells || []).filter((c) => c >= 0),
         key = cells.slice().sort((x, y) => x - y).join(",");
@@ -2161,7 +2207,8 @@ function createTutor(G, region) {
       // Like directLevel: use all applications at the lowest level that moves something, together. In the what-if family: the
       // what-if with the least effort that on its own gives exactly this number (as in hints).
       let done = false;
-      for (let L = 2; L <= 11 && !done; L++) {
+      for (const L of LADDER) {
+        if (done) break;
         if (L === WHATIF_L) {
           const w = whatIfBest(S0, S, steps, (T) => (singleHolds(T, cell, v) ? { cell, v, score: 0 } : null));
           if (w) {
@@ -2206,39 +2253,39 @@ function createTutor(G, region) {
     const a = availLevel(S0),
       avail = a.level,
       direct = directLevel(S0, cell, v);
-    const ahead = direct > avail ? aheadLevel(S0, cell, v, Math.min(direct - 1, 11)) : null;
+    const ahead = TT.harder(direct, avail) ? aheadLevel(S0, cell, v, TT.below(direct)) : null;
     // the next number is chosen by price, so a harder technique can be the cheapest way (a short chain before a triple):
     // then the move is one of the easiest all the same
-    const e = direct > avail ? easiest(known) : null,
+    const e = TT.harder(direct, avail) ? easiest(known) : null,
       cheapest = !!(e && e.cell === cell && e.v === v && e.hardestLevel === direct);
     // the length of the reasoning for a move with a technique (pairs and up), for calibrating the price per link later
-    const ex = direct >= 3 && direct <= 11 ? explainMove(known, cell, v) : null;
+    const ex = TT.known(direct) && TT.harder(direct, TT.code("neighbour")) ? explainMove(known, cell, v) : null;
     return { avail, nAvail: a.n, direct, ahead, cheapest, len: ex ? ex.len : 0 };
   }
 
   // Solving on from here the easiest way, without the cell itself, until the cell is placed: the hardest level that takes.
-  // If a move on the cell was at most that hard, it was needed anyway, only done early. 1-11, or 12 if it cannot be done.
+  // If a move on the cell was at most that hard, it was needed anyway, only done early. A unit, or TT.GUESS if it cannot be done.
   function hardestUntil(known, cell) {
     const k = known.slice();
-    let top = 1;
+    let top = SINGLES;
     for (let g = 0; g < 200; g++) {
       const r = readyList(k);
-      if (!r.list.length) return 12;
-      top = Math.max(top, r.level);
+      if (!r.list.length) return TT.GUESS;
+      top = TT.max(top, r.level);
       if (r.list.some(([c]) => c === cell)) return top;
       r.list.forEach(([c, x]) => (k[c] = x));
     }
-    return 12;
+    return TT.GUESS;
   }
   const st = (cand, val) => ({ cand: cand.slice(), val: val.slice(), broken: null });
   // A fast logical solver for the generator: place singles, and otherwise use all moves at the easiest level that helps,
-  // at most maxL. The same techniques as hints. { solved, level (the hardest level used, 1-11), uses: moves per level,
+  // at most maxL. The same techniques as hints. { solved, level (the hardest unit used, or TT.GUESS), uses: moves per unit,
   // tech: moves per technique (0 naked single, 1 hidden single, 2- as TECH_LABELS) }
-  function rate(givens, maxL = 11) {
+  function rate(givens, maxL = TT.last()) {
     const S = fromKnown(givens);
     const tech = new Array(TECH_NAMES.length).fill(0);
-    if (S.broken) return { solved: false, level: 12, uses: {}, tech };
-    let level = 1;
+    if (S.broken) return { solved: false, level: TT.GUESS, uses: {}, tech };
+    let level = SINGLES;
     const uses = {};
     for (let guard = 0; guard < 2000; guard++) {
       if (solved(S)) return { solved: true, level, uses, tech };
@@ -2249,11 +2296,12 @@ function createTutor(G, region) {
             place(S, x.cell, x.v);
             tech[x.kind === "naked" ? 0 : 1]++;
           }
-        if (S.broken) return { solved: false, level: 12, uses, tech };
+        if (S.broken) return { solved: false, level: TT.GUESS, uses, tech };
         continue;
       }
       let moved = false;
-      for (let L = 2; L <= maxL && !moved; L++) {
+      for (const L of LADDER) {
+        if (moved || TT.harder(L, maxL)) break;
         const apps = levelApps(S, L);
         if (!apps.length) continue;
         const before = S.cand.join();
@@ -2262,16 +2310,16 @@ function createTutor(G, region) {
           apply(S, a);
           if (a.tech != null && S.cand.join() !== b0) tech[a.tech]++;
         }
-        if (S.broken) return { solved: false, level: 12, uses, tech };
+        if (S.broken) return { solved: false, level: TT.GUESS, uses, tech };
         if (S.cand.join() !== before) {
           moved = true;
-          level = Math.max(level, L);
+          level = TT.max(level, L);
           uses[L] = (uses[L] || 0) + 1;
         }
       }
-      if (!moved) return { solved: false, level: 12, uses, tech };
+      if (!moved) return { solved: false, level: TT.GUESS, uses, tech };
     }
-    return { solved: false, level: 12, uses, tech };
+    return { solved: false, level: TT.GUESS, uses, tech };
   }
   return {
     easiest,
@@ -2279,6 +2327,11 @@ function createTutor(G, region) {
     singles,
     fromKnown,
     routeMove,
+    // the lowest unit, up to maxL, at which (cell, v) is seen directly from the known numbers; TT.GUESS above maxL or broken
+    moveLevel: (known, cell, v, maxL = TT.last()) => {
+      const S0 = fromKnown(known);
+      return S0.broken ? TT.GUESS : directLevel(S0, cell, v, maxL);
+    },
     explainMove,
     easyList,
     readyList,

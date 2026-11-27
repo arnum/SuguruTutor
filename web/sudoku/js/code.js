@@ -1,7 +1,7 @@
 // Puzzle codes for Sudoku: SD1-... (compact, with a check) or an ordinary puzzle of 81 characters (digits and . or 0),
-// which most Sudoku sites use. The same character set and check as Suguru's SU1 codes.
+// which most Sudoku sites use (16 or 36 characters for 4×4 and 6×6). The same character set and check as Suguru's SU1 codes.
 //
-// SD1 format: SD1-9X9-<data in groups of 5 characters>. For each cell 1 bit "given?" + 4 bits (number-1) if given, and finally
+// SD1 format: SD1-9X9-<data in groups of 5 characters> (SD1-6X6-…, SD1-4X4-… for the small boards). For each cell 1 bit "given?" + 4 bits (number-1) if given, and finally
 // a 10-bit check. Character set: Crockford base32 (no I, L, O, U). Upper/lower case, spaces and hyphens do not matter.
 const CODE_ALPHA = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
 
@@ -38,18 +38,20 @@ function encodePuzzle(p) {
 /** Returns { rows, cols, region, givens } or throws an error with an explanation. */
 function decodePuzzle(text) {
   const raw = String(text).trim();
-  // ordinary puzzle: 81 characters of digits and . or 0 (spaces, line breaks and | are ignored)
+  // ordinary puzzle: 81 characters of digits and . or 0 (spaces, line breaks and | are ignored); 36 or 16 for the small boards
   const plain = raw.replace(/[\s|+-]/g, "");
-  if (/^[0-9.]{81}$/.test(plain)) {
-    const givens = [...plain].map((ch) => (ch === "." ? 0 : +ch));
-    return { rows: 9, cols: 9, region: sudokuBoxes(9, 9), givens };
-  }
+  for (const k of SUDOKU_SIZES)
+    if (plain.length === k * k && /^[0-9.]+$/.test(plain)) {
+      const givens = [...plain].map((ch) => (ch === "." ? 0 : +ch));
+      if (givens.some((v) => v > k)) break;
+      return { rows: k, cols: k, region: sudokuBoxes(k, k), givens };
+    }
   const t = raw.toUpperCase().replace(/#/g, "").replace(/\s+/g, "-").replace(/-+/g, "-").replace(/×/g, "X");
   const m = t.match(/^SD1-(\d{1,2})X(\d{1,2})-([0-9A-Z-]+)$/) || t.match(/^SD1(\d{1,2})X(\d{1,2})-?([0-9A-Z-]+)$/);
   if (!m) throw new Error(tr("The code should look like SD1-9X9-… or be a puzzle of 81 characters."));
   const cols = +m[1],
     rows = +m[2];
-  if (cols !== 9 || rows !== 9) throw new Error(tr("The size in the code does not make sense."));
+  if (cols !== rows || !SUDOKU_SIZES.includes(rows)) throw new Error(tr("The size in the code does not make sense."));
   const body = m[3].replace(/-/g, "").replace(/O/g, "0").replace(/[IL]/g, "1");
   const bits = [];
   for (const ch of body) {
@@ -69,6 +71,6 @@ function decodePuzzle(text) {
   for (let k = 0; k < 10; k++) chk = (chk << 1) | take();
   if (bits.length - pos >= 5 || bits.slice(pos).some((b) => b)) throw new Error(tr("The code is too long or has a typo."));
   if (chk !== codeChecksum(bits.slice(0, dataEnd), rows, cols)) throw new Error(tr("The check does not match. There is probably a typo in the code."));
-  if (givens.some((v) => v > 9)) throw new Error(tr("The code is too long or has a typo."));
+  if (givens.some((v) => v > rows)) throw new Error(tr("The code is too long or has a typo."));
   return { rows, cols, region: sudokuBoxes(rows, cols), givens };
 }

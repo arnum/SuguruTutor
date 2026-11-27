@@ -1,48 +1,211 @@
 {
 "template": {
-  "<title>Suguru strategies</title>": "<title>Suguru-strategier</title>",
-  "<h1>Suguru strategies</h1>": "<h1>Suguru-strategier</h1>",
-  "The fourteen techniques the game's difficulty rating uses, from the easiest to the hardest. Tap the drawing or Next to go one step forward.": "De fjorten teknikker, som spillets sværhedsvurdering bruger, fra de letteste til de sværeste. Tryk på tegningen eller på Næste for at gå et trin frem.",
-  "aria-label=\"How to read the drawings\"": "aria-label=\"Sådan læser du tegningerne\"",
-  "<h2>How to read the drawings</h2>": "<h2>Sådan læser du tegningerne</h2>",
-  "</i>Given number</span>": "</i>Givet tal</span>",
-  "</i>Found earlier</span>": "</i>Fundet tidligere</span>",
-  "</i>Possible numbers</span>": "</i>Mulige tal</span>",
-  "</i>Crossed out</span>": "</i>Streges ud</span>",
-  "</i>The pattern</span>": "</i>Mønsteret</span>",
-  "</i>Affected</span>": "</i>Påvirkes</span>",
-  "</i>Assumption</span>": "</i>Antagelse</span>",
-  "</i>Contradiction</span>": "</i>Modstrid</span>",
-  "<h2>The order in practice</h2>": "<h2>Rækkefølgen i praksis</h2>",
-  "Go through the whole grid for naked and hidden singles until nothing more happens.": "Gå hele gitteret igennem for eneste kandidat og eneste plads, til der ikke sker mere.",
-  "Look for regions of two cells and for 2×2 blocks. That is where neighbour eliminations and triples usually hide.": "Kig efter regioner med to felter og efter 2×2-blokke. Det er dér, nabo-eliminering og tripler oftest gemmer sig.",
-  "Pencil in the possible numbers and look for pairs that see each other.": "Skriv mulige tal med blyant og led efter par, der ser hinanden.",
-  "Find cells with two options and numbers with two places in a region, and see whether they can be chained. Start with one number at a time.": "Find felter med to muligheder og tal med to pladser i en region, og se om de kan kædes sammen. Start med ét tal ad gangen.",
-  "Only when nothing else works: assume a number and follow it. Start with just that one number, then all numbers, and finally try both ways.": "Først når intet andet virker: antag et tal og følg det. Begynd med kun det ene tal, så alle tal, og prøv til sidst begge veje.",
-  "In the game, a puzzle's difficulty is measured as effort: the heaviest step plus an addition for how many heavy steps there are. The level shown for each technique below is its place from easy to hard, not the difficulty of a puzzle. Examples marked “From a real puzzle” come straight from the generator, and every claim has been checked against the puzzles' solutions.": "I spillet måles en opgaves sværhed som indsats: det tungeste skridt plus et tillæg for, hvor mange tunge skridt der er. Niveauet ved hver teknik herunder er teknikkens plads fra let til svær, ikke opgavens sværhedsgrad. Eksemplerne med mærket \"Fra en rigtig opgave\" er hentet direkte fra generatoren, og alle påstande er kontrolleret mod opgavernes løsninger.",
-  "const LEVELS = [\"\", \"Easy\", \"Medium\", \"Hard\", \"Very hard\", \"Chain: one number\", \"Chain: two options\", \"Chain: mixed\", \"What-if: one number\", \"What-if: singles\", \"Both ways\", \"What-if: techniques\"];": "const LEVELS = [\"\", \"Let\", \"Middel\", \"Svær\", \"Meget svær\", \"Kæde: ét tal\", \"Kæde: to muligheder\", \"Kæde: blandet\", \"Hvis-så: ét tal\", \"Hvis-så: enkle tal\", \"Begge veje\", \"Hvis-så: teknikker\"];",
-  "? \"Start again\" : \"Next\"": "? \"Forfra\" : \"Næste\"",
-  ">Level ${ex.level} · ${LEVELS[ex.level]}": ">Niveau ${ex.level} · ${LEVELS[ex.level]}",
-  "'<span class=\"real\">From a real puzzle</span>'": "'<span class=\"real\">Fra en rigtig opgave</span>'",
-  "aria-label=\"Example of ${ex.name}\"": "aria-label=\"Eksempel på ${ex.name}\"",
-  ">Previous</button>": ">Forrige</button>",
-  ">Next</button>": ">Næste</button>",
-  "<b>Look for:</b>": "<b>Se efter:</b>"
+"<title>Suguru strategies</title>": "<title>Suguru-strategier</title>",
+"<h1>Suguru strategies</h1>": "<h1>Suguru-strategier</h1>",
+"aria-label=\"How to read the drawings\"": "aria-label=\"Sådan læser du tegningerne\"",
+"<h2>How to read the drawings</h2>": "<h2>Sådan læser du tegningerne</h2>",
+"</i>Given number</span>": "</i>Givet tal</span>",
+"</i>Found earlier</span>": "</i>Fundet tidligere</span>",
+"</i>Possible numbers</span>": "</i>Mulige tal</span>",
+"</i>Crossed out</span>": "</i>Streges ud</span>",
+"</i>The pattern</span>": "</i>Mønsteret</span>",
+"</i>Affected</span>": "</i>Påvirkes</span>",
+"</i>Assumption</span>": "</i>Antagelse</span>",
+"</i>Contradiction</span>": "</i>Modstrid</span>",
+"<h2>The order in practice</h2>": "<h2>Rækkefølgen i praksis</h2>",
+"Go through the whole grid for naked and hidden singles until nothing more happens.": "Gå hele gitteret igennem for eneste kandidat og eneste plads, til der ikke sker mere.",
+"Look for regions of two cells and for 2×2 blocks. That is where neighbour eliminations and triples usually hide.": "Kig efter regioner med to felter og efter 2×2-blokke. Det er dér, nabo-eliminering og tripler oftest gemmer sig.",
+"Pencil in the possible numbers and look for pairs that see each other.": "Skriv mulige tal med blyant og led efter par, der ser hinanden.",
+"Find cells with two options and numbers with two places in a region, and see whether they can be chained. Start with one number at a time.": "Find felter med to muligheder og tal med to pladser i en region, og se om de kan kædes sammen. Start med ét tal ad gangen.",
+"Only when nothing else works: assume a number and follow it. Start with just that one number, then all numbers, and finally try both ways.": "Først når intet andet virker: antag et tal og følg det. Begynd med kun det ene tal, så alle tal, og prøv til sidst begge veje.",
+"In the game, a puzzle's difficulty is measured as effort: the heaviest step plus an addition for how many heavy steps there are. The level shown for each technique below is its place from easy to hard, not the difficulty of a puzzle. Examples marked “From a real puzzle” come straight from the generator, and every claim has been checked against the puzzles' solutions.": "I spillet måles en opgaves sværhed som indsats: det tungeste skridt plus et tillæg for, hvor mange tunge skridt der er. Niveauet ved hver teknik herunder er teknikkens plads fra let til svær, ikke opgavens sværhedsgrad. Eksemplerne med mærket \"Fra en rigtig opgave\" er hentet direkte fra generatoren, og alle påstande er kontrolleret mod opgavernes løsninger.",
+"? \"Start again\" : \"Next\"": "? \"Forfra\" : \"Næste\"",
+">Level ${num(ex.level)} · ${LEVELS[ex.level]}": ">Niveau ${num(ex.level)} · ${LEVELS[ex.level]}",
+"'<span class=\"real\">From a real puzzle</span>'": "'<span class=\"real\">Fra en rigtig opgave</span>'",
+"aria-label=\"Example of ${ex.name}\"": "aria-label=\"Eksempel på ${ex.name}\"",
+">Previous</button>": ">Forrige</button>",
+">Next</button>": ">Næste</button>",
+"<b>Look for:</b>": "<b>Se efter:</b>",
+"The fifteen techniques the game's difficulty rating uses, from the easiest to the hardest. Tap the drawing or Next to go one step forward.": "De femten teknikker, som spillets sværhedsvurdering bruger, fra de letteste til de sværeste. Tryk på tegningen eller på Næste for at gå et trin frem.",
+"const LEVELS = [\"\", \"Easy\", \"Medium\", \"Hard\", \"Pair: mixed\", \"Very hard\", \"Chain: one number\", \"Chain: two options\", \"Chain: mixed\", \"What-if: one number\", \"What-if: singles\", \"Both ways\", \"What-if: techniques\"];": "const LEVELS = [\"\", \"Let\", \"Middel\", \"Svær\", \"Par: blandet\", \"Meget svær\", \"Kæde: ét tal\", \"Kæde: to muligheder\", \"Kæde: blandet\", \"Hvis-så: ét tal\", \"Hvis-så: enkle tal\", \"Begge veje\", \"Hvis-så: teknikker\"];"
 },
 "examples": {
-  "eneste-kandidat": {"name": "Eneste kandidat", "rule": "Stryg de tal, cellen ikke kan have. Er der kun ét tilbage, er det svaret.", "look": "Celler i små regioner, og celler der er omringet af mange givne tal.", "frames": ["Regionen har tre felter, så hver celle starter med mulighederne 1, 2 og 3.", "b2 rører 1-tallet i a1 og 2-tallet i a3, begge skråt. De to tal streges ud.", "Kun 3 er tilbage, så b2 = 3.", "Det smitter: c2 rører 1-tallet i c3 og kan nu kun være 2. Så bliver c1 = 1."]},
-  "eneste-plads": {"name": "Eneste plads i region", "rule": "Vælg et tal, regionen mangler. Kan det kun stå ét sted, står det der.", "look": "De største tal i en region (4 og 5). De har færrest steder at være.", "frames": ["Regionen a2 til d2 skal have tallene 1 til 4. Hvor kan 4-tallet stå?", "4-tallet i b1 rører a2, b2 og c2, også skråt.", "Kun d2 er tilbage, så d2 = 4. d2 havde stadig fire muligheder, så eneste kandidat kunne ikke have fundet den."]},
-  "nabo-eliminering": {"name": "Nabo-eliminering", "rule": "Ligger alle mulige pladser for et tal i en region op ad den samme celle, kan den celle ikke have tallet.", "look": "Regioner med to felter. Deres 1 og 2 rammer alle celler, der rører begge felter.", "frames": ["b2 og c2 er en region med to felter. Den skal have 1 og 2, men vi ved ikke hvor.", "Uanset rækkefølgen lander 1 og 2 i celler, som b1, c1, b3 og c3 alle rører. De fire celler kan derfor ikke være 1 eller 2.", "a1 og d1 rører kun ét af felterne og beholder 1 og 2. I den øverste region må 1 og 2 altså stå i a1 og d1."]},
-  "noegent-par": {"name": "Nøgent par", "rule": "To celler, der ser hinanden og kun har de samme to muligheder, bruger de to tal. Celler, der ser begge, mister dem.", "look": "\"Ser hinanden\" betyder samme region eller at de rører. Parret må gerne ligge i to forskellige regioner.", "frames": ["En rigtig 5×5-opgave midt i løsningen. Store sorte tal er givne, grå er fundet undervejs, små tal er de muligheder, der er tilbage.", "d2 og e2 rører hinanden og kan begge kun være 4 eller 5. Den ene bliver 4, den anden 5, selv om de ligger i hver sin region.", "d1 rører både d2 og e2. Hvis d1 var 4, kunne ingen af dem være 4. Altså kan d1 ikke være 4.", "d1 har kun 1 tilbage: d1 = 1."]},
-  "skjult-par": {"name": "Skjult par", "rule": "Kan to tal i en region kun stå i de samme to celler, er cellerne optaget af dem. Andre muligheder i de celler streges.", "look": "Tal, der mangler i en region og har få pladser. Kig på tallene, ikke på cellerne.", "frames": ["Regionen a2 til e2 har fem felter. 4-tallet i d1 og 5-tallet i d3 rører c2, d2 og e2, så de tre kan kun være 1, 2 eller 3.", "Hvor kan 4 og 5 stå? Kun i a2 og b2. To tal og to pladser, så begge celler er optaget.", "a2 og b2 kan derfor ikke være 1, 2 eller 3, selv om tallene står som muligheder.", "Parret var skjult, fordi a2 og b2 havde fem muligheder hver. Fra den anden side er c2, d2 og e2 en nøgen trippel med 1, 2 og 3."]},
-  "noegen-trippel": {"name": "Nøgen trippel", "rule": "Tre celler, der alle ser hinanden og tilsammen kun har tre muligheder, bruger de tre tal.", "look": "2×2-blokke. Fire celler i en 2×2-blok rører alle hinanden og skal derfor have fire forskellige tal.", "frames": ["En rigtig 5×5-opgave. Ingen enklere teknik giver fremskridt her.", "c1, d1 og d2 rører alle hinanden. Tilsammen kan de kun være 2, 3 eller 4. Hver celle behøver ikke alle tre, det er nok at de deler dem.", "c2 rører alle tre og kan derfor hverken være 3 eller 4. 2 var allerede væk.", "c2 = 5. De fire celler udgør en 2×2-blok: tre af dem deler 2, 3 og 4, så den fjerde må være noget andet."]},
-  "skjult-trippel": {"name": "Skjult trippel", "rule": "Kan tre tal i en region kun stå i de samme tre celler, er cellerne optaget af dem.", "look": "Regioner med fem felter, hvor de store tal er klemt sammen i den ene ende.", "frames": ["3, 4 og 5 i d1, e1 og e3 rører d2 og e2, så de kun kan være 1 eller 2. c2 rører 3-tallet.", "3, 4 og 5 kan kun stå i a2, b2 og c2. Tre tal på tre pladser.", "Så er der ikke plads til 1 og 2 i de tre celler.", "Samme resultat får man af, at d2 og e2 er et nøgent par med 1 og 2. Derfor bruger programmet næsten aldrig skjulte tripler: parret bliver fundet først."]},
-  "kaede-et-tal": {"name": "Kæde med ét tal", "rule": "Følg ét tal gennem regioner, hvor det kun har to pladser. Står det ikke her, må det stå dér, og så kan det ikke stå i felterne omkring. Kæden ender et sted, der også kunne have tallet.", "look": "Et tal med kun to pladser i flere regioner, der ligger tæt.", "frames": ["En rigtig 5×5-opgave. Vi følger kun tallet 1.", "Antag at c4 ikke er 1. I sin region kan 1 kun stå i c4 eller b4, så b4 = 1.", "a5 rører b4 og kan så ikke være 1. I regionen nederst kan 1 kun stå i a5 eller d5, så d5 = 1.", "Altså står 1 enten i c4 eller i d5. d4 rører begge og kan derfor ikke være 1.", "d4 mister 1. Hele kæden handlede kun om tallet 1."]},
-  "kaede-to-muligheder": {"name": "Kæde med to-mulighedsfelter", "rule": "Felter med kun to muligheder, der rører hinanden, danner en kæde: er det første felt ikke a, tvinges det næste, og så videre, indtil det sidste bliver a.", "look": "Felter med to muligheder, hvor nabofelter deler ét tal.", "frames": ["d4, d5 og e4 har hver kun to muligheder, og de rører hinanden.", "Antag at d4 ikke er 1. d4 har kun 1 og 5, så d4 = 5.", "d5 rører d4 og kan ikke være 5. d5 har kun 4 og 5, så d5 = 4.", "e4 rører d5 og kan ikke være 4. e4 har kun 1 og 4, så e4 = 1.", "Altså er enten d4 = 1, eller e4 = 1. e3 rører begge og kan derfor ikke være 1.", "e3 mister 1."]},
-  "kaede": {"name": "Blandet kæde", "rule": "En kæde der skifter mellem felter med to muligheder og tal med to pladser i en region. Enten starten eller slutningen er sand, så det der modsiger begge, kan streges.", "look": "Når hverken kæder med ét tal eller kæder med to-mulighedsfelter slår til alene.", "frames": ["En rigtig 5×5-opgave. Ingen af de rene kæder virker her, men en blandet gør.", "Antag at c3 ikke er 3. c3 har kun 3 og 5, så c3 = 5.", "d3 rører c3 og kan ikke være 5. d3 har kun 2 og 5, så d3 = 2.", "c2 rører d3 og kan ikke være 2. I regionen kan 2 kun stå i c1 og c2, så c1 = 2.", "Altså er enten c3 = 3, eller c1 = 2. Er c3 = 3, kan c1 i samme region ikke være 3. Er c1 = 2, er den heller ikke 3.", "c1 mister 3. Kæden brugte to felter med to muligheder (c3 og d3) og et tal med to pladser (2 i c1 og c2)."]},
-  "hvis-saa-et-tal": {"name": "Hvis-så med ét tal", "rule": "Antag at et felt er x, og følg kun tallet x: hvor må x så stå i de andre regioner? Mangler en region plads til x, var antagelsen forkert.", "look": "Et tal, der har få pladser tilbage i flere regioner tæt på hinanden.", "frames": ["c4 kan være 4 eller 5. Ingen kæde hjælper her, så vi prøver og følger kun tallet 4.", "Antag c4 = 4.", "Regionen med b1, c1, c2, c3 og d3 mangler 4. c3 og d3 rører c4, og c2 har ikke 4. Så må 4 stå i b1.", "Regionen med a1, a2, b2 og b3 skal også have et 4-tal. Men a1, a2 og b2 rører b1, og b3 rører c4. Der er ingen plads til 4. Det er en modstrid.", "Antagelsen var forkert, så c4 = 5. Vi så kun på tallet 4 hele vejen."]},
-  "hvis-saa-kort": {"name": "Hvis-så med enkle tal", "rule": "Antag et tal og følg de enkle konsekvenser for alle tal. Ender det i en umulighed, var antagelsen forkert.", "look": "Felter med to muligheder i en tæt klynge af små regioner.", "frames": ["d3 kan være 1 eller 5. Hverken kæder eller hvis-så med ét tal hjælper her.", "Antag d3 = 1.", "c2 rører d3 og havde 1 eller 2. Så c2 = 2.", "d4 rører d3 og havde 1 eller 2. Så d4 = 2.", "c4 rører 1-tallet i d3 og 2-tallet i d4. Så c4 = 5.", "b3 rører 2-tallet i c2 og ligger i samme region som 5-tallet i c4. Så b3 = 1.", "c5 ligger i samme region som b3 (1) og c4 (5) og rører d4 (2). Der er intet tal tilbage. Det er en modstrid.", "Antagelsen var forkert, så d3 = 5. Her skulle flere forskellige tal følges, ikke kun ét."]},
-  "begge-veje": {"name": "Begge veje", "rule": "Tag et felt med to muligheder (eller et tal med to pladser) og prøv begge veje med enkle træk. Fører begge til det samme, er det sandt.", "look": "Et felt med to muligheder, der påvirker den samme region på samme måde uanset hvad.", "frames": ["En rigtig 6×6-opgave. e2 kan kun være 1 eller 4. Vi prøver begge veje.", "Vej 1: hvis e2 = 1, kan d1 og e1 ikke være 1, fordi de rører e2. I regionen øverst kan 1 så kun stå i c1.", "Vej 2: hvis e2 = 4, kan d1 og e1 ikke være 4. Så må 4 stå i c1.", "Uanset vejen bliver c1 enten 1 eller 4. Den kan altså ikke være 5.", "c1 mister 5. Ingen af vejene førte til en modstrid. Det er sammenligningen af de to veje, der giver svaret."]},
-  "hvis-saa-dyb": {"name": "Hvis-så med teknikker", "rule": "Som hvis-så med enkle tal, men vejen til modstriden kræver sværere teknikker undervejs.", "look": "Når alt andet er prøvet. Skriv antagelsen ned med blyant, så du kan rulle den tilbage.", "frames": ["d1 kan være 1 eller 2.", "Antag d1 = 1.", "e2 ligger i samme region og havde 1 eller 2. Så e2 = 2.", "Regionen c2, d2, d3, e3, d4 mangler et 2-tal. d3 og e3 rører e2, og d4 havde ikke 2. Kun c2 er tilbage: c2 = 2.", "c3, d3, c4 og d4 er en 2×2-blok, så alle fire skal være forskellige. Men alle fire kan kun være 1, 4 eller 5: tre tal til fire celler. Det er en modstrid.", "Altså er d1 ikke 1, men 2. Kæden krævede en trippel undervejs. Derfor tæller den som hvis-så med teknikker."]}
+"eneste-kandidat": {
+"name": "Eneste kandidat",
+"rule": "Stryg de tal, cellen ikke kan have. Er der kun ét tilbage, er det svaret.",
+"look": "Celler i små regioner, og celler der er omringet af mange givne tal.",
+"frames": [
+"Regionen har tre felter, så hver celle starter med mulighederne 1, 2 og 3.",
+"b2 rører 1-tallet i a1 og 2-tallet i a3, begge skråt. De to tal streges ud.",
+"Kun 3 er tilbage, så b2 = 3.",
+"Det smitter: c2 rører 1-tallet i c3 og kan nu kun være 2. Så bliver c1 = 1."
+]
+},
+"eneste-plads": {
+"name": "Eneste plads i region",
+"rule": "Vælg et tal, regionen mangler. Kan det kun stå ét sted, står det der.",
+"look": "De største tal i en region (4 og 5). De har færrest steder at være.",
+"frames": [
+"Regionen a2 til d2 skal have tallene 1 til 4. Hvor kan 4-tallet stå?",
+"4-tallet i b1 rører a2, b2 og c2, også skråt.",
+"Kun d2 er tilbage, så d2 = 4. d2 havde stadig fire muligheder, så eneste kandidat kunne ikke have fundet den."
+]
+},
+"nabo-eliminering": {
+"name": "Nabo-eliminering",
+"rule": "Ligger alle mulige pladser for et tal i en region op ad den samme celle, kan den celle ikke have tallet.",
+"look": "Regioner med to felter. Deres 1 og 2 rammer alle celler, der rører begge felter.",
+"frames": [
+"b2 og c2 er en region med to felter. Den skal have 1 og 2, men vi ved ikke hvor.",
+"Uanset rækkefølgen lander 1 og 2 i celler, som b1, c1, b3 og c3 alle rører. De fire celler kan derfor ikke være 1 eller 2.",
+"a1 og d1 rører kun ét af felterne og beholder 1 og 2. I den øverste region må 1 og 2 altså stå i a1 og d1."
+]
+},
+"noegent-par": {
+"name": "Nøgent par",
+"rule": "To celler, der ser hinanden og kun har de samme to muligheder, bruger de to tal. Celler, der ser begge, mister dem.",
+"look": "\"Ser hinanden\" betyder samme region eller at de rører. Parret må gerne ligge i to forskellige regioner.",
+"frames": [
+"En rigtig 5×5-opgave midt i løsningen. Store sorte tal er givne, grå er fundet undervejs, små tal er de muligheder, der er tilbage.",
+"d2 og e2 rører hinanden og kan begge kun være 4 eller 5. Den ene bliver 4, den anden 5, selv om de ligger i hver sin region.",
+"d1 rører både d2 og e2. Hvis d1 var 4, kunne ingen af dem være 4. Altså kan d1 ikke være 4.",
+"d1 har kun 1 tilbage: d1 = 1."
+]
+},
+"skjult-par": {
+"name": "Skjult par",
+"rule": "Kan to tal i en region kun stå i de samme to celler, er cellerne optaget af dem. Andre muligheder i de celler streges.",
+"look": "Tal, der mangler i en region og har få pladser. Kig på tallene, ikke på cellerne.",
+"frames": [
+"Regionen a2 til e2 har fem felter. 4-tallet i d1 og 5-tallet i d3 rører c2, d2 og e2, så de tre kan kun være 1, 2 eller 3.",
+"Hvor kan 4 og 5 stå? Kun i a2 og b2. To tal og to pladser, så begge celler er optaget.",
+"a2 og b2 kan derfor ikke være 1, 2 eller 3, selv om tallene står som muligheder.",
+"Parret var skjult, fordi a2 og b2 havde fem muligheder hver. Fra den anden side er c2, d2 og e2 en nøgen trippel med 1, 2 og 3."
+]
+},
+"noegen-trippel": {
+"name": "Nøgen trippel",
+"rule": "Tre celler, der alle ser hinanden og tilsammen kun har tre muligheder, bruger de tre tal.",
+"look": "2×2-blokke. Fire celler i en 2×2-blok rører alle hinanden og skal derfor have fire forskellige tal.",
+"frames": [
+"En rigtig 5×5-opgave. Ingen enklere teknik giver fremskridt her.",
+"c1, d1 og d2 rører alle hinanden. Tilsammen kan de kun være 2, 3 eller 4. Hver celle behøver ikke alle tre, det er nok at de deler dem.",
+"c2 rører alle tre og kan derfor hverken være 3 eller 4. 2 var allerede væk.",
+"c2 = 5. De fire celler udgør en 2×2-blok: tre af dem deler 2, 3 og 4, så den fjerde må være noget andet."
+]
+},
+"skjult-trippel": {
+"name": "Skjult trippel",
+"rule": "Kan tre tal i en region kun stå i de samme tre celler, er cellerne optaget af dem.",
+"look": "Regioner med fem felter, hvor de store tal er klemt sammen i den ene ende.",
+"frames": [
+"3, 4 og 5 i d1, e1 og e3 rører d2 og e2, så de kun kan være 1 eller 2. c2 rører 3-tallet.",
+"3, 4 og 5 kan kun stå i a2, b2 og c2. Tre tal på tre pladser.",
+"Så er der ikke plads til 1 og 2 i de tre celler.",
+"Samme resultat får man af, at d2 og e2 er et nøgent par med 1 og 2. Derfor bruger programmet næsten aldrig skjulte tripler: parret bliver fundet først."
+]
+},
+"kaede-et-tal": {
+"name": "Kæde med ét tal",
+"rule": "Følg ét tal gennem regioner, hvor det kun har to pladser. Står det ikke her, må det stå dér, og så kan det ikke stå i felterne omkring. Kæden ender et sted, der også kunne have tallet.",
+"look": "Et tal med kun to pladser i flere regioner, der ligger tæt.",
+"frames": [
+"En rigtig 5×5-opgave. Vi følger kun tallet 1.",
+"Antag at c4 ikke er 1. I sin region kan 1 kun stå i c4 eller b4, så b4 = 1.",
+"a5 rører b4 og kan så ikke være 1. I regionen nederst kan 1 kun stå i a5 eller d5, så d5 = 1.",
+"Altså står 1 enten i c4 eller i d5. d4 rører begge og kan derfor ikke være 1.",
+"d4 mister 1. Hele kæden handlede kun om tallet 1."
+]
+},
+"kaede-to-muligheder": {
+"name": "Kæde med to-mulighedsfelter",
+"rule": "Felter med kun to muligheder, der rører hinanden, danner en kæde: er det første felt ikke a, tvinges det næste, og så videre, indtil det sidste bliver a.",
+"look": "Felter med to muligheder, hvor nabofelter deler ét tal.",
+"frames": [
+"d4, d5 og e4 har hver kun to muligheder, og de rører hinanden.",
+"Antag at d4 ikke er 1. d4 har kun 1 og 5, så d4 = 5.",
+"d5 rører d4 og kan ikke være 5. d5 har kun 4 og 5, så d5 = 4.",
+"e4 rører d5 og kan ikke være 4. e4 har kun 1 og 4, så e4 = 1.",
+"Altså er enten d4 = 1, eller e4 = 1. e3 rører begge og kan derfor ikke være 1.",
+"e3 mister 1."
+]
+},
+"kaede": {
+"name": "Blandet kæde",
+"rule": "En kæde der skifter mellem felter med to muligheder og tal med to pladser i en region. Enten starten eller slutningen er sand, så det der modsiger begge, kan streges.",
+"look": "Når hverken kæder med ét tal eller kæder med to-mulighedsfelter slår til alene.",
+"frames": [
+"En rigtig 5×5-opgave. Ingen af de rene kæder virker her, men en blandet gør.",
+"Antag at c3 ikke er 3. c3 har kun 3 og 5, så c3 = 5.",
+"d3 rører c3 og kan ikke være 5. d3 har kun 2 og 5, så d3 = 2.",
+"c2 rører d3 og kan ikke være 2. I regionen kan 2 kun stå i c1 og c2, så c1 = 2.",
+"Altså er enten c3 = 3, eller c1 = 2. Er c3 = 3, kan c1 i samme region ikke være 3. Er c1 = 2, er den heller ikke 3.",
+"c1 mister 3. Kæden brugte to felter med to muligheder (c3 og d3) og et tal med to pladser (2 i c1 og c2)."
+]
+},
+"hvis-saa-et-tal": {
+"name": "Hvis-så med ét tal",
+"rule": "Antag at et felt er x, og følg kun tallet x: hvor må x så stå i de andre regioner? Mangler en region plads til x, var antagelsen forkert.",
+"look": "Et tal, der har få pladser tilbage i flere regioner tæt på hinanden.",
+"frames": [
+"c4 kan være 4 eller 5. Ingen kæde hjælper her, så vi prøver og følger kun tallet 4.",
+"Antag c4 = 4.",
+"Regionen med b1, c1, c2, c3 og d3 mangler 4. c3 og d3 rører c4, og c2 har ikke 4. Så må 4 stå i b1.",
+"Regionen med a1, a2, b2 og b3 skal også have et 4-tal. Men a1, a2 og b2 rører b1, og b3 rører c4. Der er ingen plads til 4. Det er en modstrid.",
+"Antagelsen var forkert, så c4 = 5. Vi så kun på tallet 4 hele vejen."
+]
+},
+"hvis-saa-kort": {
+"name": "Hvis-så med enkle tal",
+"rule": "Antag et tal og følg de enkle konsekvenser for alle tal. Ender det i en umulighed, var antagelsen forkert.",
+"look": "Felter med to muligheder i en tæt klynge af små regioner.",
+"frames": [
+"d3 kan være 1 eller 5. Hverken kæder eller hvis-så med ét tal hjælper her.",
+"Antag d3 = 1.",
+"c2 rører d3 og havde 1 eller 2. Så c2 = 2.",
+"d4 rører d3 og havde 1 eller 2. Så d4 = 2.",
+"c4 rører 1-tallet i d3 og 2-tallet i d4. Så c4 = 5.",
+"b3 rører 2-tallet i c2 og ligger i samme region som 5-tallet i c4. Så b3 = 1.",
+"c5 ligger i samme region som b3 (1) og c4 (5) og rører d4 (2). Der er intet tal tilbage. Det er en modstrid.",
+"Antagelsen var forkert, så d3 = 5. Her skulle flere forskellige tal følges, ikke kun ét."
+]
+},
+"begge-veje": {
+"name": "Begge veje",
+"rule": "Tag et felt med to muligheder (eller et tal med to pladser) og prøv begge veje med enkle træk. Fører begge til det samme, er det sandt.",
+"look": "Et felt med to muligheder, der påvirker den samme region på samme måde uanset hvad.",
+"frames": [
+"En rigtig 6×6-opgave. e2 kan kun være 1 eller 4. Vi prøver begge veje.",
+"Vej 1: hvis e2 = 1, kan d1 og e1 ikke være 1, fordi de rører e2. I regionen øverst kan 1 så kun stå i c1.",
+"Vej 2: hvis e2 = 4, kan d1 og e1 ikke være 4. Så må 4 stå i c1.",
+"Uanset vejen bliver c1 enten 1 eller 4. Den kan altså ikke være 5.",
+"c1 mister 5. Ingen af vejene førte til en modstrid. Det er sammenligningen af de to veje, der giver svaret."
+]
+},
+"hvis-saa-dyb": {
+"name": "Hvis-så med teknikker",
+"rule": "Som hvis-så med enkle tal, men vejen til modstriden kræver sværere teknikker undervejs.",
+"look": "Når alt andet er prøvet. Skriv antagelsen ned med blyant, så du kan rulle den tilbage.",
+"frames": [
+"d1 kan være 1 eller 2.",
+"Antag d1 = 1.",
+"e2 ligger i samme region og havde 1 eller 2. Så e2 = 2.",
+"Regionen c2, d2, d3, e3, d4 mangler et 2-tal. d3 og e3 rører e2, og d4 havde ikke 2. Kun c2 er tilbage: c2 = 2.",
+"c3, d3, c4 og d4 er en 2×2-blok, så alle fire skal være forskellige. Men alle fire kan kun være 1, 4 eller 5: tre tal til fire celler. Det er en modstrid.",
+"Altså er d1 ikke 1, men 2. Kæden krævede en trippel undervejs. Derfor tæller den som hvis-så med teknikker."
+]
+},
+"blandet-par": {
+"name": "Blandet par",
+"rule": "Et par kan også ses på to måder. To felter, der rører hinanden og har de samme to muligheder, er tilsammen de to tal. Et felt i samme region som det ene, der rører det andet, mister begge tal.",
+"look": "Par, der ligger i to regioner. Se hver af de to regioner igennem efter et felt, der rører den anden halvdel af parret.",
+"frames": [
+"En rigtig 5×5-opgave midt i løsningen. Intet almindeligt par hjælper her.",
+"c2 og d3 rører hinanden og kan begge kun være 2 eller 3. Den ene er 2, den anden 3, selv om de ligger i hver sin region.",
+"b3 rører ikke d3, men ligger i samme region og kan derfor ikke have d3's tal. Den rører c2 og kan derfor heller ikke have c2's tal.",
+"Tilsammen er c2 og d3 2 og 3, så b3 kan ingen af delene være. b3 ser parret på to forskellige måder, og det er dét, der gør det svært at få øje på.",
+"b3 har kun 1 tilbage: b3 = 1."
+]
+}
 }
 }

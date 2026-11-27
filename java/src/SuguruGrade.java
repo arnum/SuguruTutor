@@ -17,17 +17,42 @@ public final class SuguruGrade {
 
     public static final String[] BAND = {"", "Beginner", "Easy", "Medium", "Hard", "Very hard", "Expert", "Master", "Extreme", "Diabolical"};
     /** Short name of the technique for each technique level 1-11 (12 = guessing). */
-    public static final String[] LEVEL_TECH = {"", "singles", "neighbour elimination", "pairs", "triples", "single-number chain",
+    public static final String[] LEVEL_TECH = {"", "singles", "neighbour elimination", "pairs", "mixed pair", "triples", "single-number chain",
         "bivalue chain", "mixed chain", "single-number what-if", "what-if with singles", "both ways", "what-if with techniques", "guessing"};
+    // ---- The technique table's questions (as TT in tools/grade/techs.js). A unit is named by its code, which never changes;
+    // the table's order (UNIT_ORDER, generated below) is the only order, so codes are never compared as numbers.
+    static int rank(int code) {
+        if (code == GUESS) return UNIT_ORDER.length;
+        for (int i = 0; i < UNIT_ORDER.length; i++) if (UNIT_ORDER[i] == code) return i;
+        return -1;
+    }
+    static boolean known(int code) { return rank(code) >= 0 && code != GUESS; }
+    static boolean harder(int a, int b) { return rank(a) > rank(b); }
+    static int max(int a, int b) { return rank(b) > rank(a) ? b : a; }
+    /** methods: a is harder than b if its unit is, or (in one unit) if it comes later in the unit's list (as TT.harderMethod) */
+    static boolean harderMethod(int a, int b) {
+        int ua = METHOD_UNIT[a], ub = METHOD_UNIT[b];
+        if (ua != ub) return harder(ua, ub);
+        int[] ms = methods(ua); int ia = -1, ib = -1;
+        for (int i = 0; i < ms.length; i++) { if (ms[i] == a) ia = i; if (ms[i] == b) ib = i; }
+        return ia > ib;
+    }
+    static int[] methods(int code) { int r = rank(code); return r >= 0 && r < UNIT_ORDER.length ? UNIT_METHODS[r] : new int[0]; }
+    static int last() { return UNIT_ORDER[UNIT_ORDER.length - 1]; }
+    static int below(int code) { if (code == GUESS) return last(); int r = rank(code); return r > 0 ? UNIT_ORDER[r - 1] : code; }
+    static int above(int code) { int r = rank(code); return r >= 0 && r < UNIT_ORDER.length - 1 ? UNIT_ORDER[r + 1] : code; }
+    static int first(String family) { for (int i = 0; i < UNIT_ORDER.length; i++) if (UNIT_FAMILY[i].equals(family)) return UNIT_ORDER[i]; return -1; }
+    static int code(String id) { for (int i = 0; i < UNIT_ORDER.length; i++) if (UNIT_ID[i].equals(id)) return UNIT_ORDER[i]; throw new IllegalArgumentException("no technique unit " + id); }
+
     /*
      * All numbers in the grade come from tools/grade/weights.json (the same as web/shared/js/grade.js). Features (SuguruTutor) ->
      * weights (below) -> effort (stepEffort). A calibration only changes weights.json; see tools/grade/README.md.
      */
     // <gen:weights> Written by tools/grade/gen.py from tools/grade/weights.json. Edit there, not here.
     // Pencil terms: [0] with pencil, [1] without pencil, [2] as you used to play; each a list per technique (derived from base, diff and anchor).
-    static final int FIT = 11;
-    static final double[] RECOG = {0, 0, 0.6, 2.2, 2.9, 3, 3.7, 1.9, 2.2, 2.5, 2.8, 3.1, 3.5, 3.1};
-    static final double[] LINK = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+    static final int FIT = 12;
+    static final double[] RECOG = {0, 0, 0.6, 2.2, 2.9, 3, 3.7, 1.9, 2.2, 2.5, 2.8, 3.1, 3.5, 3.1, 2.6};
+    static final double[] LINK = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
     static final double[] SPOT = {0.5, 0.5, 0.3, 0.15, 0};
     static final double W_cap = 14.9;
     static final double W_inner = 0.25;
@@ -57,16 +82,35 @@ public final class SuguruGrade {
     static final double W_singlesFirst = 0;
     static final double W_singlesNakedW = 0;
     static final double W_singlesNakedSpan = 1;
-    static final double[][] P_mem = {{0.3, 0.3, 0.3, 0.1, 0.1, 0.2, 0.2, 0.1, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3}, {0.3, 0.3, 0.3, 0.3, 0.3, 0.4, 0.4, 0.3, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5}, {0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3}};
-    static final double[][] P_tech = {{0, 0, 0, -0.3, -0.5, -0.5, -0.6, -0.4, 0, 0, 0, 0, 0, 0}, {0, 0, 0, 0, 0, 0.5, 0.6, 0, 1, 1.2, 0.3, 1.5, 1.5, 1.5}, {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}};
-    static final double[][] P_multi = {{0, 0, 0, -0.25, -0.25, -0.125, -0.125, 0, 0, 0, 0, 0, 0, 0}, {0, 0, 0, 0, 0, 0.125, 0.125, 0, 0.25, 0.25, 0, 0, 0.25, 0}, {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}};
-    static final double[][] P_trial = {{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.3, 0.3, 0, 0.3}, {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}};
-    static final double[][] P_built = {{0, 0, 0, -0.4, -0.4, -0.2, -0.2, -0.4, 0, 0, 0, 0, 0, 0}, {0, 0, 0, 0, 0, 0.2, 0.2, 0, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4}, {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}};
-    static final double[][] P_repeat = {{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}};
-    static final double[][] P_partial = {{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}};
-    static final double[][] P_len = {{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.2, 0.2, 0.2, 0.2}, {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}};
+    static final double[][] P_mem = {{0.3, 0.3, 0.3, 0.1, 0.1, 0.2, 0.2, 0.1, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.1}, {0.3, 0.3, 0.3, 0.3, 0.3, 0.4, 0.4, 0.3, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.3}, {0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3}};
+    static final double[][] P_tech = {{0, 0, 0, -0.3, -0.5, -0.5, -0.6, -0.4, 0, 0, 0, 0, 0, 0, -0.3}, {0, 0, 0, 0, 0, 0.5, 0.6, 0, 1, 1.2, 0.3, 1.5, 1.5, 1.5, 0}, {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}};
+    static final double[][] P_multi = {{0, 0, 0, -0.25, -0.25, -0.125, -0.125, 0, 0, 0, 0, 0, 0, 0, -0.25}, {0, 0, 0, 0, 0, 0.125, 0.125, 0, 0.25, 0.25, 0, 0, 0.25, 0, 0}, {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}};
+    static final double[][] P_trial = {{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.3, 0.3, 0, 0.3, 0}, {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}};
+    static final double[][] P_built = {{0, 0, 0, -0.4, -0.4, -0.2, -0.2, -0.4, 0, 0, 0, 0, 0, 0, -0.4}, {0, 0, 0, 0, 0, 0.2, 0.2, 0, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0}, {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}};
+    static final double[][] P_repeat = {{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}};
+    static final double[][] P_partial = {{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}};
+    static final double[][] P_len = {{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.2, 0.2, 0.2, 0.2, 0}, {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}};
     static final double P_multiCap = 1;
+    // The technique table, from tools/grade/techniques.json: units in teaching order (codes never change; the order
+    // is the only order), and per method (technique number) its unit and flags. See rank() below.
+    static final int GUESS = 13;
+    static final int[] UNIT_ORDER = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12};
+    static final int[][] UNIT_METHODS = {{0, 1}, {2}, {3, 4}, {14}, {5, 6}, {7}, {8}, {9}, {10}, {11}, {12}, {13}};
+    static final String[] UNIT_ID = {"singles", "neighbour", "pairs", "mixedPair", "triples", "chain1", "chain2", "chainMixed", "whatIf1", "whatIfSingles", "bothWays", "whatIfTech"};
+    static final String[] UNIT_FAMILY = {"basic", "basic", "basic", "basic", "basic", "chain", "chain", "chain", "whatif", "whatif", "whatif", "whatif"};
+    static final String[] UNIT_GAMES = {"", "", "", "suguru", "", "", "", "", "", "", "", ""};
+    static final int[] METHOD_UNIT = {1, 1, 2, 3, 3, 5, 5, 6, 7, 8, 9, 10, 11, 12, 4};
+    static final int[] METHOD_WEIGHT = {1, 1, 4, 8, 10, 15, 18, 20, 22, 24, 26, 30, 40, 60, 12};
+    static final boolean[] METHOD_PATTERN = {false, false, true, true, true, true, true, false, false, false, false, false, false, false, true};
+    static final boolean[] METHOD_INNER = {false, false, true, true, true, true, true, true, true, true, true, false, false, false, true};
+    static final boolean[] METHOD_CHAIN = {false, false, false, false, false, false, false, true, true, true, false, false, false, false, false};
+    static final boolean[] METHOD_BYLENGTH = {false, false, false, false, false, false, false, true, true, true, true, true, true, true, false};
+    static final int[] METHOD_WITHIN = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 9, 0};
     // </gen:weights>
+    // (after the generated table, which they are made from)
+    static final int SINGLES = METHOD_UNIT[0];
+    /** the units the solver tries after the singles, in order */
+    static final int[] LADDER = java.util.Arrays.stream(UNIT_ORDER).filter(c -> c != METHOD_UNIT[0]).toArray();
 
     /** A step described by its features (the hardest pattern on the way to one number). */
     public static final class Step {
@@ -132,7 +176,7 @@ public final class SuguruGrade {
         f.base = 1.0 * RECOG[T];
         double[] v = s.vis;
         if (v != null) {
-            if (T >= 2 && T <= 6) f.shapeT = W_vis * (W_shapeSize * Math.min(W_shapeSizeCap, Math.max(0, v[0] - 2)) + W_shapeBent * v[1]);
+            if ((T >= 2 && T <= 6) || T == 14) f.shapeT = W_vis * (W_shapeSize * Math.min(W_shapeSizeCap, Math.max(0, v[0] - 2)) + W_shapeBent * v[1]);
             f.openT = W_vis * W_open * (W_openMid - v[2]);
             f.workT = W_vis * Math.max(W_workLo, Math.min(W_workHi, W_workPer * (v[3] - W_workMid)));
         }
@@ -171,7 +215,7 @@ public final class SuguruGrade {
         double optsSum = 0; int narrowCount = 0;
         for (Step s : steps) {
             g.tech = Math.max(g.tech, s.L); g.mem = Math.max(g.mem, s.mem); g.len = Math.max(g.len, s.len);
-            optsSum += s.opts; if (s.opts <= 1) narrowCount++; if (s.L >= 2) g.advCount++;
+            optsSum += s.opts; if (s.opts <= 1) narrowCount++; if (harder(s.L, SINGLES)) g.advCount++;
         }
         g.total = N; g.avgOpts = optsSum / N; g.narrow = narrowCount / (double) N;
         // Load: the effort in all non-trivial steps beyond the heaviest; repeats of the same technique count for less
@@ -209,7 +253,7 @@ public final class SuguruGrade {
         p.grade = st == null ? null : gradeFromSteps(st);
     }
 
-    static final int[] START = {0, 1, 2, 2, 3, 5, 6, 8, 9, 10};
+    static final int[] START = {0, 1, 2, 2, 3, 6, 7, 9, 10, 11}; // levels since 26 Nov. 2026 (the mixed pair is 4)
 
     /**
      * Generate for a difficulty (band 1-9), a decimal range [lo, hi], an optional technique (must, 0 = all)
@@ -227,11 +271,11 @@ public final class SuguruGrade {
             attach(p);
             p.target = band;
             int b = p.grade != null ? p.grade.band : p.rating.level, dec = p.grade != null ? p.grade.decimal : 0;
-            int key = (must > 0 ? Math.abs(p.rating.level - must) * 100 : 0) + Math.abs(b - band) * 10 + (dec < lo ? lo - dec : dec > hi ? dec - hi : 0)
+            int key = (must > 0 ? Math.abs(rank(p.rating.level) - rank(must)) * 100 : 0) + Math.abs(b - band) * 10 + (dec < lo ? lo - dec : dec > hi ? dec - hi : 0)
                 + (p.grade != null && "short".equals(kind) ? Math.max(0, p.grade.load - 3) : p.grade != null && "long".equals(kind) ? Math.max(0, 6 - p.grade.load) : 0);
             if (key < bestKey) { best = p; bestKey = key; }
             if (key == 0 || System.currentTimeMillis() - t0 > budgetMs) break;
-            if (must == 0) tt = b < band ? Math.min(11, tt + 1) : b > band ? Math.max(band == 1 ? 1 : 2, tt - 1) : tt;
+            if (must == 0) tt = b < band ? above(tt) : b > band ? max(band == 1 ? SINGLES : code("neighbour"), below(tt)) : tt;
         }
         return best;
     }
@@ -277,7 +321,7 @@ public final class SuguruGrade {
     public static String describe(SuguruEngine.Puzzle p) {
         StringBuilder sb = new StringBuilder();
         if (p.grade != null) sb.append(SuguruText.t(BAND[p.grade.band])).append(' ').append(p.grade.valueText()).append(" · ").append(p.grade.peakLoadText()).append(" · ");
-        sb.append(SuguruText.t(LEVEL_TECH[Math.min(12, p.rating.level)])).append(" · ").append(SuguruText.f("%d givens", p.clueCount())).append('\n');
+        sb.append(SuguruText.t(LEVEL_TECH[p.rating.level])).append(" · ").append(SuguruText.f("%d givens", p.clueCount())).append('\n');
         if (p.grade != null) for (String[] l : profileLines(p.grade)) sb.append(String.format("  %5s  ", l[0])).append(l[1]).append('\n');
         for (int t = 0; t < p.rating.uses.length; t++) if (p.rating.uses[t] > 0)
             sb.append("  ").append(String.format("%-28s", SuguruText.t(SuguruEngine.TECH_LABEL[t]))).append(" x").append(p.rating.uses[t]).append('\n');

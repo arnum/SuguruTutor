@@ -27,6 +27,10 @@
 //     focus      cells that play a part: the rest is dimmed
 //     corner     {cell: colour}: a small corner (whose number it was)
 //     dashed     a cell whose number gets a dashed circle (the hint's cell on the game board)
+//     ucol       {cell*16+d: 1 | 2}: the player's chain colours on options (A: a disc, B: a square; chains.js)
+//     ulinks     [{a, da, b, db, w}]: the player's links between options (da/db 0: the cell), w: weak (dashed)
+//     ufrom      {c, d}: the first end of a link being drawn
+//     noteDigit  the number the chain tool works on: the other pencil marks are drawn faintly
 //     ring       {c, warn}: the selected cell's frame (warn: about to be overwritten)
 //     flash      the numbers flash in (solved)
 //     labels     the column letters and row numbers along the edges (default on)
@@ -38,7 +42,8 @@
 const DRAW_S = 100;
 const FONT_UI = "Zen Kaku Gothic New, system-ui, sans-serif",
   FONT_GIVEN = "Shippori Mincho B1, Georgia, serif";
-const notePos = (maxR) => (maxR >= 7 ? NOTE_POS9 : maxR >= 6 ? NOTE_POS6 : NOTE_POS5);
+// where the pencil marks go: by the largest region (a 4×4 Sudoku's marks two by two, GAME.boxNotes; Suguru's as on a die)
+const notePos = (maxR) => (maxR >= 7 ? NOTE_POS9 : maxR >= 6 ? NOTE_POS6 : maxR === 4 && GAME.boxNotes ? NOTE_POS4 : NOTE_POS5);
 const asSet = (x) => (x instanceof Set ? x : new Set(x || []));
 const num = (x, y, size, weight, fill, txt, extra = "") =>
   `<text x="${x}" y="${y}" text-anchor="middle" dominant-baseline="central" font-family="${FONT_UI}" font-weight="${weight}" font-size="${size}" fill="${fill}"${extra}>${txt}</text>`;
@@ -65,7 +70,9 @@ function boardParts(b, v = {}) {
     work = asSet(v.work),
     opts = v.opts || {},
     badges = v.badges || {},
-    focus = v.focus && v.focus.length ? asSet(v.focus) : null;
+    focus = v.focus && v.focus.length ? asSet(v.focus) : null,
+    ucol = v.ucol || {},
+    ulinked = new Set((v.ulinks || []).flatMap((l) => [l.da ? l.a * 16 + l.da : -1, l.db ? l.b * 16 + l.db : -1])); // options a link ends at
   let cells = "",
     texts = "";
   if (v.labels !== false) {
@@ -113,8 +120,19 @@ function boardParts(b, v = {}) {
         if (st) texts += `<line x1="${x + px - 13}" y1="${y + py + 11}" x2="${x + px + 13}" y2="${y + py - 11}" stroke="var(--bad)" stroke-width="3.5" stroke-linecap="round"/>`;
       }
     } else if (b.reveal && b.reveal[i]) texts += num(x + 50, y + 52, 44, 400, "var(--mute)", b.reveal[i], ` opacity="0.7"`);
-    else if (b.notes && b.notes[i]) {
-      for (let d = 1; d <= 9; d++) if (b.notes[i] & (1 << d) && pos[d]) texts += num(x + pos[d][0], y + pos[d][1], 22, 500, "var(--mute)", d);
+    else if ((b.notes && b.notes[i]) || v.ucol) {
+      // pencil marks, and the chain tool's colours on options (a coloured option shows even without a pencil mark)
+      for (let d = 1; d <= 9; d++) {
+        if (!pos[d]) continue;
+        const k = ucol[i * 16 + d],
+          has = (b.notes && b.notes[i] & (1 << d)) || ulinked.has(i * 16 + d); // a link's end shows its option
+        if (!has && !k) continue;
+        const [px, py] = pos[d];
+        if (k === 1) texts += `<circle cx="${x + px}" cy="${y + py}" r="17" fill="var(--colA)"/>`;
+        else if (k === 2) texts += `<rect x="${x + px - 16}" y="${y + py - 16}" width="32" height="32" rx="6" fill="var(--colB)"/>`;
+        const faint = v.noteDigit && d !== v.noteDigit && !k;
+        texts += num(x + px, y + py, k || (v.noteDigit && d === v.noteDigit) ? 24 : 22, k ? 700 : v.noteDigit === d ? 700 : 500, k ? "var(--colInk)" : v.noteDigit === d ? "var(--ink)" : "var(--mute)", d, faint ? ` opacity="0.3"` : "");
+      }
     }
     if (corner[i]) texts += `<path d="M${x + S - 30} ${y + 2}h28v28z" fill="${corner[i]}"/>`;
     if (badges[i] != null) texts += `<circle cx="${x + 19}" cy="${y + 19}" r="14" fill="var(--ink)"/>` + num(x + 19, y + 20, 18, 700, "var(--paper)", badges[i]);
@@ -188,6 +206,35 @@ function boardParts(b, v = {}) {
     lines +=
       `<path d="M${sx.toFixed(1)} ${sy.toFixed(1)}Q${cx.toFixed(1)} ${cy.toFixed(1)} ${ex.toFixed(1)} ${ey.toFixed(1)}" stroke="${col}" stroke-width="5" fill="none" stroke-linecap="round" pointer-events="none"/>` +
       `<path d="M${(ex + hx * 12).toFixed(1)} ${(ey + hy * 12).toFixed(1)}L${(ex - hx * 10 - hy * 10).toFixed(1)} ${(ey - hy * 10 + hx * 10).toFixed(1)}L${(ex - hx * 10 + hy * 10).toFixed(1)} ${(ey - hy * 10 - hx * 10).toFixed(1)}Z" fill="${col}" pointer-events="none"/>`;
+  }
+  // the player's links (chains.js): straight lines between options or cells, solid for strong, dashed for weak
+  const uPt = (c, d) => {
+    const p = d && pos[d] ? pos[d] : [50, 50];
+    return [(c % cols) * S + p[0], Math.floor(c / cols) * S + p[1]];
+  };
+  for (const l of v.ulinks || []) {
+    const [x1, y1] = uPt(l.a, l.da),
+      [x2, y2] = uPt(l.b, l.db),
+      len = Math.hypot(x2 - x1, y2 - y1) || 1,
+      inCell = l.a === l.b, // a cell's two options: a short line between them
+      cut = (d) => (inCell ? 11 : d ? 17 : 30), // stop at the option's disc or the cell's number
+      ux = (x2 - x1) / len,
+      uy = (y2 - y1) / len;
+    if (len < (inCell ? 20 : 36)) continue;
+    // slightly bent, like the hints' arrows, so a link along a row does not run through the numbers between its ends;
+    // a cell's two options get a small arc over the cell
+    const sx = x1 + ux * cut(l.da),
+      sy = y1 + uy * cut(l.da),
+      ex = x2 - ux * cut(l.db),
+      ey = y2 - uy * cut(l.db),
+      bend = inCell ? 16 : Math.min(30, len * 0.15),
+      qx = (sx + ex) / 2 - uy * bend,
+      qy = (sy + ey) / 2 + ux * bend;
+    lines += `<path d="M${sx.toFixed(1)} ${sy.toFixed(1)}Q${qx.toFixed(1)} ${qy.toFixed(1)} ${ex.toFixed(1)} ${ey.toFixed(1)}" fill="none" stroke="var(--ulink)" stroke-width="5" stroke-linecap="round"${l.w ? ` stroke-dasharray="4 11"` : ""} pointer-events="none"/>`;
+  }
+  if (v.ufrom) {
+    const [fx, fy] = uPt(v.ufrom.c, v.ufrom.d);
+    lines += `<circle cx="${fx}" cy="${fy}" r="${v.ufrom.d ? 20 : 40}" fill="none" stroke="var(--ulink)" stroke-width="4" stroke-dasharray="6 6" pointer-events="none"/>`;
   }
   if (v.ring && v.ring.c >= 0) {
     const x = (v.ring.c % cols) * S,

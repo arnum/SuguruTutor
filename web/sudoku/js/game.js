@@ -1,5 +1,5 @@
 // Sudoku: the game's rules as a model that the tutor, board and analysis build on, and the texts and lists that are
-// Sudoku-specific. The techniques are the same 14 as in Suguru (the same numbers, see shared/js/tutor.js); only the names and
+// Sudoku-specific. The techniques are the same 15 as in Suguru (the same numbers, see shared/js/tutor.js); only the names and
 // explanations are Sudoku's own.
 
 // The names of the 14 techniques. "Single-number chain" covers X-wing, skyscraper and other X-chains; "bivalue chain"
@@ -19,12 +19,13 @@ const TECH_LABELS = [
   tr("What-if with singles"),
   tr("Both ways"),
   tr("What-if with techniques"),
+  "", // 14: the mixed pair needs touching cells, so Sudoku never has it (its level 4 stays empty and hidden)
 ];
 
 // ---------- Lists the shared code uses (core.js, newgame.js, stats.js, play.js)
 // the guide's anchors per technique (sudoku/guide.html, built by tools/guide/build_sudoku.js). null = no example in the
 // guide, so hints about that technique do not link to it. Since 22 Nov. 2026 all 14 have an example.
-const GUIDE_IDS = ["eneste-kandidat", "eneste-plads", "laaste-kandidater", "noegent-par", "skjult-par", "noegen-trippel", "skjult-trippel", "kaede-et-tal", "kaede-to-muligheder", "kaede", "hvis-saa-et-tal", "hvis-saa-kort", "begge-veje", "hvis-saa-dyb"];
+const GUIDE_IDS = ["eneste-kandidat", "eneste-plads", "laaste-kandidater", "noegent-par", "skjult-par", "noegen-trippel", "skjult-trippel", "kaede-et-tal", "kaede-to-muligheder", "kaede", "hvis-saa-et-tal", "hvis-saa-kort", "begge-veje", "hvis-saa-dyb", null];
 const TECH_NAMES_UI = [
   tr("naked single"),
   tr("hidden single"),
@@ -40,13 +41,21 @@ const TECH_NAMES_UI = [
   tr("what-if with singles"),
   tr("both ways"),
   tr("what-if with techniques"),
+  "",
 ];
-const SIZES = [{ r: 9, c: 9, t: tr("Classic") }];
+// The board sizes: the classic 9×9 and the small ones (27 Nov. 2026), 6×6 with 2×3 boxes and 4×4 with 2×2 boxes
+const SUDOKU_SIZES = [4, 6, 9];
+const SIZES = [
+  { r: 4, c: 4, t: tr("Micro") },
+  { r: 6, c: 6, t: tr("Mini") },
+  { r: 9, c: 9, t: tr("Classic") },
+];
 const LEVEL_INFO = [
   null,
   tr("Only naked and hidden singles."),
   tr("A number is locked to one line in a box, or to one box in a line."),
   tr("Pairs: two cells share the same two numbers."),
+  "", // level 4, the mixed pair: not in Sudoku
   tr("Triples of cells and numbers."),
   tr("Follow one number: X-wing and similar chains."),
   tr("Chains of cells with two options, e.g. XY-wing."),
@@ -61,6 +70,7 @@ const LEVEL_TECH = [
   tr("singles"),
   tr("locked candidates"),
   tr("pairs"),
+  "", // level 4: not in Sudoku
   tr("triples"),
   tr("single-number chain"),
   tr("bivalue chain"),
@@ -77,6 +87,7 @@ const TECH_TIP = [
   tr("Scan box by box and row by row: is only one number missing, or can a number only go in one place?"),
   tr("If a number in a box can only go in one row or column, it cannot go anywhere else in that row or column. The same holds the other way round."),
   tr("Find two cells in the same row, column or box with the same two options: those two numbers can be crossed out everywhere else there."),
+  "",
   tr("Three cells in the same row, column or box that have only three options between them lock those three numbers, just like a pair."),
   tr("If a number can only go in two places in each of two rows, and the places are in the same columns (X-wing), the number cannot go anywhere else in those columns."),
   tr("Follow a chain of cells with only two options (e.g. XY-wing): the ends can remove options from cells that see both of them."),
@@ -91,7 +102,9 @@ const TECH_TIP = [
 const CHECK_TIP = tr("Check the row, column and box before you place a number: each number may appear only once in each.");
 const GAME = {
   guide: true, // the strategy guide: guide.html (English) and guide-da.html (Danish)
-  ui: { sizeIdx: 0, maxRegion: 9 }, // defaults on "New game"
+  // defaults on "New game": 9×9 (a Sudoku choice stored before the small sizes came in, 27 Nov. 2026, has no ui.size and
+  // gets this one, which is what it meant)
+  ui: { size: "9x9", maxRegion: 9 },
   // the daily puzzle per weekday (Sunday first): always 9×9, harder through the week and at the weekend
   daily: [
     [9, 9, 6],
@@ -105,8 +118,13 @@ const GAME = {
   // Sudoku grades assume written candidates from pairs up (see tools/grade/sudoku.json), so the grade with pencil is shown
   settings: { pencil: "med" },
   // the technique level the generator starts with per difficulty band (with pencil: pairs ~4-5, X-chains ~5-6, XY ~6, mixed ~8)
-  gradeStart: [0, 1, 2, 3, 3, 5, 6, 7, 8, 9],
+  gradeStart: [0, 1, 2, 3, 3, 6, 7, 8, 9, 10],
   dailyMaxRegion: 9,
+  trialSize: [9, 9], // the timed trial stays on 9×9
+  // 4×4 (2×2 boxes) only ever needs singles, so its grade stays low: a board for speed
+  microTop: 1.9,
+  boxNotes: true, // pencil marks on 4×4 two by two (draw.js)
+  microNote: tr("A 4×4 Sudoku is always solved with singles, so its grade stays under 2. These boards are for speed."),
   tintLabel: tr("Colour the boxes"),
   peersLabel: tr("Highlight row, column and box"),
   anyDigit: null, // all numbers 1-9 are legal in all cells
@@ -156,7 +174,7 @@ const GAME = {
     1: [tr("Find an easy number"), tr("Tap a cell whose number you can see.")],
     2: [tr("Find locked candidates"), tr("Find a number that in a box can only go in one row or column, or in a line only in one box. Tap those places.")],
     3: [tr("Find a pair"), tr("Two cells in a house with the same two options, or two numbers with only the same two places in a house. Tap the two cells.")],
-    4: [tr("Find a triple"), tr("Three cells and three numbers locked to each other in a house. Tap the three cells.")],
+    5: [tr("Find a triple"), tr("Three cells and three numbers locked to each other in a house. Tap the three cells.")],
   },
   // Practice games (games.js): six levels each, like the drills (see Suguru's game.js)
   games: {
@@ -179,10 +197,10 @@ const GAME = {
     sweep: [
       { size: [9, 9], pencil: true, empty: [0.4, 0.55], techs: [2], minT: 2 },
       { size: [9, 9], pencil: true, empty: [0.4, 0.6], techs: [3], minT: 2 },
-      { size: [9, 9], pencil: true, empty: [0.45, 0.65], techs: [2, 3, 4], minT: 3 },
+      { size: [9, 9], pencil: true, empty: [0.45, 0.65], techs: [2, 3, 5], minT: 3 },
       { size: [9, 9], pencil: false, empty: [0.4, 0.55], techs: [2], minT: 2 },
       { size: [9, 9], pencil: false, empty: [0.45, 0.6], techs: [2, 3], minT: 3 },
-      { size: [9, 9], pencil: false, empty: [0.5, 0.65], techs: [3, 4], minT: 3 },
+      { size: [9, 9], pencil: false, empty: [0.5, 0.65], techs: [3, 5], minT: 3 },
     ],
     count: [
       { size: [9, 9], pencil: true, empty: [0.3, 0.45], count: [1, 3] },

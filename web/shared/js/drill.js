@@ -31,7 +31,8 @@ const PAR = {
   1: { look: 1.3, per: 2 }, // singles
   2: { look: 2.5, per: 5 }, // neighbour elimination / locked candidates
   3: { look: 3, per: 6 }, // pairs
-  4: { look: 3, per: 9 }, // triples (no data yet)
+  4: { look: 3, per: 7.5 }, // the mixed pair (26 Nov 2026, a guess between pairs and triples)
+  5: { look: 3, per: 9 }, // triples (no data yet)
   cascade: { look: 1.5, per: 0.75 }, // per number, without choosing it on the pad
   changed: { look: 1.5, per: 1.4 },
   sweep: { look: 2.5, per: 0.8 },
@@ -40,7 +41,7 @@ const PAR = {
 };
 const parSize = (c) => Math.pow((c.b.rows * c.b.cols) / 36, 0.45) * (GAME.parScale || 1);
 function parOf(L, c) {
-  const p = PAR[L] || PAR[4],
+  const p = PAR[L] || PAR[5],
     finds = isGame(L) && PG[L].finds ? Math.max(1, PG[L].finds(c)) : 1;
   return (p.look + p.per * finds) * parSize(c);
 }
@@ -79,7 +80,7 @@ const drillWhole = (lv) => Math.max(1, Math.min(DRILL_MAX, Math.floor(lv + 1e-9)
 // cells (more empty cells to scan), up to half the level's range at .9
 function drillSpec(L, R) {
   const lv = ladderOf(R),
-    base = (isGame(L) ? GAME.games[L] : L === 1 ? GAME.drillSingles : GAME.drillLevels)[drillWhole(lv) - 1],
+    base = (isGame(L) ? GAME.games[L] : L === TT.SINGLES ? GAME.drillSingles : GAME.drillLevels)[drillWhole(lv) - 1],
     f = Math.max(0, Math.min(0.9, lv - drillWhole(lv))),
     [lo, hi] = base.empty,
     sh = f * 0.5 * (hi - lo);
@@ -96,8 +97,13 @@ const drillKey = (v) => (/^\d$/.test(v) ? +v : v);
 let drillWorker = null,
   drillWait = {};
 function drillFetch(L, lv) {
-  const req = { type: isGame(L) ? "game" : "drill", id: Math.random().toString(36).slice(2), L, game: L, spec: drillSpec(L, lv), seed: (Math.random() * 1e9) >>> 0, budget: 2500 };
-  const inPage = (r) => (r.type === "game" ? findGame(E, r) : findDrill(E, r));
+  const req = { type: isGame(L) ? "game" : "drill", L, game: L, spec: drillSpec(L, lv), seed: (Math.random() * 1e9) >>> 0, budget: 2500 };
+  return askWorker(req, (r) => (r.type === "game" ? findGame(E, r) : findDrill(E, r)));
+}
+// A request to the practice worker (drills, practice games, the campaign's example boards), done in the page (inPage) if the
+// worker cannot start. Resolves with the board it found (or null).
+function askWorker(req, inPage) {
+  req.id = Math.random().toString(36).slice(2);
   return new Promise((resolve) => {
     const local = () => setTimeout(() => resolve(inPage(req)), 30);
     try {
@@ -113,10 +119,10 @@ function drillFetch(L, lv) {
           drillWorker = null;
           const ws = drillWait;
           drillWait = {};
-          Object.values(ws).forEach((w) => w.resolve(inPage(w.req)));
+          Object.values(ws).forEach((w) => w.resolve(w.inPage(w.req)));
         };
       }
-      drillWait[req.id] = { req, resolve };
+      drillWait[req.id] = { req, resolve, inPage };
       drillWorker.postMessage(req);
     } catch (e) {
       local();
@@ -191,9 +197,9 @@ function drillBoard(b, lv) {
     tu,
     known,
     cand: tu.fromKnown(known).cand,
-    apps: !game && D.L >= 2 ? tu.drillApps(known, D.L) : [],
-    easy: D.L === 1 ? tu.easyList(known).map(([cell, v]) => ({ cell, v })) : [],
-    phase: D.L === 1 ? "use" : "find",
+    apps: !game && TT.beyond(D.L) ? tu.drillApps(known, D.L) : [],
+    easy: D.L === TT.SINGLES ? tu.easyList(known).map(([cell, v]) => ({ cell, v })) : [],
+    phase: D.L === TT.SINGLES ? "use" : "find",
     sel: [],
     wrong: 0,
     penalty: 0,
@@ -269,7 +275,7 @@ function drillTap(cell) {
     renderDrill();
     return;
   }
-  const gives = D.L === 1 ? c.easy : c.app.gives;
+  const gives = D.L === TT.SINGLES ? c.easy : c.app.gives;
   const g = gives.find((x) => x.cell === cell);
   if (g) {
     c.placed = g;
@@ -358,7 +364,7 @@ function drillBoardSvg(c) {
     if (v && !c.b.givens[i]) color[i] = "var(--ink)";
   });
   const hv = { pattern: [], target: [], bad: c.flash || [], cand: {}, strike: {} };
-  const showCand = D.L >= 2 && c.spec.pencil;
+  const showCand = TT.beyond(D.L) && c.spec.pencil;
   if (showCand) c.known.forEach((v, i) => !v && (hv.cand[i] = c.cand[i]));
   let marks = null;
   if (c.phase === "find") hv.pattern = c.sel;
@@ -366,7 +372,7 @@ function drillBoardSvg(c) {
   if (c.phase === "done") {
     if (c.shown) {
       const kv = keyView(c.shown);
-      Object.assign(hv, { pattern: kv.pattern || [], target: kv.target || [], strike: kv.strike || {} });
+      Object.assign(hv, { pattern: kv.pattern || [], target: kv.target || [], strike: kv.strike || {}, outline: kv.outline || null }); // the text can name "the outlined region"
       if (kv.cand) for (const k in kv.cand) hv.cand[k] = kv.cand[k];
     } else if (c.app) {
       hv.pattern = c.app.cells;
@@ -421,7 +427,7 @@ function renderDrill() {
   if (isGame(D.L)) task = PG[D.L].task(c);
   else if (c.phase === "find") task = `<h3>${title}</h3><p>${line}</p>`;
   else if (c.phase === "use")
-    task = D.L === 1 ? `<h3>${title}</h3><p>${line}</p>` : `<h3>${tr("Now use it")}</h3><p>${tr("Tap the cell that gets a number.")}</p>`;
+    task = D.L === TT.SINGLES ? `<h3>${title}</h3><p>${line}</p>` : `<h3>${tr("Now use it")}</h3><p>${tr("Tap the cell that gets a number.")}</p>`;
   else {
     // the text explains what is on the board: the pattern you found (or the one "Show me" found)
     let text = "";
@@ -514,12 +520,12 @@ function drillChart(s) {
 function drillLevelText(L, lv) {
   const sp = drillSpec(L, lv),
     parts = [];
-  const sizes = new Set((L === 1 ? GAME.drillSingles : GAME.drillLevels).map((x) => x.size.join("x")));
+  const sizes = new Set((L === TT.SINGLES ? GAME.drillSingles : GAME.drillLevels).map((x) => x.size.join("x")));
   if (sizes.size > 1) parts.push(sp.size[1] + "×" + sp.size[0]);
-  if (L >= 2) parts.push(sp.pencil ? tr("with pencil marks") : tr("without pencil marks"));
+  if (TT.beyond(L)) parts.push(sp.pencil ? tr("with pencil marks") : tr("without pencil marks"));
   const mid = (sp.empty[0] + sp.empty[1]) / 2;
   parts.push(mid < 0.45 ? tr("late in the puzzle") : mid < 0.62 ? tr("mid-puzzle") : tr("early in the puzzle"));
-  if (L === 1 && sp.opts) parts.push(sp.opts === 1 ? tr("only one easy number to find") : tr("at most {n} easy numbers to find", { n: sp.opts }));
+  if (L === TT.SINGLES && sp.opts) parts.push(sp.opts === 1 ? tr("only one easy number to find") : tr("at most {n} easy numbers to find", { n: sp.opts }));
   return parts.join(", ");
 }
 // Faster at your current level than a week ago? Needs at least 3 boards at the level in each period.
@@ -650,7 +656,7 @@ function drillSuggest() {
   if (last) {
     try {
       const t = takeaway(last);
-      const m = t && t.moments && t.moments.find((x) => x.L >= 1 && x.L <= 4);
+      const m = t && t.moments && t.moments.find((x) => DRILL_TECHS.includes(x.L));
       if (m) return { L: m.L, why: "game" };
     } catch (e) {}
   }
@@ -662,25 +668,18 @@ function drillSuggest() {
   }
   return { L: best ? best.L : 3, why: best ? "last" : "start" };
 }
-function renderPracticeCard() {
-  const slot = $("practiceSlot");
-  if (!slot) return;
-  const sg = drillSuggest();
-  slot.innerHTML =
-    `<button class="card practice" type="button" id="practiceGo">` +
-    `<svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></svg>` +
-    `<div><span class="eyebrow">${tr("Practice")}</span><strong>${esc(drillName(sg.L))}</strong>` +
-    `<span class="sub">${sg.why === "game" ? tr("From your last game · 5 boards") : tr("5 boards, a few minutes")}</span></div>` +
-    `<svg class="i chev" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></button>` +
-    `<button class="link pother" type="button" id="practiceOther">${tr("More practice")}</button>`;
-  $("practiceGo").onclick = () => startDrill(sg.L);
-  $("practiceOther").onclick = drillChooser;
-}
-function drillChooser() {
+// The practice sheet (from home): the suggested drill first, then all of them. sg: drillSuggest()
+function drillChooser(sg) {
   openSheet(
     `<h2>${tr("Practice")}</h2>` +
+      (sg && sg.L
+        ? `<button class="primary big" type="button" id="dcSuggest">${esc(drillName(sg.L))}</button>` +
+          `<p class="sub">${sg.why === "game" ? tr("From your last game · 5 boards") : tr("5 boards, a few minutes")}</p>`
+        : "") +
       `<h3 class="dhead">${tr("Techniques")}</h3><p class="sub">${tr("Five boards where one technique is the next step.")}</p>` +
       `<div class="dlist">${drillListHtml(null)}</div>` +
+      `<h3 class="dhead">${tr("Chains and what-ifs")}</h3><p class="sub">${tr("A whole board that starts where the technique is next. Not part of the statistics.")}</p>` +
+      `<div class="dlist">${trainListHtml()}</div>` +
       `<h3 class="dhead">${tr("Games")}</h3><div class="dlist">${gameListHtml(null, true)}</div>` +
       `<div class="actions"><button class="secondary" type="button" id="dcClose">${tr("Cancel")}</button></div>`,
     (b) => {
@@ -691,7 +690,20 @@ function drillChooser() {
             startDrill(drillKey(x.dataset.drill));
           }),
       );
+      b.querySelectorAll("[data-train]").forEach(
+        (x) =>
+          (x.onclick = () => {
+            closeSheet();
+            trainStart(+x.dataset.train, "practice");
+          }),
+      );
       b.querySelector("#dcClose").onclick = closeSheet;
+      const s = b.querySelector("#dcSuggest");
+      if (s)
+        s.onclick = () => {
+          closeSheet();
+          startDrill(sg.L);
+        };
     },
   );
 }

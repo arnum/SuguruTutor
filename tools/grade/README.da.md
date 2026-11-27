@@ -88,6 +88,45 @@ kørslerne stoppes ved cirka det dobbelte af de led, de har råd til. JS og Java
 **Regionsformer:** et felt, der rører alle felter i en region én mindre end dets egen, er en single af sin egen slags
 (`shape`, score 0,5, teknik 0). Den bygger ikke på noget på pladen, så den har ingen afhængigheder i hvis-så-kæder.
 
+**Det blandede par (26. nov. 2026):** et nøgent pars mål deles efter, hvordan de ser de to felter. Et mål, der rører
+begge eller ligger i region med begge, hører til det almindelige par (teknik 3, niveau 3). Et mål, der ser det ene felt
+gennem regionen og det andet kun ved at røre det, hører til det blandede par (teknik 14, niveau 4), som er sværere at få
+øje på. I én spillers træk tog et blandet par en median på 69 s mod 16 s for et par, målet rører (9 og 5 træk).
+Genkendelsen er sat mellem parret og triplen (2,6); fittet (r 0,744) ændrer sig næsten ikke mellem 2,2 og 3,4, fordi den
+billigste vej sjældent kræver det (5 af 7.421 trin i 249 opgaver). Sudoku kan ikke have det: dér deler et felt,
+der ser begge felter i et par, altid ét hus med begge. Niveauerne fra tripler og op rykkede ét op (tripler 5, kæder 6-8,
+hvis-så 9-12, 13 = kan ikke lade sig gøre); tidskurven bruger et trin per niveau (`calL` i `calib.js`: det blandede par
+3,5, resten som før), så de forventede tider for de andre teknikker er uændrede.
+
+## Teknik-tabellen (27. nov. 2026)
+
+`tools/grade/techniques.json` er det eneste sted, der kender teknikkernes rækkefølge. Den har to lister:
+
+- **Enheder**, det en spiller lærer, og det appen viser som et niveau: en `code`, der aldrig ændres (niveaunumrene fra
+  26. nov. 2026, frosset), et `id`, en `family` (basic, chain, whatif), et `rung` på tidskurven, flagene `drill`,
+  `learn` og `rare`, `games` hvis kun nogle spil har den, og dens `methods`. Rækkefølgen i listen er rækkefølgen fra let
+  til svær. Kode 13 (`guess`) betyder "kan ikke lade sig gøre uden at gætte" og kommer efter alle enheder.
+- **Metoder**, det løseren finder (teknik-numrene 0-14, der kun bliver tilføjet til): motorens `weight` og flagene
+  `pattern` (et mønster på brættet: synligheden tæller), `inner` (må bruges inde i et hvis-så med teknikker), `chain`,
+  `byLength` (prissat efter længde) og `within` (for et hvis-så: den enhed, det må bruge indeni).
+
+`gen.py` skriver tabellen og `techs.js` (spørgsmålene, `TT`) ind i begge `gradew.js`, og de samme data som konstanter
+ind i `SuguruGrade.java` (med `rank`, `harder`, `max` og resten skrevet i hånden ved siden af). Reglen: **en kode er et
+navn, ikke en plads.** Ingen kode sammenligner koder som tal; den spørger tabellen: `TT.rank`, `TT.harder`, `TT.beyond`
+(sværere end de enkle tal), `TT.max`, `TT.list("drill")`, `TT.family`, `TT.rung`, og `TT.num` for det tal, spilleren
+ser (enhedens plads i spillets rækkefølge, så Sudoku, der ikke har det blandede par, viser tripler som 4). Gemte data
+(spil, øvelser, kampagne, træning) beholder koderne, så en ny enhed kræver ingen flytning af data.
+
+**Tilføj en teknik:**
+- *En variant af en, spilleren allerede kender:* en ny metode (det næste nummer) i den enheds `methods`, en finder i
+  begge tutorer og begge bedømmere (`FIND`/`FINDERS` i JS, `find` i Java), dens række i `weights.json` og dens navn.
+- *En ny enhed:* den næste ledige kode (14 og op), sat ind i listen, hvor den hører til, plus dens tekster:
+  `LEVEL_TECH`, `LEVEL_INFO`, `TECH_TIP` og guiden i hvert spil. Afprøvet på en kopi: at gøre det skjulte par til sin egen
+  enhed efter parrene krævede ingen kodeændring; JS og Java gav de samme sværhedsgrader på alle 249 testopgaver, én 4×4-
+  opgave fik en anden sværhedsgrad, og generatoren lavede opgaver til den nye enhed.
+- **Stadig i hånden:** teksterne per spil (navne, beskrivelser, tips, guidens ankre), og de to løsere i hvert sprog
+  (generatorens bedømmer og tutoren), som ikke altid er enige.
+
 ## Sådan kalibreres
 
 1. Eksportér statistikken fra appen (Indstillinger, «Eksportér statistik») og læg filen et sted uden for repoet.

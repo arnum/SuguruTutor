@@ -33,7 +33,7 @@ function renderStats() {
     "afterbegin",
     `<div class="seg scopeseg" id="statScope" role="group" aria-label="${esc(tr("Which games"))}">` +
       [
-        ["main", tr("5×5 and up")],
+        ["main", tr("{size} and up", { size: SIZES.filter((x) => x.r * x.c > 16).map((x) => x.c + "×" + x.r)[0] })],
         ["micro", tr("4×4")],
       ]
         .map(([k, t]) => `<button type="button" data-s="${k}" aria-pressed="${k === ui.statScope}">${t}</button>`)
@@ -118,7 +118,7 @@ function renderStatsIn() {
   html += TAB("teknik") + routePanel();
   html += timePanel();
   // Hints
-  const tc = new Array(14).fill(0);
+  const tc = new Array(E.TECH.length).fill(0);
   games.forEach((g) => (g.hintTechs || []).forEach((t) => tc[t]++));
   const totalHints = tc.reduce((a, b) => a + b, 0);
   if (totalHints) {
@@ -126,7 +126,9 @@ function renderStatsIn() {
     html +=
       `<div class="panelcard"><h3>${tr("What hints have taught you")}</h3><p>${tr("The hardest technique in each of your {n} hints.", { n: totalHints })}</p>` +
       tc
-        .map((n, t) =>
+        .map((n, t) => [n, t])
+        .sort((a, b) => TT.order(E.TECH[a[1]].level, E.TECH[b[1]].level) || a[1] - b[1]) // in the table's order (the mixed pair, 14, sits after the pairs)
+        .map(([n, t]) =>
           n
             ? `<div class="barrow" data-tip="${esc(E.TECH[t].label)}: ${n === 1 ? tr("1 hint") : tr("{n} hints", { n })}"><span class="n">${E.TECH[t].level}</span>` +
               `<span class="name">${esc(E.TECH[t].label)}</span><span class="cnt">${n}</span><span class="best"></span>` +

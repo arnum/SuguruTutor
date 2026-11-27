@@ -6,7 +6,7 @@ function loadPuzzle(p, saved, opts = {}) {
   tutor = createTutor(G, p.region);
   hint = null;
   if (!p.maxRegion) p.maxRegion = 5;
-  NOTE_POS = p.maxRegion >= 7 ? NOTE_POS9 : p.maxRegion >= 6 ? NOTE_POS6 : NOTE_POS5;
+  NOTE_POS = notePos(p.maxRegion);
   if (!p.grade || !p.grade.hard || p.grade.load === undefined || p.grade.fit !== GW.fit || !p.grade.lv) {
     const st = solveProfile(tutor, p.givens);
     p.grade = st ? gradeFromSteps(st) : null;
@@ -19,6 +19,7 @@ function loadPuzzle(p, saved, opts = {}) {
   peerSets = boardModel(G, p.region).peers.map((x) => new Set(x));
   entries = saved ? saved.entries : new Array(n).fill(0);
   notes = saved ? saved.notes : new Array(n).fill(0);
+  chainLoad(saved && saved.chain); // the chain tool's colours and links (chains.js)
   undoStack = [];
   selected = -1;
   reveal = false;
@@ -45,6 +46,7 @@ function loadPuzzle(p, saved, opts = {}) {
           modeT: opts.modeT != null ? opts.modeT : null,
           camp: opts.camp || null, // a campaign board: { L, board, part } (campaign.js)
           trial: opts.trial || null, // a timed trial board: { fl, T, lim } (trial.js)
+          train: opts.train || null, // a training board: { L, from, part, used } (train.js)
           moves: [],
         };
   if (!meta.moves) meta.moves = [];
@@ -55,7 +57,7 @@ function loadPuzzle(p, saved, opts = {}) {
 }
 function saveCurrent() {
   if (!P) return;
-  store.set("current", { puzzle: P, entries, notes, elapsed: elapsed(), solved, meta });
+  store.set("current", { puzzle: P, entries, notes, chain: chainEmpty() ? undefined : chainState, elapsed: elapsed(), solved, meta });
 }
 function recordGame(won) {
   if (!P || !meta) return;
@@ -102,6 +104,14 @@ function recordGame(won) {
     if (meta.trialDone) return null;
     meta.trialDone = true;
     trialRecord(rec);
+    return rec;
+  }
+  // a training board is kept in the training log, not in the statistics
+  if (meta.train) {
+    if (meta.trainDone) return null;
+    meta.trainDone = true;
+    rec.train = meta.train;
+    trainRecord(rec);
     return rec;
   }
   // a campaign board is kept by the campaign, not in the statistics

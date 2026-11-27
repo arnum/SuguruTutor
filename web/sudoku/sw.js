@@ -44,6 +44,8 @@ const SHELL = [
   "../shared/js/drill.js",
   "../shared/js/campaign.js",
   "../shared/js/trial.js",
+  "../shared/js/train.js",
+  "../shared/js/chains.js",
   "../shared/js/debug.js",
   "../shared/js/settings.js",
   "../shared/js/main.js",

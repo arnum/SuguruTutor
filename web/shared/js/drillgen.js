@@ -5,7 +5,8 @@
 // 3 pairs, 4 triples. Each has six difficulty levels, described per game in GAME.drillLevels (GAME.drillSingles for singles):
 // board size, whether pencil marks are shown, and how far into the puzzle the position is (the share of empty cells).
 
-const DRILL_TECHS = [1, 2, 3, 4];
+// the levels with a drill: singles, neighbour elimination (locked candidates), pairs, the mixed pair (Suguru only), triples
+const DRILL_TECHS = TT.list("drill");
 
 // d = { L, spec: { size: [rows, cols], maxRegion, empty: [lo, hi], opts }, seed, budget (ms) }
 // Generates puzzles that need technique level L and walks their solution with the tutor (always the easiest next number).
@@ -24,7 +25,7 @@ function findDrill(SE, d) {
     bestDist = Infinity;
   const rand = () => ((rnd = (rnd * 1103515245 + 12345) >>> 0) % 100000) / 100000;
   for (let round = 0; round < 40; round++) {
-    const p = SE.generate(rows, cols, Math.max(1, d.L), seed++, 1500, null, d.spec.maxRegion || 5);
+    const p = SE.generate(rows, cols, TT.max(TT.SINGLES, d.L), seed++, 1500, null, d.spec.maxRegion || 5);
     if (!p) continue;
     const region = Array.from(p.region),
       tu = createTutor(SE.makeGeometry(rows, cols), region),
@@ -37,8 +38,8 @@ function findDrill(SE, d) {
       const empty = known.filter((v) => !v).length / total;
       let fits = false,
         near = false;
-      if (d.L === 1) fits = h.hardestLevel === 1 && (!d.spec.opts || h.opts <= d.spec.opts);
-      else if (h.hardestLevel >= 2 && h.hardestLevel <= d.L) {
+      if (d.L === TT.SINGLES) fits = h.hardestLevel === TT.SINGLES && (!d.spec.opts || h.opts <= d.spec.opts);
+      else if (TT.beyond(h.hardestLevel) && !TT.harder(h.hardestLevel, d.L)) {
         const gives = tu.drillApps(known, d.L).some((a) => a.gives.length);
         fits = gives && h.hardestLevel === d.L && h.support.length === 1;
         near = gives && !fits;
@@ -61,6 +62,41 @@ function findDrill(SE, d) {
   return best;
 }
 
+
+// ---------- the campaign's example board (campaign.js)
+// d = { L, rows, cols, band, maxRegion, seed, budget }: a board where technique L is the next step, found as a training board
+// is (generateGraded with startAt), and of the few found in the time the cleanest: the shortest explanation, then the
+// smallest pattern. The board is the position itself: every number on it drawn as a given.
+function findExample(SE, d) {
+  const t0 = Date.now();
+  let seed = d.seed >>> 0,
+    best = null;
+  for (let k = 0; k < 6 && (k < 1 || Date.now() - t0 < d.budget); k++) {
+    const p = generateGraded(SE, {
+      rows: d.rows,
+      cols: d.cols,
+      level: d.band,
+      must: d.L,
+      startAt: d.L,
+      seed: seed++,
+      budget: Math.min(4000, d.budget),
+      lo: 0,
+      hi: 9,
+      nuance: "alle",
+      kind: "alle",
+      maxRegion: d.maxRegion || 5,
+      np: false,
+    });
+    if (!p || !p.startAt) continue;
+    const region = Array.from(p.region),
+      givens = Array.from(p.givens);
+    const h = createTutor(SE.makeGeometry(d.rows, d.cols), region).easiest(givens);
+    if (!h || h.hardestLevel !== d.L) continue;
+    const score = h.views.length + 0.1 * ((h.vis && h.vis.size) || 0);
+    if (!best || score < best.score) best = { L: d.L, rows: d.rows, cols: d.cols, region, givens, score };
+  }
+  return best;
+}
 
 // ---------- practice games (games.js)
 // d = { game, spec, seed, budget }. Like findDrill: generate puzzles, walk their solution with the tutor and keep the positions
@@ -104,7 +140,7 @@ function findGame(SE, d) {
       if (dist > 0 && dist >= bestDist) return;
       let extra = null;
       if (d.game === "cascade") {
-        if (i + sp.n <= steps.length && steps.slice(i, i + sp.n).every((x) => x.h.hardestLevel === 1)) extra = {};
+        if (i + sp.n <= steps.length && steps.slice(i, i + sp.n).every((x) => x.h.hardestLevel === TT.SINGLES)) extra = {};
       } else if (d.game === "count") {
         const n = tu.easyList(st.known).length;
         if (n >= sp.count[0] && n <= sp.count[1]) extra = {};

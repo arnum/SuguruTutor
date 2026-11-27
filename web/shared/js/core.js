@@ -52,11 +52,12 @@ const plText = (o) => {
   else if (o.npk != null && penUsed(o) !== true) o = { peak: o.npk, load: o.npl };
   return o.peak != null ? tr("peak {top} · load {load}", { top: dec(o.peak), load: o.load }) : "";
 };
+// The technique picker's groups: the table's families in its order (a unit the game does not have is left out)
 const LEVEL_GROUPS = [
-  { name: tr("Basic techniques"), levels: [1, 2, 3, 4] },
-  { name: tr("Chains"), levels: [5, 6, 7] },
-  { name: tr("What-if"), levels: [8, 9, 10, 11] },
-];
+  { family: "basic", name: tr("Basic techniques") },
+  { family: "chain", name: tr("Chains") },
+  { family: "whatif", name: tr("What-if") },
+].map((g) => ({ name: g.name, levels: TT.list().filter((L) => TT.family(L) === g.family) }));
 // Daily puzzle: the same for everyone on the same date (Sunday = 0)
 // The daily puzzle per weekday (Sunday first): [rows, columns, difficulty band]. The game can have its own (GAME.daily).
 const DAILY = GAME.daily || [
@@ -87,7 +88,7 @@ const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&l
 
 // ---------- Storage. Everything is wrapped in try/catch: in some views storage is turned off, and then the app only remembers in memory.
 // The player's own data (PERSONAL) lives in keys of its own for a guest (guest mode, below); settings are shared.
-const PERSONAL = new Set(["history", "archive", "current", "drills", "drillstash", "practicelog", "play", "campaign", "trials"]);
+const PERSONAL = new Set(["history", "archive", "current", "drills", "drillstash", "practicelog", "play", "campaign", "trials", "training", "levelsV"]);
 let DATA_NS = "";
 const keyOf = (k) => APP.id + "." + (PERSONAL.has(k) ? DATA_NS : "") + k;
 const MEM = {};
@@ -152,12 +153,19 @@ const settings = Object.assign(
   store.get("settings", {}),
 );
 const ui = Object.assign({ sizeIdx: 1, level: 3, nuance: "alle", maxRegion: 5, must: 0, scale: 2, kind: "alle", mode: "manual" }, GAME.ui || {}, store.get("ui", {}));
-// Suguru got a 4×4 size first in the list (24 November 2026): the stored choice moves one along, so it stays the same size
-if (SIZES[0].r === 4 && !ui.sizes4) {
-  ui.sizeIdx = (ui.sizeIdx == null ? 1 : ui.sizeIdx) + 1;
-  ui.sizes4 = 1;
+// The chosen size is kept by its dimensions (ui.size, "rows x cols") since 27 Nov. 2026, so a size added to a game's list
+// cannot change it; ui.sizeIdx is its place in this version's list. Before, only the place was kept.
+if (!ui.size) {
+  // Suguru got a 4×4 size first in the list (24 November 2026): a choice stored before that moves one along
+  if (APP.id === "suguru" && !ui.sizes4) {
+    ui.sizeIdx = (ui.sizeIdx == null ? 1 : ui.sizeIdx) + 1;
+    ui.sizes4 = 1;
+  }
+  const s0 = SIZES[ui.sizeIdx] || SIZES[0];
+  ui.size = s0.r + "x" + s0.c;
   store.set("ui", ui);
 }
+ui.sizeIdx = Math.max(0, SIZES.findIndex((s) => s.r + "x" + s.c === ui.size));
 if (ui.scale !== 2) {
   ui.scale = 2;
   ui.level = 3;
@@ -169,6 +177,9 @@ ui.level = Math.min(9, Math.max(1, ui.level));
 // step codes (lv), which the statistics do not use, and are compressed about 6 times (lz.js). Everything else is unchanged, so
 // the statistics are the same. The archive is only rewritten when games are moved down into it, or when older games change
 // (a new rating, import, reset).
+// the games whose full route analysis (every move) is kept: 200 since 27 Nov. 2026, to collect data for the grading
+// experiments (about 2.3 KB per game); the player can choose fewer in Storage
+const KEEP_MOVES = 200;
 const ARCH_MAX = 300, // this many games in the uncompressed part before the oldest are moved to the archive
   ARCH_KEEP = 200; // this many are kept uncompressed after a move
 let ARCH_N = 0, // number of games in the archive (the first ARCH_N in games)
@@ -290,7 +301,7 @@ function saveGames(all) {
   for (const [keep, opts] of [[20], [10], [10, { notable: false }], [1, { notable: false }], [1, { notable: false, notes: false }]]) {
     if (!trimMoves(keep, opts)) continue;
     if (store.set("history", games.slice(ARCH_N))) {
-      settings.keepMoves = Math.min(settings.keepMoves ?? 40, keep);
+      settings.keepMoves = Math.min(settings.keepMoves ?? KEEP_MOVES, keep);
       saveSettings();
       toast(tr("Storage was full, so the route analysis for older games was removed. The statistics are kept."));
       return;

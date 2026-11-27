@@ -72,7 +72,7 @@ function startRoute(rec) {
   rec.routePending = true;
   const typ = typicalTimes();
   runRoute(p, moves, (list) => {
-    const g = rec.camp || rec.trial ? rec : games.find((x) => x.id === rec.id);
+    const g = rec.camp || rec.trial || rec.train ? rec : games.find((x) => x.id === rec.id);
     if (!g) return;
     delete g.routePending;
     delete rec.routePending;
@@ -92,11 +92,13 @@ function startRoute(rec) {
     rec.moves = g.moves;
     if (rec.camp) campKeep(rec);
     else if (rec.trial) trialKeep(rec);
-    else {
+    else if (rec.train) {
+      // the training log keeps only the summary (train.js)
+    } else {
       delete g.keepWhy;
       keepWhy(g);
       // Keep the details for the latest games (default 40); older ones keep only the summary
-      trimMoves(Math.max(1, settings.keepMoves ?? 40));
+      trimMoves(Math.max(1, settings.keepMoves ?? KEEP_MOVES));
       saveGames();
     }
     const el2 = document.getElementById("routeLine");
@@ -273,8 +275,10 @@ function routeChart(list, p) {
     T = 10,
     B = 24,
     n = list.length;
-  const lvOf = (m) => (m.cls === "wrong" || m.cls === "guess" ? 0 : m.cls === "hint" ? m.avail || 1 : moveLevel(m));
-  const top = Math.min(12, Math.max(3, ...list.map(lvOf), ...list.map((m) => m.avail || 1)) + 1);
+  // heights are places in the technique table's order (TT), counted from 1; 0 = no technique (an error, a guess)
+  const pos = TT.num;
+  const lvOf = (m) => (m.cls === "wrong" || m.cls === "guess" ? 0 : pos(m.cls === "hint" ? m.avail || TT.SINGLES : moveLevel(m)));
+  const top = Math.min(TT.list().length, Math.max(3, ...list.map(lvOf), ...list.map((m) => pos(m.avail || TT.SINGLES))) + 1);
   const tmax = Math.max(1000, ...list.map((m) => m.t));
   const x = (t) => L + ((W - L - R) * t) / tmax;
   const y = (v) => T + (H - T - B) * (1 - (v - 1) / Math.max(1, top - 1));
@@ -299,7 +303,7 @@ function routeChart(list, p) {
   // The easiest possible level as a staircase over time
   let path = "";
   list.forEach((m, i) => {
-    const a = m.avail || 1;
+    const a = pos(m.avail || TT.SINGLES);
     path += i ? `H${x(m.t - m.dt)}V${y(a)}` : `M${x(0)} ${y(a)}`;
   });
   path += `H${x(tmax)}`;
@@ -380,7 +384,7 @@ function routeLessons(g) {
   if (!list || !list.length) return [];
   markErrors(list);
   const base = baseline(g.id);
-  const usual = (L) => (base[L] ? base[L].med : L === 1 ? 4 : 8 * L * L);
+  const usual = (L) => (base[L] ? base[L].med : L === TT.SINGLES ? 4 : 8 * TT.rung(L) ** 2);
   const gameMed = median(list.filter((m) => m.cls !== "hint" && m.cls !== "wrong").map((m) => m.dt / 1000));
   const lapse = new Set(((concGet(g) || {}).idx || []).filter((i) => list[i] && list[i].cls !== "wrong"));
   const isStuck = (m) => {
@@ -583,7 +587,7 @@ function lessonShort(L, nm, g) {
   const e = L.e;
   if (!e) return null;
   const tech = LEVEL_TECH[e.L];
-  const tip = (e.L === 1 && g && spotTip(g, e, L.parts[0].i)) || TECH_TIP[e.L];
+  const tip = (e.L === TT.SINGLES && g && spotTip(g, e, L.parts[0].i)) || TECH_TIP[e.L];
   return (
     (L.parts.some((x) => x.type !== "self")
       ? tr("{cell} = {v} ({tech}) was waiting during {parts}.", { cell: nm(e.c), v: e.v, tech, parts: lessonParts(L) })
@@ -613,7 +617,7 @@ function showRoute(g, back) {
   const times = timesOf(g);
   const tRows = Object.keys(times)
     .map(Number)
-    .sort((a, b) => a - b)
+    .sort(TT.order)
     .map((L) => {
       const med = median(times[L]),
         bl = base[L];
@@ -623,7 +627,7 @@ function showRoute(g, back) {
         cmp = d >= 1.4 ? tr("slower than usual") : d <= 0.7 ? tr("faster than usual") : "";
       }
       return (
-        `<tr><td>${L}</td><td>${esc(LEVEL_TECH[L])}</td><td>${times[L].length}</td><td><b>${fmtS(med)}</b></td><td>${bl ? fmtS(bl.med) : "–"}</td></tr>` +
+        `<tr><td>${TT.num(L)}</td><td>${esc(LEVEL_TECH[L])}</td><td>${times[L].length}</td><td><b>${fmtS(med)}</b></td><td>${bl ? fmtS(bl.med) : "–"}</td></tr>` +
         (cmp
           ? `<tr><td></td><td colspan="4" style="border-top:0;padding-top:0;color:var(--mute)">${cmp}</td></tr>`
           : "")
@@ -928,14 +932,14 @@ function mboardHtml(g, i, mode) {
       stepsHtml(P2, known, mine, { c: m.c, v: m.v, col: "var(--warn)" }) +
       `</figure>`;
     const right =
-      `<figure class="mbcol"><figcaption><b style="color:var(--indigo)">${ready.level > 1 ? tr("Just as easy then") : tr("Easy numbers then")}</b><br>${others.length === 1 ? tr("One other to choose") : tr("{n} others to choose from", { n: others.length })}</figcaption>` +
+      `<figure class="mbcol"><figcaption><b style="color:var(--indigo)">${TT.beyond(ready.level) ? tr("Just as easy then") : tr("Easy numbers then")}</b><br>${others.length === 1 ? tr("One other to choose") : tr("{n} others to choose from", { n: others.length })}</figcaption>` +
       miniBoard(
         P2,
         known,
         null,
         others.map(([c, v]) => ({ c, v, col: "var(--indigo)" })).concat([{ c: m.c, v: m.v, col: "var(--warn)" }]),
       ) +
-      `<p class="mbtext">${ready.level > 1 ? tr("All the numbers that could be found with {tech} at that moment.", { tech: LEVEL_TECH[ready.level] }) : GAME.directAll}</p></figure>`;
+      `<p class="mbtext">${TT.beyond(ready.level) ? tr("All the numbers that could be found with {tech} at that moment.", { tech: LEVEL_TECH[ready.level] }) : GAME.directAll}</p></figure>`;
     return `<div class="mbpair">${left}${right}</div>`;
   }
   // Could the move be found more easily by placing other numbers in your head first (thought ahead)? Then that route is shown,
@@ -950,7 +954,7 @@ function mboardHtml(g, i, mode) {
     let best = null;
     for (const [c, v] of r.ahead.via) {
       const h = P2.tu.explainMove(kk, c, v);
-      if (h && (!best || h.hardestLevel > best.h.hardestLevel)) best = { h, c, v };
+      if (h && (!best || TT.harder(h.hardestLevel, best.h.hardestLevel))) best = { h, c, v };
       kk[c] = v;
       head[c] = v;
     }
@@ -958,7 +962,7 @@ function mboardHtml(g, i, mode) {
     const vs = r.ahead.via.map(([c, v]) => nm(c) + " = " + v),
       viaTxt = list2(vs.slice(0, 4)) + (vs.length > 4 ? " " + tr("and more") : "");
     lvl = r.ahead.level;
-    if (best && fin && best.h.hardestLevel > fin.hardestLevel) {
+    if (best && fin && TT.harder(best.h.hardestLevel, fin.hardestLevel)) {
       mine = best.h;
       extra =
         "<br>" +
@@ -1038,14 +1042,14 @@ function concOf(g, base) {
   markErrors(g.moves);
   const mv = g.moves.filter(judged);
   if (mv.length < 8) return null;
-  const easyT = mv.filter((m) => m.avail === 1 && m.cls === "easy" && !m.early).map((m) => m.dt / 1000);
-  const norm = base[1] ? base[1].med : easyT.length ? median(easyT) : 8;
+  const easyT = mv.filter((m) => m.avail === TT.SINGLES && m.cls === "easy" && !m.early).map((m) => m.dt / 1000);
+  const norm = base[TT.SINGLES] ? base[TT.SINGLES].med : easyT.length ? median(easyT) : 8;
   const thr = Math.max(20, 3 * norm);
   const slips = [];
   g.moves.forEach((m, i) => {
     if (!judged(m)) return;
     if (m.cls === "wrong") slips.push({ i, kind: "err" });
-    else if (m.avail === 1 && (m.nAvail || 0) >= 3 && m.dt / 1000 >= thr && !m.early) slips.push({ i, kind: "slow" }); // a move needed anyway is work, not a lapse
+    else if (m.avail === TT.SINGLES && (m.nAvail || 0) >= 3 && m.dt / 1000 >= thr && !m.early) slips.push({ i, kind: "slow" }); // a move needed anyway is work, not a lapse
   });
   const slow = slips.filter((x) => x.kind === "slow").length,
     err = slips.length - slow;
@@ -1120,7 +1124,6 @@ function concLineHtml(g) {
     k = sorted.findIndex((x) => x.id === g.id);
   const prev = k > 0 && me && me.idx > 1 ? sorted[k - 1] : null;
   const prevBad = prev && concState(concGet(prev), concUsual(prev.id)) > 0;
-  const cmp = usual != null ? " " + tr("That is {a} lapses per 100 moves against your usual {b}.", { a: c.rate.toFixed(0), b: usual.toFixed(0) }) : "";
   const late = c.late >= 2 && c.late > 0.6 * (c.slow + c.err) ? " " + tr("Most of them came in the second half of the game.") : "";
   const advice = prevBad
     ? " <b>" + tr("This is the second game in a row. A break will probably help more than another puzzle.") + "</b>"
@@ -1128,7 +1131,7 @@ function concLineHtml(g) {
       ? " " + tr("If the next game looks the same, it's time for a break.")
       : "";
   const head = st === 2 ? tr("You lost focus along the way.") : tr("A dip in concentration.");
-  return `<p class="insight warn" style="text-align:left;margin:10px 0 0"><b>${head}</b> ${tr("{what}, even though there were several easy numbers to take.", { what: what[0].toUpperCase() + what.slice(1) })}${cmp}${late}${advice}</p>`;
+  return `<p class="insight warn" style="text-align:left;margin:10px 0 0"><b>${head}</b> ${tr("{what}, even though there were several easy numbers to take.", { what: what[0].toUpperCase() + what.slice(1) })}${late}${advice}</p>`;
 }
 function concRouteHtml(g, nm) {
   const c = concGet(g);
@@ -1154,49 +1157,71 @@ function concRouteHtml(g, nm) {
     `</ul>`
   );
 }
+// The statistics' Concentration panel (27 Nov. 2026; before, a bar chart of lapses per 100 moves): a sentence on your
+// recent games, when the lapses come if there is a clear pattern (the game number in the session, or late in a game), what
+// to do, and the latest lapse on the board: the number that took long and the easy numbers that were waiting.
 function concPanel() {
   const list = games
     .map((g) => ({ g, c: concGet(g) }))
     .filter((x) => x.c)
-    .slice(-14);
+    .slice(-20);
   if (!list.length)
-    return `<div class="panelcard"><h3>${tr("Concentration")}</h3><p>${tr("After each game, this shows whether easy numbers dragged on or errors crept in, and whether that was more than usual for you.")}</p></div>`;
-  const W = 320,
-    H = 96,
-    L = 24,
-    B = 14,
-    mx = Math.max(10, ...list.map((x) => x.c.rate)),
-    bw = Math.min(20, (W - L) / list.length - 4);
-  let s = `<svg class="trend" viewBox="0 0 ${W} ${H}" role="img" aria-label="${tr("Lapses per 100 moves in your recent games")}">`;
-  [0, mx / 2, mx].forEach((v) => {
-    const y = 6 + (H - B - 6) * (1 - v / mx);
-    s += `<line x1="${L}" x2="${W}" y1="${y}" y2="${y}" stroke="var(--grid)"/><text x="${L - 6}" y="${y + 4}" font-size="10" text-anchor="end" fill="var(--mute)">${Math.round(v)}</text>`;
-  });
-  const usualAll = concUsual(null);
-  if (usualAll != null) {
-    const y = 6 + (H - B - 6) * (1 - usualAll / mx);
-    s += `<line x1="${L}" x2="${W}" y1="${y}" y2="${y}" stroke="var(--mute)" stroke-width="1.5" stroke-dasharray="4 3"/>`;
+    return `<div class="panelcard"><h3>${tr("Concentration")}</h3><p>${tr("After a few games, this shows where easy numbers dragged on while others were waiting.")}</p></div>`;
+  const ctx = contexts(),
+    bad = list.filter((x) => concState(x.c, concUsual(x.g.id)) > 0),
+    n = list.length;
+  const text = bad.length
+    ? tr("In {k} of your last {n} games, easy numbers dragged on while others were waiting, or errors crept in.", { k: bad.length, n })
+    : tr("Fine in your last {n} games: easy numbers did not drag on more than usual.", { n });
+  let todo = "";
+  // when: the 3rd game of a session or later against the first two; or the second half of a game
+  const share = (f) => {
+    const l = list.filter(f);
+    return { n: l.length, k: l.filter((x) => bad.includes(x)).length };
+  };
+  const late = share((x) => ctx[x.g.id] && ctx[x.g.id].idx >= 3),
+    early = share((x) => ctx[x.g.id] && ctx[x.g.id].idx < 3),
+    halves = bad.filter((x) => x.c.late > 0.6 * (x.c.slow + x.c.err)).length;
+  if (bad.length) {
+    if (late.k >= 2 && late.k / late.n >= 2 * (early.n ? early.k / early.n : 0))
+      todo = tr("Most of them came in the 3rd game of a session or later: stop after two games.");
+    else if (halves >= 2 && halves > bad.length / 2) todo = tr("Most of them came in the second half of a game: a short pause halfway can help.");
+    else todo = tr("When easy numbers start to drag, take a break.");
   }
-  let flagged = 0;
-  list.forEach((x, i) => {
-    const st = concState(x.c, concUsual(x.g.id));
-    if (st) flagged++;
-    const h = Math.max(2, ((H - B - 6) * x.c.rate) / mx),
-      xx = L + 4 + i * ((W - L - 4) / list.length);
-    const d = new Date(x.g.end).toLocaleDateString(LOCALE, { day: "numeric", month: "short" });
-    s +=
-      `<rect x="${xx}" y="${H - B - h}" width="${bw}" height="${h}" rx="3" fill="${st === 2 ? "var(--bad)" : st === 1 ? "var(--warn)" : "var(--indigo)"}"/>` +
-      `<rect x="${xx - 2}" y="6" width="${bw + 4}" height="${H - B - 6}" fill="transparent" data-tip="${esc(d + " · " + BAND[gBand(x.g)] + " " + dec(gradeFor(x.g)) + ": " + tr("{a} slow easy numbers, {b} errors in {n} moves", { a: x.c.slow, b: x.c.err, n: x.c.n }) + (st === 2 ? " · " + tr("lost focus") : st === 1 ? " · " + tr("dip") : ""))}"/>`;
-  });
-  s +=
-    `</svg><div class="legendrow" style="justify-content:flex-start;gap:4px 12px;flex-wrap:wrap"><span><i style="background:var(--indigo)"></i> ${tr("usual")}</span><span><i style="background:var(--warn)"></i> ${tr("dip")}</span>` +
-    `<span><i style="background:var(--bad)"></i> ${tr("lost focus")}</span><span><svg width="18" height="8" style="vertical-align:middle"><path d="M0 4h18" stroke="var(--mute)" stroke-width="1.5" stroke-dasharray="4 3"/></svg> ${tr("your usual")}</span></div>`;
-  const last = list[list.length - 1];
+  // the latest lapse with its moves kept: the longest search in that game
+  let board = "";
+  for (let k = list.length - 1; k >= 0 && !board; k--) {
+    const g = list[k].g,
+      idx = list[k].c.idx.filter((i) => g.moves && g.moves[i] && g.moves[i].cls !== "wrong");
+    if (!idx.length) continue;
+    const i = idx.reduce((a, b) => (g.moves[b].dt > g.moves[a].dt ? b : a));
+    try {
+      board = concBoardHtml(g, i);
+    } catch (e) {
+      board = "";
+    }
+  }
+  // a finding, so it is never folded away (stats.js, foldLong)
+  return `<div class="panelcard"><h3>${tr("Concentration")}</h3><p class="insight${bad.length ? " warn" : ""}" style="text-align:left">${text}${todo ? ` <b>${todo}</b>` : ""}</p>${board}</div>`;
+}
+// One lapse on the board just before it: the number you placed after a long search (orange) and the easy numbers that
+// were there to take (blue)
+function concBoardHtml(g, i) {
+  const P2 = routePuzzle(g);
+  if (!P2) return "";
+  const m = g.moves[i],
+    known = boardBefore(P2, g.moves, i);
+  if (known.unsure.length) return "";
+  const others = P2.tu.readyList(known).list.filter(([c]) => c !== m.c);
+  if (!others.length) return "";
+  const marks = [{ c: m.c, v: m.v, col: "var(--warn)" }].concat(others.map(([c, v]) => ({ c, v, col: "var(--indigo)" }))),
+    color = {}; // the numbers already placed in grey, so only the rings stand out
+  known.forEach((v, c) => v && !P2.d.givens[c] && (color[c] = "var(--mute)"));
+  const d = new Date(g.end).toLocaleDateString(LOCALE, { day: "numeric", month: "short" });
   return (
-    `<div class="panelcard"><h3>${tr("Concentration")}</h3><p>${tr("Lapses per 100 moves in your last {n} games. A lapse is an easy number that took more than 3 times your usual time while at least 3 easy numbers were available, or a wrong number.", { n: list.length })}</p>` +
-    concLineHtml(last.g).replace("margin:10px 0 0", "margin:0 0 8px") +
-    s +
-    `<p class="caveat">${tr("The colour compares each game with your other games. A dip needs at least 2 lapses and 1.5 times your usual rate; lost focus at least 3 lapses and twice the rate. An interruption (a phone call, someone asking you something) looks like a lapse.")}</p></div>`
+    `<figure class="mbcol concb"><figcaption><b>${esc(tr("The latest: {d}, move {k}", { d, k: i + 1 }))}</b><br>` +
+    tr("{time} for the orange number, while the blue ones were just as easy.", { time: fmt(m.dt) }) +
+    `</figcaption>${miniBoard(P2, known, null, marks, {}, { color })}</figure>`
   );
 }
 
@@ -1550,10 +1575,10 @@ function focusData() {
       H[L] = (H[L] || 0) + 1;
     });
   });
-  const base = T[1] && T[1].length >= 5 ? median(T[1]) : null;
+  const base = T[TT.SINGLES] && T[TT.SINGLES].length >= 5 ? median(T[TT.SINGLES]) : null;
   const cal = fitCalib(calibRows(src));
   const out = [];
-  for (let L = 1; L <= 11; L++) {
+  for (const L of TT.all()) {
     const cl = cal.lvl[L],
       nT = cl ? cl.n : 0,
       sp = S[L],
@@ -1562,7 +1587,7 @@ function focusData() {
     // Typical time when the move is the only one on the board: your own for the technique and the one the curve gives
     const med = nT ? calTime(cal, L, 1, true) : null,
       expected = calTime(cal, L, 1, false);
-    const speed = L > 1 && base && nT >= 5 ? Math.exp(-cl.r) : null; // >1: faster than your curve
+    const speed = TT.beyond(L) && base && nT >= 5 ? Math.exp(-cl.r) : null; // >1: faster than your curve
     const spot = sp && sp[0] >= 4 ? sp[1] / sp[0] : null; // share of the times you took the easiest when L was the easiest
     const hintShare = h / Math.max(1, h + nT);
     let score = 0;
@@ -1599,7 +1624,7 @@ function focusPanel() {
   const fd = focusData(),
     rows = fd.rows;
   if (!fd.base || rows.length < 2) {
-    const n1 = games.reduce((a, g) => a + (timesOf(g)[1] || []).length, 0);
+    const n1 = games.reduce((a, g) => a + (timesOf(g)[TT.SINGLES] || []).length, 0);
     return (
       `<div class="panelcard focus"><h3>${tr("Focus area")}</h3><p>${tr("This will show which technique you are weakest at, and where you are stronger than the technique would suggest.")} ` +
       `${tr("It needs some solved puzzles with different techniques")}${n1 < 5 ? " " + tr("(at least 5 easy moves to know your base speed)") : ""}.</p></div>`
@@ -1645,7 +1670,7 @@ function focusPanel() {
         y = 6 + i * rowH;
       const x = v >= 0 ? mid + 1 : mid - 1 - w;
       chart +=
-        `<text x="0" y="${y + 13}" font-size="11.5" fill="var(--ink)">${f.L} · ${esc(LEVEL_TECH[f.L].length > 16 ? LEVEL_TECH[f.L].slice(0, 15) + "…" : LEVEL_TECH[f.L])}</text>` +
+        `<text x="0" y="${y + 13}" font-size="11.5" fill="var(--ink)">${TT.num(f.L)} · ${esc(LEVEL_TECH[f.L].length > 16 ? LEVEL_TECH[f.L].slice(0, 15) + "…" : LEVEL_TECH[f.L])}</text>` +
         `<rect x="${x}" y="${y + 3}" width="${w}" height="12" rx="4" fill="${v >= 0 ? "var(--indigo)" : "var(--warn)"}"` +
         ` data-tip="${esc(LEVEL_TECH[f.L])}: ${tr("typically {median}, your curve {exp} ({n} moves)", { median: fmtS(f.med), exp: fmtS(f.expected), n: f.nT })}${f.spot != null ? ", " + tr("found it when easiest {pct} %", { pct: Math.round(100 * f.spot) }) : ""}"/>` +
         `<rect x="${L0}" y="${y}" width="${W - L0}" height="${rowH}" fill="transparent" data-tip="${esc(LEVEL_TECH[f.L])}: ${tr("typically {median}, your curve {exp} ({n} moves)", { median: fmtS(f.med), exp: fmtS(f.expected), n: f.nT })}"/>`;
@@ -1670,12 +1695,10 @@ function bindFocus(root) {
     (b) =>
       (b.onclick = () => {
         const L = +b.dataset.train;
-        // singles to triples have drills; harder techniques are practised in a puzzle that needs them
-        if (L >= 1 && L <= 4) return startDrill(L);
-        ui.must = L;
-        saveUi();
-        go("new");
-        toast(tr("Technique selected: {tech}", { tech: LEVEL_TECH[ui.must] }));
+        // singles to triples have drills; the chains and what-ifs are practised on training boards that start where the
+        // technique is next (train.js, 26 Nov. 2026; before: New game with the technique chosen)
+        if (DRILL_TECHS.includes(L)) return startDrill(L);
+        trainStart(L, "practice");
       }),
   );
   root.querySelectorAll("[data-guide]").forEach((b) => (b.onclick = () => openGuide(+b.dataset.guide)));
@@ -1698,7 +1721,7 @@ function timePanel() {
   });
   const levels = Object.keys(all)
     .map(Number)
-    .sort((a, b) => a - b);
+    .sort(TT.order);
   const meds = levels.map((L) => median(all[L])),
     maxM = Math.max(1, ...meds);
   return (
@@ -1715,7 +1738,7 @@ function timePanel() {
           tipT = " · " + tr("recent {a}, before {b}", { a: fmtS(median(recent[L])), b: fmtS(median(older[L])) });
         }
         return (
-          `<div class="barrow" data-tip="${esc(LEVEL_TECH[L])}: ${tr("median {median} over {n} moves", { median: fmtS(med), n })}${tipT}"><span class="n">${L}</span>` +
+          `<div class="barrow" data-tip="${esc(LEVEL_TECH[L])}: ${tr("median {median} over {n} moves", { median: fmtS(med), n })}${tipT}"><span class="n">${TT.num(L)}</span>` +
           `<span class="name">${esc(LEVEL_TECH[L])} <small style="color:var(--mute)">· ${n}</small></span><span class="cnt" style="font-size:13px">${fmtS(med)}</span>` +
           `<span class="best" style="color:${trend.startsWith("↓") ? "var(--indigo)" : trend.startsWith("↑") ? "var(--warn)" : "var(--mute)"};font-weight:700">${trend}</span>` +
           `<span class="track"><span class="fill" style="display:block;width:${((100 * med) / maxM).toFixed(1)}%"></span></span></div>`

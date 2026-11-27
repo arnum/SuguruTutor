@@ -39,6 +39,8 @@ public final class SuguruText {
         da("Single-number chain", "Kæde med ét tal");
         da("Bivalue chain", "Kæde med to-mulighedsfelter");
         da("Mixed chain", "Blandet kæde");
+        da("Mixed pair", "Blandet par");
+        da("Two touching cells with the same two options are those two numbers. A cell in the same region as one of them that touches the other cannot hold them.", "To felter, der rører hinanden og har de samme to muligheder, er de to tal. Et felt i samme region som det ene, der rører det andet, kan ikke have dem.");
         da("Single-number what-if", "Hvis-så med ét tal");
         da("What-if with singles", "Hvis-så med enkle tal");
         da("Both ways", "Begge veje");
@@ -72,6 +74,7 @@ public final class SuguruText {
         da("Medium", "Middel");
         da("Hard", "Svær");
         da("Very hard", "Meget svær");
+        da("Pair: mixed", "Par: blandet");
         da("Chain: one number", "Kæde: ét tal");
         da("Chain: two options", "Kæde: to muligheder");
         da("Chain: mixed", "Kæde: blandet");
@@ -89,6 +92,7 @@ public final class SuguruText {
         da("neighbour elimination", "nabo-eliminering");
         da("pairs", "par");
         da("triples", "tripler");
+        da("mixed pair", "blandet par");
         da("single-number chain", "kæde med ét tal");
         da("bivalue chain", "kæde med to-mulighedsfelter");
         da("mixed chain", "blandet kæde");
@@ -138,7 +142,7 @@ public final class SuguruText {
         da("The code gives a puzzle with no solution.", "Koden giver en opgave uden løsning.");
         da("The code gives a puzzle with more than one solution.", "Koden giver en opgave med mere end én løsning.");
         // the booklet (SuguruBook)
-        da("--technique must be 1-11", "--teknik skal være 1-11");
+        da("--technique must be 1-12", "--teknik skal være 1-12");
         da("--max must be 4, 5 or 6", "--maks skal være 4, 5 eller 6");
         da("Regions of at most 4 cells can only be made up to 7x7", "Regioner på højst 4 felter kan kun laves op til 7x7");
         da("--per-page must be 1, 2 or 4", "--pr-side skal være 1, 2 eller 4");

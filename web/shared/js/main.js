@@ -89,9 +89,89 @@ function regradeOld() {
   };
   setTimeout(step, 800);
 }
+// ---------- Levels renumbered (26 Nov. 2026): the mixed pair came in as level 4, so the levels from triples up (old 4-12) moved
+// one up (5-13). Everything stored that names a level is moved along once (store "levelsV"); the grades and step codes are
+// recomputed anyway by regradeOld (fit 12). An export from before is moved the same way when it is imported (settings.js).
+const LEVELS_V = 2;
+const upL = (L) => (typeof L === "number" && L >= 4 ? L + 1 : L);
+const upLv = (x) => (typeof x === "number" && Math.floor(x / 100) >= 4 ? x + 100 : x);
+const upKeys = (o) => {
+  const n = {};
+  for (const k in o || {}) n[/^\d+$/.test(k) ? upL(+k) : k] = o[k];
+  return n;
+};
+function levelsGame(g) {
+  if (!g || typeof g !== "object") return g;
+  if (typeof g.tech === "number") g.tech = upL(g.tech);
+  if (Array.isArray(g.lv)) g.lv = g.lv.map(upLv);
+  if (Array.isArray(g.moves))
+    g.moves.forEach((m) => {
+      for (const k of ["direct", "avail", "ahead"]) if (typeof m[k] === "number") m[k] = upL(m[k]);
+    });
+  if (g.route) {
+    if (Array.isArray(g.route.ctx)) g.route.ctx.forEach((x) => (x[0] = upL(x[0])));
+    if (g.route.times) g.route.times = upKeys(g.route.times);
+  }
+  if (g.camp && typeof g.camp.L === "number") g.camp.L = upL(g.camp.L);
+  if (g.train && typeof g.train.L === "number") g.train.L = upL(g.train.L);
+  return g;
+}
+// The other stores, as plain data (also used for an import): drills, the practice log, the campaign, the trials, training
+const levelsDrills = (d) => upKeys(d);
+const levelsPlog = (l) => (l || []).map((e) => (typeof e.k === "number" ? Object.assign({}, e, { k: upL(e.k) }) : e));
+function levelsCampaign(c) {
+  if (!c) return c;
+  return Object.assign({}, c, {
+    passed: upKeys(c.passed),
+    practice: upKeys(c.practice),
+    run: c.run ? Object.assign({}, c.run, { L: upL(c.run.L) }) : c.run,
+    log: (c.log || []).map((e) => Object.assign({}, e, { L: upL(e.L) })),
+    boards: (c.boards || []).map(levelsGame),
+  });
+}
+const levelsTrials = (t) => (t ? Object.assign({}, t, { boards: (t.boards || []).map(levelsGame) }) : t);
+const levelsTraining = (l) => (l || []).map((e) => Object.assign({}, e, { L: upL(e.L) }));
+function migrateLevels() {
+  if (store.get("levelsV", 1) >= LEVELS_V) return;
+  games.forEach(levelsGame);
+  saveGames(true);
+  store.set("drills", levelsDrills(store.get("drills", {})));
+  store.set("practicelog", levelsPlog(store.get("practicelog", [])));
+  const c = store.get("campaign", null);
+  if (c) store.set("campaign", levelsCampaign(c));
+  const t = store.get("trials", null);
+  if (t) store.set("trials", levelsTrials(t));
+  store.set("training", levelsTraining(store.get("training", [])));
+  const cur = store.get("current", null);
+  if (cur && cur.puzzle) {
+    if (cur.puzzle.rating) cur.puzzle.rating.level = upL(cur.puzzle.rating.level);
+    if (typeof cur.puzzle.startAt === "number") cur.puzzle.startAt = upL(cur.puzzle.startAt);
+    if (cur.meta) levelsGame(cur.meta);
+    store.set("current", cur);
+  }
+  if (typeof ui.must === "number" && ui.must) {
+    ui.must = upL(ui.must);
+    saveUi();
+  }
+  store.set("daily", null); // the cached daily puzzle and the stash of practice boards are made again
+  store.set("drillstash", {});
+  store.set("levelsV", LEVELS_V);
+}
+// 27 Nov. 2026: the route analysis is kept for 200 games instead of 40, to collect data for the grading experiments. A
+// setting of 40 (the old default and maximum) is raised once; a smaller choice is kept.
+function raiseKeepMoves() {
+  if (store.get("keepV", 1) >= 2) return;
+  if (settings.keepMoves === 40) {
+    settings.keepMoves = KEEP_MOVES;
+    saveSettings();
+  }
+  store.set("keepV", 2);
+}
 function start(hot) {
   translateDom(document.body);
   applyTheme();
+  migrateLevels();
+  raiseKeepMoves();
   regradeOld();
   refreshRouteSummaries();
   upgradeAheadVia();

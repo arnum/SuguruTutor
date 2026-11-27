@@ -15,6 +15,9 @@ HEAD = ('<script>try{var t=JSON.parse(localStorage.getItem("suguru.settings")||"
 
 template = open(os.path.join(HERE, "template.html"), encoding="utf-8").read()
 data = json.load(open(os.path.join(HERE, "data.json"), encoding="utf-8"))
+# the technique units in the table's order, for Suguru (the place shown per example)
+TECHS = json.load(open(os.path.join(HERE, "..", "grade", "techniques.json"), encoding="utf-8"))
+ORDER = [u["code"] for u in TECHS["units"] if "suguru" in u.get("games", ["suguru"])]
 
 for lang, fname in LANGS.items():
     t = template
@@ -33,6 +36,7 @@ for lang, fname in LANGS.items():
                 f["text"] = text
         t = t.replace('<html lang="en">', f'<html lang="{lang}">')
     t = t.replace("__DATA__", json.dumps(d, ensure_ascii=False, separators=(",", ":")))
+    t = t.replace("__ORDER__", json.dumps(ORDER))
     t = t.replace("<style>", HEAD + "<style>", 1)
     t = t.replace("</title>", '</title>\n<link rel="icon" href="icons/icon-192.png" type="image/png">', 1)
     out = os.path.join(WEB, "guide.html" if lang == "en" else f"guide-{lang}.html")

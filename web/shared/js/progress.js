@@ -144,7 +144,7 @@ function progressMoves(list) {
     if (!g.route || !g.route.ctx) return;
     withCtx++;
     g.route.ctx.forEach(([L, ds, n]) => {
-      if (L > 11 || !(ds > 0)) return;
+      if (!TT.known(L) || !(ds > 0)) return;
       (mv[L] = mv[L] || []).push({ r: Math.log(Math.max(0.5, ds / 10)) - Math.log(calTime(cal, L, n, false, g.rows * g.cols)), end: g.end });
     });
   });
@@ -152,11 +152,11 @@ function progressMoves(list) {
     few = [];
   Object.keys(mv)
     .map(Number)
-    .sort((p, q) => p - q)
+    .sort(TT.order)
     .forEach((L) => {
       const a = mv[L],
-        base = L === 1 ? 150 : 20,
-        min = L === 1 ? 50 : 10;
+        base = L === TT.SINGLES ? 150 : 20,
+        min = L === TT.SINGLES ? 50 : 10;
       if (a.length < 2 * min) return few.push({ L, n: a.length, need: 2 * min });
       const B = Math.max(min, Math.min(base, Math.floor(a.length / 3)), Math.ceil(a.length / 15));
       const res = a.map((m) => m.r),

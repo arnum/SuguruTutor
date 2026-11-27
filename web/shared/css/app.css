@@ -18,6 +18,10 @@
   --optbg: rgba(44, 71, 160, 0.16); /* an option that belongs to the pattern */
   --outline: #7a4fc9; /* the region or house it is about */
   --link: #a8610b; /* arrows */
+  --colA: rgba(0, 114, 178, 0.3); /* the chain tool's colour A (a disc) and B (a square): blue and orange, colour-blind safe */
+  --colB: rgba(230, 159, 0, 0.45);
+  --colInk: #17191e;
+  --ulink: #4b5563; /* the player's links */
   --badbg: #f6d6ce;
   --peer: #eef0ea;
   --same: #e6ebf8;
@@ -51,6 +55,10 @@
     --optbg: rgba(147, 169, 242, 0.28); /* an option that belongs to the pattern */
     --outline: #b79cf4; /* the region or house it is about */
     --link: #f0a54a; /* arrows */
+    --colA: rgba(86, 180, 233, 0.42);
+    --colB: rgba(230, 159, 0, 0.5);
+    --colInk: #ffffff;
+    --ulink: #b4bac6;
     --badbg: #4a2620;
     --peer: #1d2028;
     --same: #222a40;
@@ -81,6 +89,10 @@
   --optbg: rgba(147, 169, 242, 0.28); /* an option that belongs to the pattern */
   --outline: #b79cf4; /* the region or house it is about */
   --link: #f0a54a; /* arrows */
+  --colA: rgba(86, 180, 233, 0.42);
+  --colB: rgba(230, 159, 0, 0.5);
+  --colInk: #ffffff;
+  --ulink: #b4bac6;
   --badbg: #4a2620;
   --peer: #1d2028;
   --same: #222a40;
@@ -833,6 +845,67 @@ svg#grid {
 .tools button:disabled {
   opacity: 0.35;
 }
+/* the chain tool's bar (chains.js): colour A, colour B, strong link, weak link, Clear */
+.chainbar {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr) auto;
+  gap: 6px;
+  margin: 2px 0 4px;
+}
+.chainbar button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 38px;
+  border: 1px solid var(--grid);
+  background: var(--cell);
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+  cursor: pointer;
+}
+.chainbar button[aria-pressed="true"] {
+  border-color: var(--indigo);
+  box-shadow: inset 0 0 0 2px var(--indigo);
+}
+.chainbar .cclear {
+  padding: 0 12px;
+  font-weight: 500;
+}
+.chainbar button:disabled {
+  opacity: 0.4;
+}
+.cmark {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--colA);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.15);
+}
+.cmark.b {
+  border-radius: 4px;
+  background: var(--colB);
+}
+.cline {
+  width: 18px;
+  height: 0;
+  border-top: 3px solid var(--ulink);
+}
+.cline.w {
+  border-top-style: dashed;
+}
+/* the numbers choose the number to colour or link */
+.pad.chain button {
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 22px;
+  box-shadow: inset 0 0 0 1.5px var(--grid), inset 0 -3px 0 var(--colA);
+}
+.pad.chain button.cur {
+  box-shadow: none;
+}
 /* The pencil's price in this game: the grade with pencil, while the game still counts as without */
 .tools button#noteBtn {
   position: relative;
@@ -879,6 +952,27 @@ svg#grid {
 }
 .msg.warn {
   color: var(--warn);
+}
+/* training: once the technique is used, "Next board" skips the rest of the board (train.js) */
+.trainbar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin: 2px 0;
+  font-size: 14px;
+  font-weight: 500;
+}
+.trainbar[hidden] {
+  display: none;
+}
+.trainbar button {
+  padding: 7px 16px;
+  font-size: 14px;
+  white-space: nowrap;
+}
+.trainset {
+  margin-top: 10px;
 }
 .hint {
   background: var(--cell);
@@ -2768,6 +2862,10 @@ textarea.io.note {
   color: var(--ink);
   cursor: pointer;
 }
+/* training rows (train.js): no level bars */
+.drow.trow {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
 .drow.cur {
   background: var(--chip);
 }
@@ -3305,6 +3403,80 @@ body.guest .dock {
   gap: 8px;
   margin-top: 8px;
 }
+/* the step's progress (the rating's lower bound on its way to the pass mark): a thin bar with the percentage; after a
+   board the change it made is lighter (gained) or red (lost) */
+.campbar {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  align-items: center;
+  margin: 8px 0 2px;
+  font-variant-numeric: tabular-nums;
+}
+.campbar .cb-track {
+  position: relative;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--grid);
+  overflow: hidden;
+}
+.campbar .cb-fill,
+.campbar .cb-gain,
+.campbar .cb-loss {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+}
+.campbar .cb-fill {
+  background: var(--indigo);
+}
+.campbar .cb-gain {
+  background: var(--indigo);
+  opacity: 0.45;
+}
+.campbar .cb-loss {
+  background: var(--bad);
+  opacity: 0.45;
+}
+.campbar .cb-p {
+  font-size: 14px;
+  min-width: 3.2em;
+  text-align: right;
+}
+/* the example board at the start of a step: open when the technique is new, a quiet line when you know it */
+.campex {
+  margin: 10px 0 2px;
+}
+.campex > summary,
+.campsteps > summary {
+  cursor: pointer;
+  color: var(--indigo);
+  font-size: 14px;
+  font-weight: 600;
+  padding: 4px 0;
+}
+.campexb {
+  max-width: 280px;
+  margin: 6px 0 0;
+}
+.campexb svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+.campsteps {
+  margin-top: 6px;
+  max-width: 280px;
+}
+.campsteps svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+.campnext {
+  margin: 10px 0 4px;
+}
 
 /* a destructive button outside the menus (Delete copied notes) */
 .actions button.danger {
@@ -3334,4 +3506,138 @@ body.guest .dock {
 .trialtab td,
 .trialtab th {
   font-size: 14px;
+}
+
+/* Home (25 Nov. 2026): the other ways to play as one grouped list, one line each; the tiles without small print */
+.homelist {
+  display: flex;
+  flex-direction: column;
+  background: var(--cell);
+  border-radius: 18px;
+  box-shadow:
+    var(--shadow),
+    inset 0 0 0 1px var(--grid);
+  overflow: hidden;
+}
+.hrow {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  gap: 12px;
+  align-items: center;
+  width: 100%;
+  min-height: 52px;
+  padding: 10px 14px;
+  border: 0;
+  background: none;
+  text-align: left;
+  font: inherit;
+  color: var(--ink);
+  cursor: pointer;
+}
+.hrow + .hrow {
+  box-shadow: inset 0 1px 0 var(--grid);
+}
+.hrow:active {
+  background: var(--paper);
+}
+.hrow svg.i {
+  color: var(--indigo);
+}
+.hrow .hname {
+  font-weight: 700;
+  font-size: 16px;
+}
+.hrow .hstat {
+  color: var(--mute);
+  font-size: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 46vw;
+}
+.hrow .chev {
+  color: var(--mute);
+}
+#v-home .tile {
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  padding: 12px 8px;
+}
+/* the puzzle code and the rules at the bottom of New game */
+#v-new .codeform {
+  margin-top: 18px;
+}
+
+/* After a game: the time against the expectation (timeMeterHtml in calib.js): time · bar with a tick · percentage */
+.tmeter {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 12px;
+  align-items: center;
+  margin: 12px 0 2px;
+  font-variant-numeric: tabular-nums;
+}
+.tmeter .tm-t {
+  font-size: 17px;
+}
+.tmeter .tm-p {
+  font-size: 15px;
+  color: var(--ink);
+}
+.tmeter .tm-bar {
+  position: relative;
+  height: 30px;
+}
+.tmeter .tm-track {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 6px;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--grid);
+}
+.tmeter .tm-fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  border-radius: 3px;
+  background: var(--indigo);
+}
+.tmeter .tm-ref {
+  position: absolute;
+  top: -4px;
+  width: 2px;
+  height: 14px;
+  margin-left: -1px;
+  border-radius: 1px;
+  background: var(--ink);
+}
+.tmeter .tm-lab {
+  position: absolute;
+  top: 17px;
+  font-size: 11.5px;
+  color: var(--mute);
+  white-space: nowrap;
+}
+
+/* Quick call (26 Nov. 2026): the claim in a few big words right under the board; the board shows the rest */
+.dclaim.big {
+  margin: 0;
+  min-height: 44px;
+  font-size: 30px !important;
+  font-weight: 800;
+  line-height: 1.25 !important;
+  text-align: center;
+  letter-spacing: 0.01em;
+}
+.dclaim.full {
+  margin: 2px 0 0;
+  min-height: 0;
+  font-size: 14px !important;
+  font-weight: 400;
+  color: var(--mute);
+  text-align: center;
 }

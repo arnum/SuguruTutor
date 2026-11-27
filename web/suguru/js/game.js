@@ -1,6 +1,6 @@
 // Suguru: the game's rules as a model that the tutor, board and analysis build on.
 
-// The names of the 14 techniques (the same order in both games; see tutor.js)
+// The names of the 15 techniques (the same order in both games; see tutor.js)
 const TECH_LABELS = [
   tr("Naked single"),
   tr("Hidden single|suguru"),
@@ -16,6 +16,7 @@ const TECH_LABELS = [
   tr("What-if with singles"),
   tr("Both ways"),
   tr("What-if with techniques"),
+  tr("Mixed pair"), // 14: a pair whose target sees one cell by its region and the other by touching (level 4)
 ];
 
 // ---------- Lists the shared code uses (core.js, newgame.js, stats.js, play.js)
@@ -34,6 +35,7 @@ const GUIDE_IDS = [
   "hvis-saa-kort",
   "begge-veje",
   "hvis-saa-dyb",
+  "blandet-par",
 ];
 const TECH_NAMES_UI = [
   tr("naked single"),
@@ -50,6 +52,7 @@ const TECH_NAMES_UI = [
   tr("what-if with singles"),
   tr("both ways"),
   tr("what-if with techniques"),
+  tr("mixed pair"),
 ];
 const SIZES = [
   { r: 4, c: 4, t: tr("Micro") },
@@ -64,6 +67,7 @@ const LEVEL_INFO = [
   tr("Only naked and hidden singles."),
   tr("A number blocks cells outside its region."),
   tr("Pairs: two cells share the same two numbers."),
+  tr("A pair seen two ways: one cell through its region, the other by touching."),
   tr("Triples of cells and numbers."),
   tr("Follow one number through regions with two places."),
   tr("Chains of cells with two options."),
@@ -78,6 +82,7 @@ const LEVEL_TECH = [
   tr("singles"),
   tr("neighbour elimination"),
   tr("pairs"),
+  tr("mixed pair"),
   tr("triples"),
   tr("single-number chain"),
   tr("bivalue chain"),
@@ -94,7 +99,8 @@ const TECH_TIP = [
   "",
   tr("Scan region by region before looking for patterns: is only one number missing, or can a number only go in one place?"),
   tr("Look for numbers that touch several empty cells in the same region: the number cannot go in any of them, which often leaves only one place."),
-  tr("Find two cells in a region with the same two options: those two numbers are then locked to those cells and can be crossed out everywhere else in the region."),
+  tr("Find two cells that see each other and have the same two options: one is each number. A cell that touches both, or shares a region with both, loses those two numbers."),
+  tr("A pair can also be seen two ways: a cell in the same region as one of the two cells, touching the other, loses those two numbers as well."),
   tr("Three cells in a region that together have only three options lock those three numbers, just like a pair."),
   tr("When a number can only go in two places, follow both options one step: if both touch the same cell, the number cannot go there."),
   tr("Follow a chain of cells with only two options: each cell decides the next, and the two ends can remove options from cells they both touch."),
@@ -148,7 +154,8 @@ const GAME = {
     1: [tr("Find an easy number"), tr("Tap a cell whose number you can see.")],
     2: [tr("Find a neighbour elimination"), tr("Find a number whose places in a region all touch one cell outside it. Tap those places.")],
     3: [tr("Find a pair"), tr("Two cells that see each other and share the same two options, or two numbers with only the same two places in a region. Tap the two cells.")],
-    4: [tr("Find a triple"), tr("Three cells and three numbers locked to each other. Tap the three cells.")],
+    4: [tr("Find a mixed pair"), tr("Two touching cells with the same two options, and a cell that shares a region with one and touches the other. Tap the two cells.")],
+    5: [tr("Find a triple"), tr("Three cells and three numbers locked to each other. Tap the three cells.")],
   },
   // Practice games (games.js): six levels each, like the drills. cascade: how many numbers to place in a row; changed: how many
   // new easy numbers the placed number makes; sweep: which techniques, and at least how many cells lose options; count: how
@@ -172,11 +179,11 @@ const GAME = {
     ],
     sweep: [
       { size: [6, 6], maxRegion: 5, pencil: true, empty: [0.3, 0.55], techs: [2], minT: 2 },
-      { size: [6, 6], maxRegion: 5, pencil: true, empty: [0.3, 0.55], techs: [3], minT: 2 },
-      { size: [7, 7], maxRegion: 5, pencil: true, empty: [0.4, 0.65], techs: [2, 3, 4], minT: 3 },
-      { size: [7, 7], maxRegion: 5, pencil: false, empty: [0.4, 0.65], techs: [2, 3], minT: 2 },
-      { size: [8, 8], maxRegion: 5, pencil: false, empty: [0.45, 0.7], techs: [2, 3, 4], minT: 3 },
-      { size: [8, 8], maxRegion: 6, pencil: false, empty: [0.5, 0.8], techs: [3, 4], minT: 3 },
+      { size: [6, 6], maxRegion: 5, pencil: true, empty: [0.3, 0.55], techs: [3, 4], minT: 2 },
+      { size: [7, 7], maxRegion: 5, pencil: true, empty: [0.4, 0.65], techs: [2, 3, 4, 5], minT: 3 },
+      { size: [7, 7], maxRegion: 5, pencil: false, empty: [0.4, 0.65], techs: [2, 3, 4], minT: 2 },
+      { size: [8, 8], maxRegion: 5, pencil: false, empty: [0.45, 0.7], techs: [2, 3, 4, 5], minT: 3 },
+      { size: [8, 8], maxRegion: 6, pencil: false, empty: [0.5, 0.8], techs: [3, 4, 5], minT: 3 },
     ],
     count: [
       { size: [6, 6], maxRegion: 5, pencil: true, empty: [0.3, 0.5], count: [1, 3] },
