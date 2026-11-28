@@ -1,10 +1,10 @@
 {
-  "_about": "All the numbers in the difficulty. Edit here, then run: python3 tools/grade/gen.py (writes web/suguru/js/gradew.js and java/src/SuguruGrade.java). Raise fit when the numbers change, so stored games are regraded. Technique numbers: 0 naked single, 1 hidden single, 2 neighbour elimination, 3 naked pair, 4 hidden pair, 5 naked triple, 6 hidden triple, 7 single-number chain, 8 xy chain, 9 mixed chain, 10 single-number what-if, 11 what-if with singles, 12 both ways, 13 what-if with techniques, 14 mixed pair (Suguru only, level 4; added 26 Nov. 2026).",
-  "fit": 12,
-  "_recog": "Recognition: the pattern's base price per technique (adjusted 18-19 Nov. 2026).",
-  "recog": [0, 0, 0.6, 2.2, 2.9, 3.0, 3.7, 1.9, 2.2, 2.5, 2.8, 3.1, 3.5, 3.1, 2.6],
+  "_about": "All the numbers in the difficulty. Edit here, then run: python3 tools/grade/gen.py (writes web/suguru/js/gradew.js and java/src/SuguruGrade.java). Raise fit when the numbers change, so stored games are regraded. Technique numbers: 0 naked single, 1 hidden single, 2 neighbour elimination, 3 naked pair, 4 hidden pair, 5 naked triple, 6 hidden triple, 7 single-number chain, 8 xy chain, 9 mixed chain, 10 single-number what-if, 11 what-if with singles, 12 both ways, 13 what-if with techniques, 14 mixed pair (Suguru only, level 4; added 26 Nov. 2026), 15 mixed triple (Suguru only, unit 14 after the triples; added 28 Nov. 2026), 16 short single-number chain (Suguru: the three-link chain, a method of the single-number chain's unit, priced as the chain; added 28 Nov. 2026), 17 nook (Suguru: a cell that touches all of a region but one cell is that cell's number; a method of neighbour elimination's unit, recognised like it (0.6): the fit could not tell 0.6 from 2.2; added 28 Nov. 2026), 18 XY-Wing and 19 W-Wing (Suguru: the three-cell two-option chain and one mixed chain's shape, methods of their chains' units, priced as those chains; added 28 Nov. 2026).",
+  "fit": 14,
+  "_recog": "Recognition: the pattern's base price per technique (adjusted 18-19 Nov. 2026). The mixed triple (15, 28 Nov. 2026) between the triple and the hidden triple, as the mixed pair sits between the pair and the triple: a guess until times exist. The nook (17, 28 Nov. 2026) as neighbour elimination (0.6): in your 128 games without pencil the fit was 0.469 at 0.6 and 0.475 at 2.2, so the times cannot tell; it was taken as easy, as it is to spot.",
+  "recog": [0, 0, 0.6, 2.2, 2.9, 3.0, 3.7, 1.9, 2.2, 2.5, 2.8, 3.1, 3.5, 3.1, 2.6, 3.4, 1.9, 0.6, 2.2, 2.5],
   "_link": "Length by method: each link of the reasoning beyond the first costs this much, per technique (chains and what-ifs). On top of len (log2 of the length, for every step). A link in a what-if with techniques asks more than a link in a single-number chain (25 Nov. 2026).",
-  "link": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+  "link": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
   "_inner": "Techniques inside a what-if: inner x the recognition of the hardest of them. Lowered from 0.6 to 0.25 (Nov. 2026): a short what-if with a pair is easier than a long one with singles (the player's experience), so what is inside the chain must not weigh more than the length.",
   "inner": 0.25,
   "_vis": "How well this particular case hides: vis x (shape + openness + work).",
@@ -42,22 +42,22 @@
   "singlesNarrowSpan": 0.15,
   "_pencil": "Pencil. The grades are derived by gen.py: with pencil = base - (1 - anchor) x diff, without pencil = base + anchor x diff, as you used to play = base. 'base' is the fitted numbers (only memory is not 0), 'diff' is how much harder it is without pencil, and 'anchor' is how large a share of the games the base values are fitted to were played with pencil, per technique (0 = without, 1 = with). Set 20 Nov. 2026 from the player's own words: what-ifs and chains over two-option cells with pencil, triples sometimes (on a long search), the rest without. 'diff' is an educated guess; 'repeat' and 'partial' are prepared but set to 0.",
   "pencil": {
-    "_anchor": "Share of the fitted games that were played with pencil, per technique: 0 naked single, 1 hidden single, 2 neighbour, 3 naked pair, 4 hidden pair, 5 naked triple, 6 hidden triple, 7 single-number chain, 8 xy chain, 9 mixed chain, 10-13 what-if, 14 mixed pair.",
-    "anchor": [0, 0, 0, 0, 0, 0.5, 0.5, 0, 1, 1, 1, 1, 1, 1, 0],
+    "_anchor": "Share of the fitted games that were played with pencil, per technique: 0 naked single, 1 hidden single, 2 neighbour, 3 naked pair, 4 hidden pair, 5 naked triple, 6 hidden triple, 7 single-number chain, 8 xy chain, 9 mixed chain, 10-13 what-if, 14 mixed pair, 15 mixed triple, 16 short single-number chain, 17 nook, 18 XY-Wing, 19 W-Wing.",
+    "anchor": [0, 0, 0, 0, 0, 0.5, 0.5, 0, 1, 1, 1, 1, 1, 1, 0, 0.5, 0, 0, 1, 1],
     "_base": "Fitted values (the same for both grades, before the pencil difference). Terms not listed here have base 0.",
     "base": {
-      "mem": [0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3]
+      "mem": [0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3]
     },
     "_diff": "How much harder without pencil, per term and technique. mem: w x log2(1 + things in your head); tech: fixed; multi: w x cells with several options left (at most multiCap in both directions); trial: what-if from a cell with 3+ options (0/1); built: w x log2(1 + cells built on earlier eliminations); repeat: saves w x the recognition when the pattern has been used before (0/1); partial: partial triple (0/1). len: w x log2(the length of the whole reasoning) for what-ifs (without pencil the whole chain of assumed numbers must be remembered; with pencil it is not written down either, but easier to follow).",
     "diff": {
-      "mem": [0, 0, 0, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2],
-      "tech": [0, 0, 0, 0.3, 0.5, 1, 1.2, 0.4, 1, 1.2, 0.3, 1.5, 1.5, 1.5, 0.3],
-      "multi": [0, 0, 0, 0.25, 0.25, 0.25, 0.25, 0, 0.25, 0.25, 0, 0, 0.25, 0, 0.25],
-      "trial": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.3, 0.3, 0, 0.3, 0],
-      "built": [0, 0, 0, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4],
-      "repeat": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-      "partial": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-      "len": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.2, 0.2, 0.2, 0.2, 0]
+      "mem": [0, 0, 0, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0, 0.2, 0.2],
+      "tech": [0, 0, 0, 0.3, 0.5, 1, 1.2, 0.4, 1, 1.2, 0.3, 1.5, 1.5, 1.5, 0.3, 1, 0.4, 0, 1, 1.2],
+      "multi": [0, 0, 0, 0.25, 0.25, 0.25, 0.25, 0, 0.25, 0.25, 0, 0, 0.25, 0, 0.25, 0.25, 0, 0, 0.25, 0.25],
+      "trial": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.3, 0.3, 0, 0.3, 0, 0, 0, 0, 0, 0],
+      "built": [0, 0, 0, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0, 0.4, 0.4],
+      "repeat": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      "partial": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      "len": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.2, 0.2, 0.2, 0.2, 0, 0, 0, 0, 0, 0]
     },
     "multiCap": 1
   }

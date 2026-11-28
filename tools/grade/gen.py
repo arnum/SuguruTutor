@@ -32,7 +32,7 @@ GAMES = {
 }
 TECHS_SRC = os.path.join(ROOT, "tools", "grade", "techniques.json")
 TECHS_JS = os.path.join(ROOT, "tools", "grade", "techs.js")
-NTECH = 15
+NTECH = 20
 SCALARS = ["cap", "inner", "vis", "shapeSize", "shapeSizeCap", "shapeBent", "open", "openMid", "workPer", "workMid", "workLo", "workHi",
            "len", "loadOver", "loadTechRepeat", "loadScale", "loadWeight", "loadCountScale", "early",
            "singlesK", "singlesOptsW", "singlesOptsMid", "singlesOptsSpan", "singlesNarrowW", "singlesNarrowSpan",

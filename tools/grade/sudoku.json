@@ -1,10 +1,10 @@
 {
-  "_about": "Sudoku: all the numbers in the difficulty. Edit here, then run: python3 tools/grade/gen.py (writes web/sudoku/js/gradew.js). Raise fit when the numbers change. The technique numbers are the same as in Suguru: 0 naked single, 1 hidden single, 2 locked candidates, 3 naked pair, 4 hidden pair, 5 naked triple, 6 hidden triple, 7 single-number chain (X-wing etc.), 8 xy chain (XY-wing etc.), 9 mixed chain, 10 single-number what-if, 11 what-if with singles, 12 both ways, 13 what-if with techniques, 14 mixed pair (Suguru only, level 4; added 26 Nov. 2026).",
+  "_about": "Sudoku: all the numbers in the difficulty. Edit here, then run: python3 tools/grade/gen.py (writes web/sudoku/js/gradew.js). Raise fit when the numbers change. The technique numbers are the same as in Suguru: 0 naked single, 1 hidden single, 2 locked candidates, 3 naked pair, 4 hidden pair, 5 naked triple, 6 hidden triple, 7 single-number chain (X-wing etc.), 8 xy chain (XY-wing etc.), 9 mixed chain, 10 single-number what-if, 11 what-if with singles, 12 both ways, 13 what-if with techniques, 14 mixed pair (Suguru only, level 4; added 26 Nov. 2026), 15 mixed triple (Suguru only, unit 14 after the triples; added 28 Nov. 2026), 16 short single-number chain (Suguru: the three-link chain, a method of the single-number chain's unit, priced as the chain; added 28 Nov. 2026), 17 nook (Suguru: a cell that touches all of a region but one cell is that cell's number; a method of neighbour elimination's unit, recognition 1.0 by hand; added 28 Nov. 2026).",
   "fit": 4,
   "_recog": "Recognition per technique. Starting values (21 Nov. 2026) from Sudoku Explainer's order (locked candidates 2.6-2.8; naked pair 3.0; X-wing 3.2; hidden pair 3.4; naked triple 3.6; hidden triple 4.0; XY-wing 4.2; forcing chains 7-8; nishio 7.5-8.5; cell/region chains 8-9; dynamic chains 8.5-9.5), put on the same scale as Suguru. Not fitted to played times yet.",
-  "recog": [0, 0, 0.6, 1.8, 2.4, 3.0, 3.6, 2.1, 2.8, 3.2, 3.4, 3.6, 3.8, 3.6, 1.8],
+  "recog": [0, 0, 0.6, 1.8, 2.4, 3.0, 3.6, 2.1, 2.8, 3.2, 3.4, 3.6, 3.8, 3.6, 1.8, 3.0, 2.1, 0.6, 2.8, 3.2],
   "_link": "Length by method: each link of the reasoning beyond the first costs this much, per technique (chains and what-ifs). On top of len (log2 of the length, for every step). A link in a what-if with techniques asks more than a link in a single-number chain (25 Nov. 2026).",
-  "link": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+  "link": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
   "_inner": "Techniques inside a what-if: inner x the recognition of the hardest of them.",
   "inner": 0.6,
   "_vis": "How well this particular case hides: vis x (shape + openness + work).",
@@ -43,21 +43,21 @@
   "_pencil": "Pencil: with pencil = base - (1 - anchor) x diff, without pencil = base + anchor x diff, as you used to play = base. diff is the same guess as in Suguru until there are played Sudoku times.",
   "pencil": {
     "_anchor": "Share of the games the base values apply to that were played with pencil, per technique. Sudoku Explainer's values assume written candidates from pairs up (the 'direct' forms without candidates are set lower), so the anchor is with pencil from pairs up, and without pencil for singles and locked candidates.",
-    "anchor": [0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+    "anchor": [0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1],
     "_base": "Fitted values (the same for both grades, before the pencil difference). Terms not listed here have base 0.",
     "base": {
-      "mem": [0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3]
+      "mem": [0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3]
     },
     "_diff": "How much harder without pencil, per term and technique. mem: w x log2(1 + things in your head); tech: fixed; multi: w x cells with several options left (at most multiCap in both directions); trial: what-if from a cell with 3+ options (0/1); built: w x log2(1 + cells built on earlier eliminations); repeat: saves w x the recognition when the pattern has been used before (0/1); partial: partial triple (0/1). len: w x log2(the length of the whole reasoning) for what-ifs (without pencil the whole chain of assumed numbers must be remembered; with pencil it is not written down either, but easier to follow).",
     "diff": {
-      "mem": [0, 0, 0, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2],
-      "tech": [0, 0, 0, 0.3, 0.5, 1, 1.2, 0.4, 1, 1.2, 0.3, 1.5, 1.5, 1.5, 0.3],
-      "multi": [0, 0, 0, 0.25, 0.25, 0.25, 0.25, 0, 0.25, 0.25, 0, 0, 0.25, 0, 0.25],
-      "trial": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.3, 0.3, 0, 0.3, 0],
-      "built": [0, 0, 0, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4],
-      "repeat": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-      "partial": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-      "len": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.2, 0.2, 0.2, 0.2, 0]
+      "mem": [0, 0, 0, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0, 0.2, 0.2],
+      "tech": [0, 0, 0, 0.3, 0.5, 1, 1.2, 0.4, 1, 1.2, 0.3, 1.5, 1.5, 1.5, 0.3, 1, 0.4, 0, 1, 1.2],
+      "multi": [0, 0, 0, 0.25, 0.25, 0.25, 0.25, 0, 0.25, 0.25, 0, 0, 0.25, 0, 0.25, 0.25, 0, 0, 0.25, 0.25],
+      "trial": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.3, 0.3, 0, 0.3, 0, 0, 0, 0, 0, 0],
+      "built": [0, 0, 0, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0, 0.4, 0.4],
+      "repeat": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      "partial": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      "len": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.2, 0.2, 0.2, 0.2, 0, 0, 0, 0, 0, 0]
     },
     "multiCap": 1
   }

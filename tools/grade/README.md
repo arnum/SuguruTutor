@@ -100,6 +100,42 @@ sees both cells of a pair always shares one house with both. The levels from tri
 6-8, what-ifs 9-12, 13 = cannot be done); the time curve uses a rung per level (`calL` in `calib.js`: the mixed pair 3.5,
 the rest as before), so the expected times of the other techniques did not change.
 
+**The mixed triple (28 Nov. 2026):** the triple split the same way. A target that sees the three cells in different ways
+(some through its region, the rest by touching) belongs to the mixed triple (technique 15, unit 14, rung 4.5 between the
+triples and the chains). Recognition 3.4, between the triple (3.0) and the chain's longer forms. The solver uses it 6
+times in 253 test puzzles; before, those steps counted as ordinary triples. Suguru only, for the same reason as the
+mixed pair. Its reference time is the nearest fitted level below plus the slope times the log of the rung ratio
+(`fit_reference.py`), until enough games have it.
+
+**The short single-number chain (28 Nov. 2026):** the three-link chain (two regions where a number has two places, one
+touch between them) is its own method (16) inside the single-number chain's unit (code 6), not a unit of its own. It
+was 75 of the 92 single-number chain steps in one player's games, so the chain's numbers were mostly its numbers. The
+solver tries it before longer chains (technique 7 starts at four links in Suguru), weight 19 against 20, priced by
+length like the chain. Grades: one of 253 test puzzles moved from 7.3 to 7.2, because finding the shortest chain first
+gave an easier route. Sudoku keeps one chain (there the three-link forms are skyscrapers and kites).
+
+**The nook (28 Nov. 2026):** a cell x that touches every cell of a region but one, y, while x's own region is no
+bigger, has the same number as y: x's number is one that region holds, and every other place there touches x. Each
+keeps only the options the other has. Method 17 in neighbour elimination's unit (code 2), Suguru only; the pairs
+follow from the shapes, so both raters and both tutors list them once per board. Counted before it was added: with only
+the singles it gives a number at 286 of 930 basic steps in one player's 243 puzzles, and it made a chain or a what-if
+unnecessary at 45 of 226 hard steps in the test puzzles (9 of 113 in the player's). Its recognition is neighbour
+elimination's (0.6): the fit on the 128 games without pencil was 0.469 at 0.6 and 0.475 at 2.2, so the times cannot
+tell, and it is as quick to spot. Grades: 86 of 252 test puzzles changed, 71 down (35 by a whole grade or more), 15 up
+by at most 0.4; the mean fell from 5.83 to 5.46. `fit` went to 14. It is left out of neighbour elimination's drill (the
+method flag `noDrill`), which asks for the places of one number. The Java grader now takes the pattern flag from the
+table (`METHOD_PATTERN`) instead of a list of technique numbers.
+
+**XY-Wing and W-Wing (28 Nov. 2026):** named the way the short chain was, as methods of their chains' units (Suguru
+only; Sudoku keeps them inside its chains for now). XY-Wing (18, unit 7) is the two-option chain with three strong links,
+three cells; the two-option chain (8) then starts at four in Suguru (with two it is a pair, found earlier). W-Wing (19,
+unit 8) is the mixed chain of one shape: x=y in a cell with options x and y, y between its two places in a region, y=x
+in a second cell with the same options (`isWing` in tutor.js, `isW` in both raters, which now keep the chain's path).
+The mixed chain (9) leaves that shape out in the tutor, so a step is not listed twice. Weights 21 and 23, between the
+chains' (20, 22, 24); recognition as their chains. In 253 test puzzles the solver uses XY-Wing 14 times and W-Wing once;
+4 grades moved down by 0.2–0.3. Before they were added the counts were: XY-Wing gave a number where the short chain did
+not at 4 of 113 hard steps in one player's games (14 of 226 in the test puzzles), W-Wing at 5 (11).
+
 ## The technique table (27 Nov. 2026)
 
 `tools/grade/techniques.json` is the only place that knows the techniques' order. It has two lists:
@@ -108,9 +144,10 @@ the rest as before), so the expected times of the other techniques did not chang
   26 Nov. 2026, frozen), an `id`, a `family` (basic, chain, whatif), a `rung` on the time curve, the flags `drill`,
   `learn` and `rare`, `games` if only some games have it, and its `methods`. Their order in the list is the order from
   easy to hard. Code 13 (`guess`) means "cannot be done without guessing" and ranks after every unit.
-- **Methods**, what the solver finds (the technique numbers 0-14, only ever appended to): the engine's `weight` and the
+- **Methods**, what the solver finds (the technique numbers 0-19, only ever appended to): the engine's `weight` and the
   flags `pattern` (a shape in the board: visibility counts), `inner` (allowed inside a what-if with techniques), `chain`,
-  `byLength` (priced by length) and `within` (for a what-if: the unit it may use inside).
+  `byLength` (priced by length), `within` (for a what-if: the unit it may use inside) and `noDrill` (left out of its
+  unit's drill).
 
 `gen.py` writes the table and `techs.js` (the questions, `TT`) into both `gradew.js` files, and the same data as
 constants into `SuguruGrade.java` (with `rank`, `harder`, `max` and the rest written by hand next to them). The rule:
@@ -122,7 +159,7 @@ Stored data (games, drills, campaign, training) keeps the codes, so a new unit n
 **Adding a technique:**
 - *A variant of one the player already knows:* a new method (the next number) in that unit's `methods`, a finder in both
   tutors and both raters (`FIND`/`FINDERS` in JS, `find` in Java), its row in `weights.json`, and its label.
-- *A new unit:* the next free code (14 and up), placed in the list where it belongs, plus its texts: `LEVEL_TECH`,
+- *A new unit:* the next free code (15 and up), placed in the list where it belongs, plus its texts: `LEVEL_TECH`,
   `LEVEL_INFO`, `TECH_TIP` and the guide in each game. Tested on a copy: splitting the hidden pair into its own unit
   after the pairs needed no code change; JS and Java gave the same grades on all 249 test puzzles, one 4×4 puzzle got
   another grade, and the generator made puzzles for the new unit.
