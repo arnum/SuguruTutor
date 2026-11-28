@@ -13,7 +13,7 @@ function theHouse(M, u) {
 // Finds the easiest next number from a position and explains the way there step by step.
 function createTutor(G, region) {
   const { n, cols } = G;
-  const TECH_NAMES = TECH_LABELS; // the game's names for the 15 techniques (the game's game.js)
+  const TECH_NAMES = TECH_LABELS; // the game's names for the techniques (game.js)
   // The techniques come from the technique table (tools/grade/techniques.json, TT in gradew.js, 27 Nov. 2026): units (what
   // a player learns, named by a code that never changes, in the table's order) and methods (what the solver applies, the
   // technique numbers). "Level" below means a unit's code; levels are compared by the table's order (TT), never as numbers.
@@ -23,7 +23,18 @@ function createTutor(G, region) {
   const SINGLES = TT.unitOf(0);
   // the units the solver tries after the singles, in order
   const LADDER = TT.all().filter((c) => c !== SINGLES);
-  const CHAIN_MODE = { 7: "x", 8: "xy", 9: "all" };
+  const CHAIN_MODE = { 7: "x", 8: "xy", 9: "all", 16: "x", 18: "xy", 19: "all" };
+  // In Suguru the shortest two-option chain (three cells) is XY-Wing (18), and one mixed shape is W-Wing (19, 28 Nov. 2026):
+  // x=y in a cell with options x and y, y between its two places in a region, y=x in a second cell with the same options.
+  const isWing = (p) =>
+    p.length === 6 &&
+    p[0] >> 4 === p[1] >> 4 &&
+    p[4] >> 4 === p[5] >> 4 &&
+    p[2] >> 4 !== p[3] >> 4 &&
+    (p[1] & 15) === (p[2] & 15) &&
+    (p[2] & 15) === (p[3] & 15) &&
+    (p[3] & 15) === (p[4] & 15) &&
+    (p[0] & 15) === (p[5] & 15);
   // The game's rules come from the game's model (boardModel in the game's game.js): houses (RC: regions, or rows,
   // columns and boxes), which houses a cell lies in, the largest number per cell, and cells that may not have the same number.
   const MODEL = boardModel(G, region);
@@ -46,6 +57,20 @@ function createTutor(G, region) {
           shapeV[c] = size[c];
           shapeVia[c] = r;
         }
+  // The nook (28 Nov. 2026, method 17, a method of neighbour elimination's unit): a cell x that touches every cell of a
+  // region but one, y, while x's own region is no bigger. x's number is one that region holds, and there only y is left
+  // for it: x and y are the same number, so each keeps only the options the other has. The pairs follow from the shapes.
+  const NOOKS = [];
+  if (KING)
+    for (let r = 0; r < nr; r++) {
+      const cells = RC[r];
+      if (cells.length < 2) continue;
+      for (let x = 0; x < n; x++) {
+        if (cells.includes(x) || size[x] > cells.length) continue;
+        const miss = cells.filter((c) => !touch(x, c));
+        if (miss.length === 1) NOOKS.push({ x, y: miss[0], r });
+      }
+    }
   // the houses two cells have in common
   const common = (a, b) => unitsOf[a].filter((u) => unitsOf[b].includes(u));
   const pc = (x) => {
@@ -177,12 +202,33 @@ function createTutor(G, region) {
     }
     return out;
   }
+  // the nook's targets: x and y each lose the options the other cannot be
+  const nookTargets = (s, x, y) => {
+    const mx = s.val[x] ? 1 << s.val[x] : s.cand[x],
+      my = s.val[y] ? 1 << s.val[y] : s.cand[y],
+      out = [];
+    if (!s.val[x] && s.cand[x] & ~my) out.push({ cell: x, mask: s.cand[x] & ~my });
+    if (!s.val[y] && s.cand[y] & ~mx) out.push({ cell: y, mask: s.cand[y] & ~mx });
+    return out;
+  };
+  function nookApps(s, first) {
+    const out = [];
+    for (const { x, y, r } of NOOKS) {
+      const targets = nookTargets(s, x, y);
+      if (!targets.length) continue;
+      out.push({ tech: 17, cells: [x, y], nook: r, targets });
+      if (first) return out;
+    }
+    return out;
+  }
   // the places all see one cell outside their house (the pattern exists even if that cell has nothing to lose)
   const seenByOne = (spots, r) => peers[spots[0]].some((x) => !RC[r].includes(x) && spots.every((sp) => peer(x, sp)));
-  // Naked pairs and triples. A pair's targets come in two kinds (26 Nov. 2026): a target that sees both cells the same way
-  // (one house holds all three, or it touches both) is an ordinary pair (technique 3); a target that sees one cell only by
-  // its house and the other only by touching is a mixed pair (technique 14, level 4), which is harder to spot.
-  // want: "simple" (only technique 3), "mixed" (only 14), or anything else for both.
+  // Naked pairs and triples. Their targets come in two kinds (pairs 26 Nov. 2026, triples 28 Nov. 2026): a target that
+  // sees all the cells the same way (one house holds them all, or it touches them all) is an ordinary pair or triple
+  // (technique 3 or 5); a target that sees them in different ways, some only by a house and the rest only by touching, is
+  // a mixed pair or mixed triple (technique 14, unit 4; technique 15, unit 14), which is harder to spot. In Sudoku three
+  // cells that see each other share a house, so there every target is ordinary.
+  // want: "simple" (only 3 or 5), "mixed" (only 14 or 15), or anything else for both.
   const sameWay = (t, cells) => cells.every((q) => touch(t, q)) || unitsOf[t].some((u) => cells.every((q) => unitsOf[q].includes(u)));
   function nakedApps(s, k, first, all, want) {
     const out = [],
@@ -200,22 +246,15 @@ function createTutor(G, region) {
           if (s.val[p] || ch.includes(p) || !(s.cand[p] & m)) continue;
           if (ch.every((q) => peer(p, q))) targets.push({ cell: p, mask: s.cand[p] & m });
         }
-        if (k === 3) {
-          if (targets.length || all) {
-            out.push({ tech: 5, cells: ch.slice(), mask: m, targets });
-            return first;
-          }
-          return false;
-        }
         const simple = targets.filter((t) => sameWay(t.cell, ch)),
           mixed = targets.filter((t) => !sameWay(t.cell, ch));
         let found = false;
         if (want !== "mixed" && (simple.length || all)) {
-          out.push({ tech: 3, cells: ch.slice(), mask: m, targets: simple });
+          out.push({ tech: k === 2 ? 3 : 5, cells: ch.slice(), mask: m, targets: simple });
           found = true;
         }
         if (want !== "simple" && mixed.length) {
-          out.push({ tech: 14, cells: ch.slice(), mask: m, targets: mixed });
+          out.push({ tech: k === 2 ? 14 : 15, cells: ch.slice(), mask: m, targets: mixed });
           found = true;
         }
         return found && first;
@@ -306,13 +345,15 @@ function createTutor(G, region) {
     for (const z of keys) m.set(z >> 4, (m.get(z >> 4) || 0) | (1 << (z & 15)));
     return [...m].map(([cell, mask]) => ({ cell, mask }));
   }
-  function chainApps(s, first, mode = "all") {
-    const tech = mode === "x" ? 7 : mode === "xy" ? 8 : 9;
+  // kLo, kHi: the number of strong links searched (2: the three-link chain). In Suguru the shortest single-number chain is
+  // its own method (16, 28 Nov. 2026), so the single-number chain (7) starts at 3 there; Sudoku keeps one chain.
+  // accept: a test of the chain's nodes (the W-Wing's shape, 19; the mixed chain without it, 9).
+  function chainApps(s, first, mode = "all", kLo = 2, kHi = 7, tech = mode === "x" ? 7 : mode === "xy" ? 8 : 9, accept = null) {
     const strong = strongLinks(s, mode);
     if (strong.size < 4) return [];
     const out = [],
       seen = new Set();
-    for (let maxK = 2; maxK <= 7; maxK++) {
+    for (let maxK = kLo; maxK <= kHi; maxK++) {
       let budget = 20000;
       const path = [],
         onPath = new Set();
@@ -320,7 +361,7 @@ function createTutor(G, region) {
         if (--budget < 0) return false;
         if (k === maxK) {
           const zs = weakNbrs(s, A, mode).filter((z) => !onPath.has(z) && weakLink(z, Y, mode));
-          if (zs.length) {
+          if (zs.length && (!accept || accept(path))) {
             const targets = groupTargets(zs);
             const sig = targets
               .map((t) => t.cell + ":" + t.mask)
@@ -787,14 +828,19 @@ function createTutor(G, region) {
   // Each method's finder: (s, first, all) -> applications. all: also patterns that give nothing (drills, Quick call).
   const FIND = {
     2: (s, first, all) => neighborApps(s, first, all),
+    17: (s, first) => nookApps(s, first),
     3: (s, first, all) => nakedApps(s, 2, first, all, "simple"),
     4: (s, first, all) => hiddenApps(s, 2, first, all),
     14: (s, first, all) => nakedApps(s, 2, first, all, "mixed"),
-    5: (s, first, all) => nakedApps(s, 3, first, all),
+    5: (s, first, all) => nakedApps(s, 3, first, all, "simple"),
+    15: (s, first, all) => nakedApps(s, 3, first, all, "mixed"),
     6: (s, first, all) => hiddenApps(s, 3, first, all),
-    7: (s, first) => chainApps(s, first, "x"),
-    8: (s, first) => chainApps(s, first, "xy"),
-    9: (s, first) => chainApps(s, first, "all"),
+    16: (s, first) => (KING ? chainApps(s, first, "x", 2, 2, 16) : []),
+    7: (s, first) => chainApps(s, first, "x", KING ? 3 : 2),
+    18: (s, first) => (KING ? chainApps(s, first, "xy", 3, 3, 18) : []),
+    8: (s, first) => chainApps(s, first, "xy", KING ? 4 : 2),
+    19: (s, first) => (KING ? chainApps(s, first, "all", 3, 3, 19, isWing) : []),
+    9: (s, first) => chainApps(s, first, "all", 2, 7, 9, KING ? (p) => !isWing(p) : null),
     10: (s, first) => nishioApps(s, first),
     11: (s, first) => trialApps(s, TT.method(11).within, first),
     12: (s, first) => bothWaysApps(s, first),
@@ -817,7 +863,12 @@ function createTutor(G, region) {
       const targets = a.targets.filter((t) => !T.val[t.cell] && T.cand[t.cell] & bit && spots.every((sp) => peer(t.cell, sp)));
       return targets.length ? { ...a, spots, targets } : null;
     }
-    if (a.tech === 3 || a.tech === 5 || a.tech === 14) {
+    if (a.tech === 17) {
+      const now = nookTargets(T, a.cells[0], a.cells[1]);
+      const targets = a.targets.map((t) => ({ cell: t.cell, mask: t.mask & ((now.find((u) => u.cell === t.cell) || { mask: 0 }).mask) })).filter((t) => t.mask);
+      return targets.length ? { ...a, targets } : null;
+    }
+    if (a.tech === 3 || a.tech === 5 || a.tech === 14 || a.tech === 15) {
       if (a.cells.some((c) => T.val[c])) return null;
       const u = a.cells.reduce((m, c) => m | T.cand[c], 0);
       if (u & ~a.mask) return null;
@@ -1084,16 +1135,33 @@ function createTutor(G, region) {
     common(a, b).find((r) => !st || (RC[r].filter((c) => !st.val[c] && st.cand[c] & (1 << d)).length === 2 && !RC[r].some((c) => st.val[c] === d))) ??
     common(a, b)[0];
 
-  // A mixed pair's target: the pair cell in the same house (byHouse) and the one it only touches (byTouch)
+  // A mixed pair's or triple's target: the cells in its house (byHouse) and the ones it only touches (byTouch)
   const mixedSides = (a, t) => {
-    const byHouse = a.cells.find((q) => unitsOf[q].some((u) => unitsOf[t].includes(u)));
-    return { byHouse, byTouch: a.cells.find((q) => q !== byHouse), house: unitsOf[t].find((u) => unitsOf[byHouse].includes(u)) };
+    const byHouse = a.cells.filter((q) => unitsOf[q].some((u) => unitsOf[t].includes(u)));
+    return { byHouse, byTouch: a.cells.filter((q) => !byHouse.includes(q)), house: unitsOf[t].find((u) => unitsOf[byHouse[0]].includes(u)) };
   };
   const mixedWhy = (a, t) => {
     const m = mixedSides(a, t.cell);
-    return tr("{cell} touches {a} and is in the same region as {b}, so it {cannot}.", { cell: nm(t.cell), a: nm(m.byTouch), b: nm(m.byHouse), cannot: cannot(t.mask) });
+    return tr("{cell} touches {a} and is in the same region as {b}, so it {cannot}.", { cell: nm(t.cell), a: list(m.byTouch.map(nm)), b: list(m.byHouse.map(nm)), cannot: cannot(t.mask) });
   };
+  // the nook: why the two cells are the same number, and what each loses by it
+  const nookWhy = (a) =>
+    tr("{x} touches every cell of {region} except {y}, and its own region is no bigger. So {x}'s number is one that region has, and the only place left for it there is {y}: {x} and {y} are the same number.", {
+      x: nm(a.cells[0]),
+      y: nm(a.cells[1]),
+      region: regionName(a.nook),
+    });
+  const nookLoses = (a, st) =>
+    a.targets
+      .map((t) => {
+        const o = t.cell === a.cells[0] ? a.cells[1] : a.cells[0];
+        return st.val[o]
+          ? tr("{other} is {v}, so {cell} {cannot}.", { other: nm(o), v: st.val[o], cell: nm(t.cell), cannot: cannot(t.mask) })
+          : tr("{other} has only {vals} left, so {cell} {cannot}.", { other: nm(o), vals: vals(st.cand[o]), cell: nm(t.cell), cannot: cannot(t.mask) });
+      })
+      .join(" ");
   function stepText(a, st) {
+    if (a.tech === 17) return nookWhy(a) + " " + nookLoses(a, st);
     if (a.tech === 2) {
       const sp = list(a.spots.map(nm)),
         tg = list(a.targets.map((t) => nm(t.cell)));
@@ -1110,7 +1178,7 @@ function createTutor(G, region) {
             : tr("{cells} sees {all}, so it cannot be {v}.", { cells: tg, all, v: a.v }))
       );
     }
-    if (a.tech === 3 || a.tech === 5 || a.tech === 14) {
+    if (a.tech === 3 || a.tech === 5 || a.tech === 14 || a.tech === 15) {
       const kk = a.cells.length,
         cs = list(a.cells.map(nm));
       const shared = a.cells.reduce((acc, c) => acc.filter((u) => unitsOf[c].includes(u)), unitsOf[a.cells[0]]);
@@ -1125,8 +1193,8 @@ function createTutor(G, region) {
         " " +
         (kk === 2 ? tr("So those two numbers are used up by exactly those two cells.") : tr("So those three numbers are used up by exactly those three cells.")) +
         " ";
-      // a mixed pair: how each target sees the two cells, one by the region and the other by touching
-      if (a.tech === 14) return s + a.targets.map((t) => mixedWhy(a, t)).join(" ");
+      // a mixed pair or triple: how each target sees the cells, some by the region and the rest by touching
+      if (a.tech === 14 || a.tech === 15) return s + a.targets.map((t) => mixedWhy(a, t)).join(" ");
       s += groupByMask(a.targets)
         .map(([m, cs]) =>
           kk === 2
@@ -1456,6 +1524,16 @@ function createTutor(G, region) {
   // what the board shows for one step, and its text without cell names
   function stepShow(a, st) {
     const nT = a.targets.length;
+    if (a.tech === 17)
+      return {
+        say:
+          yellowLose(a.targets) +
+          " " +
+          tr("The arrow's first cell touches every cell of the outlined region but the last, and its own region is no bigger. So the two cells are the same number."),
+        outline: RC[a.nook],
+        links: [{ from: a.cells[0], to: a.cells[1] }],
+        legend: { pattern: tr("the two cells"), outline: theKind(a.nook), links: tr("same number"), target: tr("loses options") },
+      };
     if (a.tech === 2) {
       const opts = {};
       a.spots.forEach((c) => (opts[c] = 1 << a.v));
@@ -1476,7 +1554,7 @@ function createTutor(G, region) {
         legend: { pattern: tr("where {v} must go", { v: a.v }), outline: theKind(a.region), target: tr("loses {v}", { v: a.v }) },
       };
     }
-    if (a.tech === 3 || a.tech === 5 || a.tech === 14) {
+    if (a.tech === 3 || a.tech === 5 || a.tech === 14 || a.tech === 15) {
       const kk = a.cells.length,
         opts = {};
       a.cells.forEach((c) => (opts[c] = a.mask & st.cand[c]));
@@ -1488,8 +1566,8 @@ function createTutor(G, region) {
           : kk === 2
             ? tr("The blue cells can only be {vals} between them, so those two numbers are used up there.", { vals: vals(a.mask) })
             : tr("The blue cells can only be {vals} between them, so those three numbers are used up there.", { vals: vals(a.mask) });
-      if (a.tech === 14) {
-        // the outline: the region the yellow cell shares with one of the pair
+      if (a.tech === 14 || a.tech === 15) {
+        // the outline: the region the yellow cell shares with some of the cells
         const houses = [...new Set(a.targets.map((t) => mixedSides(a, t.cell).house))];
         return {
           say:
@@ -1497,12 +1575,16 @@ function createTutor(G, region) {
             " " +
             why +
             " " +
-            (nT === 1
-              ? tr("The yellow cell touches one of them and is in the outlined region with the other.")
-              : tr("Each yellow cell touches one of them and is in an outlined region with the other.")),
+            (kk === 2
+              ? nT === 1
+                ? tr("The yellow cell touches one of them and is in the outlined region with the other.")
+                : tr("Each yellow cell touches one of them and is in an outlined region with the other.")
+              : nT === 1
+                ? tr("The yellow cell is in the outlined region with some of them and touches the rest.")
+                : tr("Each yellow cell is in an outlined region with some of them and touches the rest.")),
           opts,
           outline: houses.map((u) => ({ cells: RC[u] })),
-          legend: { pattern: tr("the pair"), opts: tr("their numbers"), outline: houses.length === 1 ? tr("the yellow cell's region") : tr("the yellow cells' regions"), target: tr("loses options") },
+          legend: { pattern: kk === 2 ? tr("the pair") : tr("the triple"), opts: tr("their numbers"), outline: houses.length === 1 ? tr("the yellow cell's region") : tr("the yellow cells' regions"), target: tr("loses options") },
         };
       }
       return {
@@ -1655,11 +1737,11 @@ function createTutor(G, region) {
           res.kind === "shape"
             ? tr("The next number comes from the shape of the regions. Look at the marked cell and the region it touches all of.")
             : res.kind === "naked"
-            ? tr("Technique for the next number: {tech}. Look at the marked cell: which numbers can it not be?", { tech: TECH_NAMES[0].toLowerCase() })
+            ? tr("Technique for the next number: {tech}. Look at the marked cell: which numbers can it not be?", { tech: inText(TECH_NAMES[0]) })
             : KING
-              ? tr("Technique for the next number: {tech}. Look at the marked region: which number can only go in one place?", { tech: TECH_NAMES[1].toLowerCase() })
+              ? tr("Technique for the next number: {tech}. Look at the marked region: which number can only go in one place?", { tech: inText(TECH_NAMES[1]) })
               : tr("The next number can be found with {tech}. Look at the highlighted {kind}: which number can only go in one place?", {
-                  tech: TECH_NAMES[1].toLowerCase(),
+                  tech: inText(TECH_NAMES[1]),
                   kind: MODEL.unitKind(holdUnit(S0, cell, v, res.kind)),
                 }),
         pattern: res.kind === "naked" ? [cell] : res.kind === "shape" ? [cell].concat(RC[shapeVia[cell]]) : RC[holdUnit(S0, cell, v, res.kind)].filter((c) => !S0.val[c]),
@@ -1672,8 +1754,8 @@ function createTutor(G, region) {
       const pat = a0.tech === 2 ? a0.spots : a0.cells ? a0.cells : [a0.cell];
       view.push({
         nudge: true,
-        text: tr("Technique for the easiest next number: {tech}. Start at the marked cells. Think it through yourself first, then tap Next for the explanation.", {
-          tech: TECH_NAMES[hardest].toLowerCase(),
+        text: tr("Easiest next: {tech}. Start at the marked cells, try it, then tap Next.", {
+          tech: inText(TECH_NAMES[hardest]),
         }),
         pattern: pat,
         target: [],
@@ -1905,7 +1987,7 @@ function createTutor(G, region) {
           for (const c of RC[a.region]) if (!S0.val[c] && (Tb.cand[c] ^ S0.cand[c]) & a.mask) built++;
         } else for (const c of own) if (Tb.cand[c] !== S0.cand[c]) built++;
         if ((a.tech === 10 || a.tech === 11 || a.tech === 13) && pc(Tb.cand[a.cell]) >= 3) trial = 1;
-        if ((a.tech === 5 || a.tech === 6) && a.cells.some((c) => pc(Tb.cand[c] & a.mask) < 3)) partial = 1;
+        if ((a.tech === 5 || a.tech === 6 || a.tech === 15) && a.cells.some((c) => pc(Tb.cand[c] & a.mask) < 3)) partial = 1;
         sig = a.tech + ":" + own.slice().sort((x, y) => x - y).join(",") + ":" + (a.mask != null ? a.mask : a.v != null ? a.v : "");
       }
     }
@@ -2098,8 +2180,9 @@ function createTutor(G, region) {
             v: a.v,
             spots: list(a.spots.map(nm)),
           });
+        if (a.tech === 17) return nookWhy(a);
         const cs = list((a.cells || []).map(nm));
-        if (a.tech === 3 || a.tech === 5 || a.tech === 14) {
+        if (a.tech === 3 || a.tech === 5 || a.tech === 14 || a.tech === 15) {
           const kk = a.cells.length;
           const shared = a.cells.reduce((acc, c) => acc.filter((u) => unitsOf[c].includes(u)), unitsOf[a.cells[0]]);
           return (
@@ -2162,7 +2245,9 @@ function createTutor(G, region) {
     if (S.broken || !TT.is(L, "drill") || L === SINGLES) return [];
     const before = new Set(singles(S).map((x) => x.cell * 16 + x.v));
     const groups = new Map();
-    const every = TT.methods(L).flatMap((m) => FIND[m](S, false, true));
+    const every = TT.methods(L)
+      .filter((m) => !TT.method(m).noDrill)
+      .flatMap((m) => FIND[m](S, false, true));
     for (const a of every) {
       const cells = (a.tech === 2 ? a.spots : a.cells || []).filter((c) => c >= 0),
         key = cells.slice().sort((x, y) => x - y).join(",");

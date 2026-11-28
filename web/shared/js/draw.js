@@ -27,7 +27,9 @@
 //     focus      cells that play a part: the rest is dimmed
 //     corner     {cell: colour}: a small corner (whose number it was)
 //     dashed     a cell whose number gets a dashed circle (the hint's cell on the game board)
-//     ucol       {cell*16+d: 1 | 2}: the player's chain colours on options (A: a disc, B: a square; chains.js)
+//     ucol       {cell*16+d: 1 | 2}: the player's chain colours on options (A: a disc, B: a square; chains.js); d 0: on
+//                the cell (A: a frame, B: a dashed frame), cells of one colour hold the same number: once one has it,
+//                the empty others show it
 //     ulinks     [{a, da, b, db, w}]: the player's links between options (da/db 0: the cell), w: weak (dashed)
 //     ufrom      {c, d}: the first end of a link being drawn
 //     noteDigit  the number the chain tool works on: the other pencil marks are drawn faintly
@@ -72,7 +74,13 @@ function boardParts(b, v = {}) {
     badges = v.badges || {},
     focus = v.focus && v.focus.length ? asSet(v.focus) : null,
     ucol = v.ucol || {},
+    same = {}, // the number a colour's cells share, once one of them has it (and they do not disagree)
     ulinked = new Set((v.ulinks || []).flatMap((l) => [l.da ? l.a * 16 + l.da : -1, l.db ? l.b * 16 + l.db : -1])); // options a link ends at
+  for (const k of [1, 2]) {
+    const got = new Set();
+    for (let i = 0; i < n; i++) if (ucol[i * 16] === k && values[i]) got.add(values[i]);
+    if (got.size === 1) same[k] = [...got][0];
+  }
   let cells = "",
     texts = "";
   if (v.labels !== false) {
@@ -120,6 +128,7 @@ function boardParts(b, v = {}) {
         if (st) texts += `<line x1="${x + px - 13}" y1="${y + py + 11}" x2="${x + px + 13}" y2="${y + py - 11}" stroke="var(--bad)" stroke-width="3.5" stroke-linecap="round"/>`;
       }
     } else if (b.reveal && b.reveal[i]) texts += num(x + 50, y + 52, 44, 400, "var(--mute)", b.reveal[i], ` opacity="0.7"`);
+    else if (same[ucol[i * 16]]) texts += num(x + 50, y + 52, 40, 500, ucol[i * 16] === 1 ? "var(--cellA)" : "var(--cellB)", same[ucol[i * 16]], ` opacity="0.8"`); // shown, not placed
     else if ((b.notes && b.notes[i]) || v.ucol) {
       // pencil marks, and the chain tool's colours on options (a coloured option shows even without a pencil mark)
       for (let d = 1; d <= 9; d++) {
@@ -130,11 +139,14 @@ function boardParts(b, v = {}) {
         const [px, py] = pos[d];
         if (k === 1) texts += `<circle cx="${x + px}" cy="${y + py}" r="17" fill="var(--colA)"/>`;
         else if (k === 2) texts += `<rect x="${x + px - 16}" y="${y + py - 16}" width="32" height="32" rx="6" fill="var(--colB)"/>`;
-        const faint = v.noteDigit && d !== v.noteDigit && !k;
-        texts += num(x + px, y + py, k || (v.noteDigit && d === v.noteDigit) ? 24 : 22, k ? 700 : v.noteDigit === d ? 700 : 500, k ? "var(--colInk)" : v.noteDigit === d ? "var(--ink)" : "var(--mute)", d, faint ? ` opacity="0.3"` : "");
+        const faint = v.noteDigit && d !== v.noteDigit && !k,
+          st = (strike[i] || 0) & (1 << d); // a mark that goes (the pencil and chains guide, toolguide.js)
+        texts += num(x + px, y + py, st ? 26 : k || (v.noteDigit && d === v.noteDigit) ? 24 : 22, st || k || v.noteDigit === d ? 700 : 500, st ? "var(--bad)" : k ? "var(--colInk)" : v.noteDigit === d ? "var(--ink)" : "var(--mute)", d, faint ? ` opacity="0.3"` : "");
+        if (st) texts += `<line x1="${x + px - 13}" y1="${y + py + 11}" x2="${x + px + 13}" y2="${y + py - 11}" stroke="var(--bad)" stroke-width="3.5" stroke-linecap="round"/>`;
       }
     }
     if (corner[i]) texts += `<path d="M${x + S - 30} ${y + 2}h28v28z" fill="${corner[i]}"/>`;
+    if (ucol[i * 16]) texts += `<rect x="${x + 5}" y="${y + 5}" width="${S - 10}" height="${S - 10}" rx="12" fill="none" stroke="var(--cell${ucol[i * 16] === 1 ? "A" : "B"})" stroke-width="5"${ucol[i * 16] === 2 ? ` stroke-dasharray="12 8"` : ""}/>`;
     if (badges[i] != null) texts += `<circle cx="${x + 19}" cy="${y + 19}" r="14" fill="var(--ink)"/>` + num(x + 19, y + 20, 18, 700, "var(--paper)", badges[i]);
   }
   texts += `</g>`;

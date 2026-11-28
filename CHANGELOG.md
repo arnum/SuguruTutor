@@ -5,6 +5,117 @@ the build you have. Before 22 November there were no builds, so those headings a
 timestamps of work files and screenshots. A change may be a day older than shown, and those days list only the main
 changes.
 
+## 2026-11-28a
+
+### Added
+- **A seal after each game: Performance, Skill and Focus.** The 解 stamp on the solved page becomes a seal once the
+  route analysis is done: Performance large (a bolt), Skill and Focus small (a brain and a target). Tap it for the
+  names and how sure each is.
+  - **Skill** is your level: which techniques you find when a puzzle needs them, and how fast you find the hard steps,
+    on the grade scale. A lucky game moves it little; a habit of stumbling counts in full.
+  - **Performance** is how this game went, on the same scale: your time against what your own record expected for the
+    puzzle as you played it.
+  - **Focus** is your attention on the easy numbers in this game against your previous games: 100 is your usual,
+    above is in the zone. Below its usual range twice in a session, the page suggests a break.
+  - **The time's bar** now compares with the same expected time, and so does the praise under it ("faster than
+    expected"). The estimate before a game comes from the same model.
+  - Skill and Performance need boards from 5×5 up; Sudoku shows Focus only until it has a reference of its own.
+- **Statistics rebuilt around the three numbers,** in five tabs:
+  - **Overview:** the three numbers with their trend, Skill over your latest 30 games, the key figures and activity.
+  - **Skill:** Skill over time with each game's Performance as a dot, its two parts, "Practise next" (the technique
+    that would add most to your Skill, with practice and the guide), and every technique with how often you find it
+    when needed and how fast, each with its band. Practice, hints and time per technique are here too.
+  - **Focus:** each of your latest 40 games with its band, sessions shaded; what moves your Focus (the game's number in
+    the session, the time of day, the board size), mentioned only when the band rules out chance; and the latest dip
+    on the board.
+  - **Games:** your latest games with their seals, week by week (with the median Performance and Focus), difficulty
+    over time, your times by grade and board size, and your solving route.
+  - **Debug:** the frozen reference the times are measured against, and charts of how the three numbers fit your
+    games: Performance against Skill by grade and board size, the expected against your actual time, Focus by grade,
+    and Skill's two parts over time. "Does the rating fit?" moved here.
+  - The first time, the statistics read all your games (a few seconds); after that each game is added as it ends.
+  - Each panel says in a line what it shows, not how it is worked out.
+- **A guide to the pencil and the chain tool: "Pencil and chains".** Open it from the game's menu, or with the "?" at
+  the end of the chain bar (it opens at the colours). Four short examples on real boards, drawn as the game draws them
+  and stepped through with ‹ ›, with the buttons tapped in each step shown above the board:
+  - **Pencil:** writing marks, and how a placed number takes its marks away from the cells it rules out.
+  - **Colours:** a number with two places, coloured A and B; a cell that sees both colours loses the number.
+  - **Links:** strong (solid: one of the two is right) and weak (dashed: not both), along a chain whose two ends rule
+    out a cell.
+  - **Links in a cell:** a cell's two options linked, for a chain of cells with two options.
+  - **Good to know:** Clear and Undo, hints, what counts as pencil, and the timed trial.
+  - Each game has its own examples: Suguru on 5×5 boards, Sudoku on 9×9 boards with the cells that play no part
+    dimmed. The links examples are the guide's own; the colour boards were found by a search. Every claim was checked
+    against the solution.
+
+- **A new technique in Suguru: the mixed triple.** A triple whose cells a cell sees in different ways: some through its
+  region, the rest by touching. It has its own level after the triples, with hints, practice and a guide page. Before,
+  the solver counted these as ordinary triples; they are much harder to spot.
+- **A new technique in Suguru: the nook.** A cell that touches every cell of a region but one, while its own region is
+  no bigger, has the same number as that one cell; the cell in the bend of an S-shaped region is the classic case. It
+  belongs to neighbour elimination's level and is priced like it, with its own hint (an arrow from the cell to its
+  twin) and a guide page. Neighbour elimination's practice stays as it was.
+  - **Grades:** puzzles that needed a chain or a what-if only because of a nook are now graded lower. In 252 test
+    puzzles 86 changed: 71 went down (35 by a whole grade or more), 15 up by at most 0.4; the average fell from 5.8 to
+    5.5. Your stored games are regraded once, and the statistics are rebuilt.
+  - New puzzles at a level now need that level even when you spot nooks.
+- **XY-Wing and W-Wing have names of their own (Suguru).** XY-Wing is the three-cell chain of cells with two options;
+  W-Wing is two cells with the same pair, joined by a number with two places in a region. Each is a method of its
+  chain's level, with its own guide page, and the hint looks for them before longer chains. Grades hardly change: 4 of
+  252 test puzzles, by 0.2–0.3.
+- **Relax and Learn adapt, like Challenge.** Each moves its grade after every game in it, per board size. Relax aims
+  well under the expected time (0.8 of it) without hints, so it stays relaxing as you get better; Learn aims at the
+  expected time without hints, so the technique stays the hard part and not the rest of the board. All three now
+  measure against the expected time shown before the game (the statistics model's) instead of the old estimate.
+- **Timed trial chart:** the index line has no markers. Each board is a strip you tap for its details, and only the
+  latest board is marked (filled when solved in time).
+- **Colour a cell itself in the chain tool.** With no number chosen, colour A or B goes on the cell: cells with one
+  colour hold the same number, whichever it is (a nook and its twin, the two equal ends of a chain). A frame round the
+  cell, solid for A and dashed for B. Once one of them has its number, the empty others show it, small and faint. The
+  pencil and chains guide has an example.
+- **The short single-number chain has a name of its own.** The three-link chain (a number with two places in each of
+  two regions that touch) is now a method of its own inside the single-number chain, with its own hint text and guide
+  page. The hint looks for it before longer chains. It is the same level, so grades hardly change (one test puzzle in
+  253 moved from 7.3 to 7.2).
+
+### Changed
+- **Removed from the statistics, replaced by the three numbers:** the progress index and the week table's speed,
+  technique speed, the focus area, concentration, form and fatigue, and "Solved by difficulty" (a grade on 5×5 and on
+  7×7 are different puzzles: now a table by grade and board size). Learn mode practises the statistics' "Practise
+  next" instead of the focus area.
+- **Short lines instead of explanations.** About 25 explanations are now a short line, and tapping it (›) opens the
+  whole text. Nothing is hidden for good. One look for all of them, replacing the mix of intro paragraphs, "More" and
+  "How it's measured".
+  - **Timed trial:** "In time: harder. Out of time: easier." (before, the rules disappeared after the first board).
+  - **Campaign:** "One step per technique. No hints." at the top, "Quick, clean boards fill the bar." on the step, and
+    "Quick boards count most." after a board.
+  - **New game:** "Moves after each game." for Challenge, "Rare. Can take 20 seconds." for the highest grades, "A
+    narrow band." for grade 2, "Starts where … is next." for training, "Needs …, close to …" for a technique.
+  - **Hints:** the first step says "Easiest next: …. Start at the marked cells, try it, then tap Next."
+  - **About the puzzle:** "The hardest step, plus a little for each other heavy step." and "Tallest bar: the hardest
+    step." The note that the weights were fitted to the first 17 puzzles is gone (it was out of date).
+  - **The route analysis:** "Long lines: where you searched." instead of the section "About the analysis".
+  - **Statistics:** Practice ("Beat par to go up."), Technique ("Compared with your own curve.", "Focus: speed,
+    spotting and hints.", "Your median time per move.", "↓ faster."), Form ("Pace: + is slower than usual.",
+    "Patterns, not proof."), Progress ("Games: solved / played.", "Against your usual time."), Puzzles ("Points rising
+    to the right: the grade fits you.", "1 is a perfect fit.", "Time per cell, without hints."), and the estimate
+    line ("Usually 0.6 × the estimate.").
+  - **Settings:** the pencil choice ("Grade with or without pencil.") and the three Storage notes ("Old games are
+    packed; nothing is lost.", "Some games keep it longer.", "The numbers stay; the boards go.").
+  - **The campaign's example** opens with the same small › instead of the browser's triangle.
+
+- **Hints are kept in the game's moves** (which number each counted hint was for, placed just before that number), so
+  the coming statistics can tell a step you found from one you got past with help. Nothing changes on screen yet.
+
+### Fixed
+- After a build that changes the grading, the statistics wait for your games to be regraded before reading them, so
+  they never mix old and new grades (the first start after this build takes about 11 s on a laptop).
+- Names with capitals inside, like XY-Wing, keep them in sentences ("Easiest next: XY-Wing").
+- **Campaign: a full bar on a step that was not passed.** Boards played before the rating (build 2026-11-25a) were
+  replayed into the bar only for showing it, so a step could stand at 100 % with "Try again". The replay now applies
+  the rule as well, once: a step whose bar those boards fill is passed on the board that filled it, and the campaign
+  moves on to the next step.
+
 ## 2026-11-27a
 
 ### Added

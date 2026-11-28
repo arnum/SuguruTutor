@@ -28,14 +28,14 @@ public final class SuguruTutor {
         Single(int kind, int cell, int v, int region, double score) { this.kind = kind; this.cell = cell; this.v = v; this.region = region; this.score = score; } }
     static final class Target { final int cell, mask; Target(int cell, int mask) { this.cell = cell; this.mask = mask; } }
     static final class App {
-        int tech, region = -1, v, mask, cell = -1, goal = -1, relCount, memPeak;
+        int tech, region = -1, v, mask, cell = -1, goal = -1, relCount, memPeak, nook = -1;
         /** Bit mask of the techniques used inside a what-if (only steps that carry the contradiction). */
         int innerMask;
         int[] spots, cells, nodes, rootA, rootB;
         List<Target> targets = new ArrayList<>();
         App copy() {
             App a = new App();
-            a.tech = tech; a.region = region; a.v = v; a.mask = mask; a.cell = cell; a.goal = goal; a.relCount = relCount; a.memPeak = memPeak; a.innerMask = innerMask;
+            a.tech = tech; a.region = region; a.v = v; a.mask = mask; a.cell = cell; a.goal = goal; a.relCount = relCount; a.memPeak = memPeak; a.innerMask = innerMask; a.nook = nook;
             a.spots = spots; a.cells = cells; a.nodes = nodes; a.rootA = rootA; a.rootB = rootB; a.targets = new ArrayList<>(targets);
             return a;
         }
@@ -121,8 +121,21 @@ public final class SuguruTutor {
                 for (int o : RC[r]) if (o == c || Math.abs(c / cols - o / cols) > 1 || Math.abs(c % cols - o % cols) > 1) { all = false; break; }
                 if (all) { shapeV[c] = size[c]; shapeVia[c] = r; }
             }
+        for (int r = 0; r < nr; r++) {
+            int[] cells = RC[r];
+            if (cells.length < 2) continue;
+            for (int x = 0; x < n; x++) {
+                if (region[x] == r || size[x] > cells.length) continue;
+                int y = -1, miss = 0;
+                for (int c : cells) if (!touches(x, c)) { miss++; y = c; }
+                if (miss == 1) nooks.add(new int[]{x, y, r});
+            }
+        }
     }
     int[] shapeV, shapeVia;
+    /** The nook (28 Nov. 2026, method 17, as tutor.js): {x, y, region}: x touches every cell of the region but y, and x's own
+     *  region is no bigger, so x and y are the same number. */
+    List<int[]> nooks = new ArrayList<>();
 
     boolean peer(int a, int b) { return peerM[a * n + b]; }
     static int pc(int x) { return Integer.bitCount(x); }
@@ -194,6 +207,23 @@ public final class SuguruTutor {
     }
 
     // ------------------------------------------------------------------ techniques
+    List<Target> nookTargets(St s, int x, int y) {
+        int mx = s.val[x] != 0 ? 1 << s.val[x] : s.cand[x], my = s.val[y] != 0 ? 1 << s.val[y] : s.cand[y];
+        List<Target> out = new ArrayList<>();
+        if (s.val[x] == 0 && (s.cand[x] & ~my) != 0) out.add(new Target(x, s.cand[x] & ~my));
+        if (s.val[y] == 0 && (s.cand[y] & ~mx) != 0) out.add(new Target(y, s.cand[y] & ~mx));
+        return out;
+    }
+    List<App> nookApps(St s, boolean first) {
+        List<App> out = new ArrayList<>();
+        for (int[] k : nooks) {
+            List<Target> t = nookTargets(s, k[0], k[1]);
+            if (t.isEmpty()) continue;
+            App a = new App(); a.tech = 17; a.cells = new int[]{k[0], k[1]}; a.nook = k[2]; a.targets = t;
+            out.add(a); if (first) return out;
+        }
+        return out;
+    }
     List<App> neighborApps(St s, boolean first) {
         List<App> out = new ArrayList<>();
         for (int r = 0; r < nr; r++) {
@@ -219,8 +249,9 @@ public final class SuguruTutor {
         return out;
     }
 
-    /** Pair targets (26 Nov. 2026, as tutor.js): a target that touches both cells or shares their region sees them the same way
-     *  (technique 3); one that sees one cell by the region and the other only by touching is a mixed pair (technique 14). */
+    /** Pair and triple targets (pairs 26 Nov. 2026, triples 28 Nov. 2026, as tutor.js): a target that touches all the cells or
+     *  shares their region sees them the same way (technique 3 or 5); one that sees some by the region and the rest only by
+     *  touching is a mixed pair or mixed triple (technique 14 or 15). */
     boolean touches(int a, int b) { return Math.abs(a / cols - b / cols) <= 1 && Math.abs(a % cols - b % cols) <= 1; }
     boolean sameWay(int t, int[] ch) {
         boolean all = true;
@@ -250,15 +281,11 @@ public final class SuguruTutor {
                 for (int q : ch) if (!peer(p, q)) { all = false; break; }
                 if (all) targets.add(new Target(p, s.cand[p] & m));
             }
-            if (k == 3) {
-                if (targets.isEmpty()) return false;
-                App a = new App(); a.tech = 5; a.cells = ch.clone(); a.mask = m; a.targets = targets; out.add(a); return first;
-            }
             App simple = new App(), mixed = new App();
             for (Target t : targets) (sameWay(t.cell, ch) ? simple : mixed).targets.add(t);
             boolean found = false;
-            if (want != MIXED && !simple.targets.isEmpty()) { simple.tech = 3; simple.cells = ch.clone(); simple.mask = m; out.add(simple); found = true; }
-            if (want != SIMPLE && !mixed.targets.isEmpty()) { mixed.tech = 14; mixed.cells = ch.clone(); mixed.mask = m; out.add(mixed); found = true; }
+            if (want != MIXED && !simple.targets.isEmpty()) { simple.tech = k == 2 ? 3 : 5; simple.cells = ch.clone(); simple.mask = m; out.add(simple); found = true; }
+            if (want != SIMPLE && !mixed.targets.isEmpty()) { mixed.tech = k == 2 ? 14 : 15; mixed.cells = ch.clone(); mixed.mask = m; out.add(mixed); found = true; }
             return found && first;
         }
         for (int i = st; i < cs.length; i++) {
@@ -335,15 +362,19 @@ public final class SuguruTutor {
     private final class ChainSearch {
         final St s; final char mode; final boolean first; final int tech; final Map<Integer, List<Integer>> strong;
         final List<App> out = new ArrayList<>(); final Set<String> seen = new HashSet<>();
-        int budget, maxK; final List<Integer> path = new ArrayList<>(); final Set<Integer> onPath = new HashSet<>();
-        ChainSearch(St s, char mode, boolean first) {
-            this.s = s; this.mode = mode; this.first = first;
-            this.tech = mode == 'x' ? 7 : mode == 'y' ? 8 : 9;
+        int budget, maxK; final int kLo, kHi; final List<Integer> path = new ArrayList<>(); final Set<Integer> onPath = new HashSet<>();
+        /** kLo, kHi: the number of strong links searched; the three-link single-number chain (kLo = kHi = 2) is method 16 */
+        /** wing: 0 any chain, 1 only the W-Wing's shape (19), 2 not that shape (the mixed chain, 9, in Suguru) */
+        final int wing;
+        ChainSearch(St s, char mode, boolean first, int kLo, int kHi, int tech) { this(s, mode, first, kLo, kHi, tech, 0); }
+        ChainSearch(St s, char mode, boolean first, int kLo, int kHi, int tech, int wing) {
+            this.s = s; this.mode = mode; this.first = first; this.kLo = kLo; this.kHi = kHi; this.wing = wing;
+            this.tech = tech;
             this.strong = strongLinks(s, mode);
         }
         List<App> run() {
             if (strong.size() < 4) return out;
-            for (maxK = 2; maxK <= 7; maxK++) {
+            for (maxK = kLo; maxK <= kHi; maxK++) {
                 budget = 20000;
                 path.clear(); onPath.clear();
                 outer:
@@ -365,7 +396,7 @@ public final class SuguruTutor {
             if (k == maxK) {
                 List<Integer> zs = new ArrayList<>();
                 for (int z : weakNbrs(s, A, mode)) if (!onPath.contains(z) && weakLink(z, Y, mode)) zs.add(z);
-                if (!zs.isEmpty()) {
+                if (!zs.isEmpty() && (wing == 0 || (wing == 1) == isWing(path))) {
                     List<Target> targets = groupTargets(zs);
                     List<String> parts = new ArrayList<>();
                     for (Target t : targets) parts.add(t.cell + ":" + t.mask);
@@ -397,7 +428,15 @@ public final class SuguruTutor {
             return false;
         }
     }
-    List<App> chainApps(St s, boolean first, char mode) { return new ChainSearch(s, mode, first).run(); }
+    List<App> chainApps(St s, boolean first, char mode) { return chainApps(s, first, mode, 2, 7, mode == 'x' ? 7 : mode == 'y' ? 8 : 9); }
+    List<App> chainApps(St s, boolean first, char mode, int kLo, int kHi, int tech) { return new ChainSearch(s, mode, first, kLo, kHi, tech).run(); }
+    /** the W-Wing's shape (as tutor.js isWing): x=y in a cell, y between its two places in a region, y=x in a second cell */
+    static boolean isWing(List<Integer> p) {
+        if (p.size() != 6) return false;
+        int[] c = new int[6], d = new int[6];
+        for (int i = 0; i < 6; i++) { c[i] = p.get(i) >> 3; d[i] = p.get(i) & 7; }
+        return c[0] == c[1] && c[4] == c[5] && c[2] != c[3] && d[1] == d[2] && d[2] == d[3] && d[3] == d[4] && d[0] == d[5];
+    }
 
     // ---- single-number what-if (returns the number of relevant steps, or -1 if there is no contradiction)
     TrialResult nishioRun(St s, int c0, int x) {
@@ -763,14 +802,19 @@ public final class SuguruTutor {
     List<App> find(St s, int m, boolean first) {
         switch (m) {
             case 2: return neighborApps(s, first);
+            case 17: return nookApps(s, first);
             case 3: return nakedApps(s, 2, first, SIMPLE);
             case 4: return hiddenApps(s, 2, first);
             case 14: return nakedApps(s, 2, first, MIXED);
-            case 5: return nakedApps(s, 3, first);
+            case 5: return nakedApps(s, 3, first, SIMPLE);
+            case 15: return nakedApps(s, 3, first, MIXED);
             case 6: return hiddenApps(s, 3, first);
-            case 7: return chainApps(s, first, 'x');
-            case 8: return chainApps(s, first, 'y');
-            case 9: return chainApps(s, first, 'a');
+            case 16: return chainApps(s, first, 'x', 2, 2, 16);
+            case 7: return chainApps(s, first, 'x', 3, 7, 7);
+            case 18: return chainApps(s, first, 'y', 3, 3, 18);
+            case 8: return chainApps(s, first, 'y', 4, 7, 8);
+            case 19: return new ChainSearch(s, 'a', first, 3, 3, 19, 1).run();
+            case 9: return new ChainSearch(s, 'a', first, 2, 7, 9, 2).run();
             case 10: return nishioApps(s, first);
             case 11: return trialApps(s, SuguruGrade.METHOD_WITHIN[11], first);
             case 12: return bothWaysApps(s, first);
@@ -801,7 +845,16 @@ public final class SuguruTutor {
             }
             return b.targets.isEmpty() ? null : b;
         }
-        if (a.tech == 3 || a.tech == 5 || a.tech == 14) {
+        if (a.tech == 17) {
+            List<Target> now = nookTargets(T, a.cells[0], a.cells[1]);
+            App b = a.copy(); b.targets = new ArrayList<>();
+            for (Target t : a.targets) {
+                int m = 0; for (Target u : now) if (u.cell == t.cell) m = u.mask;
+                if ((m & t.mask) != 0) b.targets.add(new Target(t.cell, m & t.mask));
+            }
+            return b.targets.isEmpty() ? null : b;
+        }
+        if (a.tech == 3 || a.tech == 5 || a.tech == 14 || a.tech == 15) {
             int u = 0;
             for (int c : a.cells) { if (T.val[c] != 0) return null; u |= T.cand[c]; }
             if ((u & ~a.mask) != 0) return null;
@@ -829,7 +882,7 @@ public final class SuguruTutor {
             b.memPeak = Math.max(A.peakFor(a.goal, gone), B.peakFor(a.goal, gone) + 1);
             return b;
         }
-        if (a.tech >= 7 && a.tech <= 9) {
+        if ((a.tech >= 7 && a.tech <= 9) || a.tech == 16 || a.tech == 18 || a.tech == 19) {
             for (int k : a.nodes) if (T.val[k >> 3] != 0 || (T.cand[k >> 3] & (1 << (k & 7))) == 0) return null;
             for (int i = 0; i + 1 < a.nodes.length; i += 2) {
                 int x = a.nodes[i], y = a.nodes[i + 1];
@@ -1006,12 +1059,12 @@ public final class SuguruTutor {
                     for (int c : RC[a.region]) if (S0.val[c] == 0 && ((Tb.cand[c] ^ S0.cand[c]) & a.mask) != 0) h.built++;
                 } else for (int c : own) if (Tb.cand[c] != S0.cand[c]) h.built++;
                 if ((a.tech == 10 || a.tech == 11 || a.tech == 13) && pc(Tb.cand[a.cell]) >= 3) h.trial = 1;
-                if (a.tech == 5 || a.tech == 6) for (int c : a.cells) if (pc(Tb.cand[c] & a.mask) < 3) { h.partial = 1; break; }
+                if (a.tech == 5 || a.tech == 6 || a.tech == 15) for (int c : a.cells) if (pc(Tb.cand[c] & a.mask) < 3) { h.partial = 1; break; }
                 Collections.sort(own);
                 StringBuilder sb = new StringBuilder().append(a.tech).append(':');
                 for (int k = 0; k < own.size(); k++) sb.append(k > 0 ? "," : "").append(own.get(k));
                 sb.append(':');
-                if ((a.tech >= 3 && a.tech <= 6) || a.tech == 14) sb.append(a.mask);
+                if ((a.tech >= 3 && a.tech <= 6) || a.tech == 14 || a.tech == 15) sb.append(a.mask);
                 else if (a.tech == 2 || a.tech == 10 || a.tech == 11 || a.tech == 13) sb.append(a.v);
                 h.sig = sb.toString();
             }

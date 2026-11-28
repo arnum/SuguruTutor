@@ -183,7 +183,10 @@ function timeMeterHtml(ms, refSec, refLabel) {
     `<b class="tm-p">${pct} %</b></div>`
   );
 }
-function estLineHtml(lv, cells) {
+function estLineHtml(lv, cells, grade, rows, cols) {
+  // the statistics model's expected time where it has one (statui.js): the same model as the bar after the game
+  const ex = rows ? statExpectedFor(lv, rows, cols, grade) : null;
+  if (ex) return `<p class="estline"><b>${tr("Expected time: about {t}.", { t: estFmt(ex) })}</b></p>`;
   const cal = myCal(),
     est = estimateSec(cal, lv, cells);
   if (!est) return "";
@@ -194,20 +197,6 @@ function estLineHtml(lv, cells) {
     `</p>`
   );
 }
-// How well does the estimate hit? Your latest solved puzzles with an estimate
-function estStats(k = 12) {
-  const cal = myCal();
-  const r = ownGames()
-    .filter((g) => g.solved && g.lv && g.lv.length)
-    .slice(-k)
-    .map((g) => g.ms / 1000 / (g.est || estimateSec(cal, g.lv, g.rows * g.cols)))
-    .filter((x) => isFinite(x) && x > 0)
-    .sort((a, b) => a - b);
-  if (r.length < 4) return null;
-  const q = (p) => r[Math.min(r.length - 1, Math.floor(p * r.length))];
-  return { n: r.length, med: q(0.5), lo: q(0.25), hi: q(0.75) };
-}
-
 // ---------- Personal grade: how a puzzle will probably feel to you
 // From your solved puzzles without hints: how long per empty cell each grade usually takes you, and how much puzzles with
 // the same hardest technique have been above or below their grade. The deviation is damped when there are few puzzles of that kind.

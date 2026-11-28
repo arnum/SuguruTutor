@@ -1,6 +1,9 @@
 // Colour and draw chains (27 Nov. 2026): a tool in the game to follow a chain yourself.
 //   Colours: a number in a cell (a candidate) gets colour A or B, the two states of a chain (simple colouring). A cell
 //   that sees both colours of a number loses it; two cells of one colour that see each other mean that colour is false.
+//   With no number chosen the colour goes on the cell itself (28 Nov. 2026): cells of one colour hold the same number,
+//   whichever it is (the nook and its twin, a chain's two equal ends). Drawn as a frame round the cell; once one of
+//   them has its number, the others show it (draw.js).
 //   Links: a line between two candidates (or two cells), solid for a strong link ("only two places" or "only two options")
 //   and dashed for a weak one ("they see each other").
 // The app does not judge the marks: they are notes, so they count as pencil for the grade (meta.pen) and a timed trial
@@ -8,13 +11,13 @@
 //
 // Use: the Chains button opens a bar with four tools (colour A, colour B, strong link, weak link) and Clear. The number
 // buttons then choose the number to work on; tapping cells colours that number, or links it (tap two cells). With no
-// number chosen, a link goes from cell to cell. Choosing another number between the two taps links two numbers (a cell's
+// number chosen, a colour goes on the cell and a link goes from cell to cell. Choosing another number between the two taps links two numbers (a cell's
 // two options, for a chain of cells with two options).
 
 let chainTool = null, // null (off) | "A" | "B" | "S" (strong link) | "W" (weak link)
   chainD = 0, // the number worked on (0: none)
   chainFrom = null, // the first end of a link being drawn: { c, d }
-  chainState = { col: {}, links: [] }; // col: { cell*16+d: 1 (A) | 2 (B) }; links: [{ a, da, b, db, w (1 = weak) }]
+  chainState = { col: {}, links: [] }; // col: { cell*16+d: 1 (A) | 2 (B); d 0: the cell }; links: [{ a, da, b, db, w (1 = weak) }]
 
 const chainKey = (c, d) => c * 16 + d;
 const chainEmpty = () => !Object.keys(chainState.col).length && !chainState.links.length;
@@ -33,7 +36,7 @@ function chainRestore(s) {
 function chainPlaced(cell, d) {
   for (const j of peerSets[cell]) delete chainState.col[chainKey(j, d)];
 }
-// a cell erased or the board started over
+// a cell erased or the board started over (its own colour stays: it says which cells are equal, not what it holds)
 function chainClearCell(cell) {
   for (let d = 1; d <= 9; d++) delete chainState.col[chainKey(cell, d)];
   chainState.links = chainState.links.filter((l) => l.a !== cell && l.b !== cell);
@@ -78,10 +81,9 @@ function chainPad(d) {
 function chainTap(cell) {
   if (solved) return;
   if (chainTool === "A" || chainTool === "B") {
-    if (value(cell)) return setMsg(tr("Colours go on the options of empty cells."), "warn");
-    if (!chainD) return setMsg(tr("Choose a number first."), "warn");
+    if (chainD && value(cell)) return setMsg(tr("Colours go on the options of empty cells."), "warn");
     if (chainD > digitMax(cell)) return setMsg(tr("This cell cannot be {v}.", { v: chainD }), "warn");
-    const k = chainKey(cell, chainD),
+    const k = chainKey(cell, chainD), // chainD 0: the cell itself
       want = chainTool === "A" ? 1 : 2;
     pushUndo();
     if (chainState.col[k] === want) delete chainState.col[k];
@@ -151,7 +153,7 @@ function chainPadHint() {
   if (chainTool === "A" || chainTool === "B")
     return chainD
       ? tr("Tap cells to colour {v} with colour {c}. Tap again to remove it.", { v: chainD, c: chainTool })
-      : tr("Choose the number to colour.");
+      : tr("Tap cells to mark them {c}: cells with one colour hold the same number. Or choose a number to colour.", { c: chainTool });
   if (chainFrom) return tr("Now tap the other end of the link.") + " " + tr("You can choose another number first.");
   return chainTool === "S"
     ? tr("Strong link (only two places, or only two options): tap two cells.") + (chainD ? "" : " " + tr("Choose a number to link its options."))
@@ -161,3 +163,4 @@ function chainPadHint() {
 $("chainBtn").onclick = chainToggle;
 $("chainBar").querySelectorAll("[data-tool]").forEach((b) => (b.onclick = () => chainSetTool(b.dataset.tool)));
 $("chainClear").onclick = chainClear;
+$("chainHelp").onclick = () => openToolGuide("colours"); // the guide to the pencil and chains (toolguide.js)

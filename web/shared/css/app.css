@@ -21,6 +21,8 @@
   --colA: rgba(0, 114, 178, 0.3); /* the chain tool's colour A (a disc) and B (a square): blue and orange, colour-blind safe */
   --colB: rgba(230, 159, 0, 0.45);
   --colInk: #17191e;
+  --cellA: #0072b2; /* colour A and B on a cell itself: a frame (chains.js) */
+  --cellB: #d08c00;
   --ulink: #4b5563; /* the player's links */
   --badbg: #f6d6ce;
   --peer: #eef0ea;
@@ -58,6 +60,8 @@
     --colA: rgba(86, 180, 233, 0.42);
     --colB: rgba(230, 159, 0, 0.5);
     --colInk: #ffffff;
+    --cellA: #56b4e9;
+    --cellB: #e69f00;
     --ulink: #b4bac6;
     --badbg: #4a2620;
     --peer: #1d2028;
@@ -91,6 +95,8 @@
   --link: #f0a54a; /* arrows */
   --colA: rgba(86, 180, 233, 0.42);
   --colB: rgba(230, 159, 0, 0.5);
+  --cellA: #56b4e9;
+  --cellB: #e69f00;
   --colInk: #ffffff;
   --ulink: #b4bac6;
   --badbg: #4a2620;
@@ -848,7 +854,7 @@ svg#grid {
 /* the chain tool's bar (chains.js): colour A, colour B, strong link, weak link, Clear */
 .chainbar {
   display: grid;
-  grid-template-columns: repeat(4, 1fr) auto;
+  grid-template-columns: repeat(4, 1fr) auto auto;
   gap: 6px;
   margin: 2px 0 4px;
 }
@@ -876,6 +882,73 @@ svg#grid {
 }
 .chainbar button:disabled {
   opacity: 0.4;
+}
+.chainbar .chelp {
+  width: 38px;
+  padding: 0;
+  font-size: 16px;
+  color: var(--indigo);
+}
+/* Pencil and chains, the guide (toolguide.js): each example a board that steps through, with the buttons tapped as chips */
+.tgbody {
+  display: flex;
+  flex-direction: column;
+  gap: 26px;
+  padding: 4px 0 40px;
+}
+.tg h3 {
+  margin: 0;
+  font-size: 18px;
+}
+.tg .tldr {
+  margin: 2px 0 10px;
+  color: var(--mute);
+  font-size: 14px;
+}
+.tg .mbsteps {
+  max-width: 380px;
+  margin: 0 auto;
+}
+.tgboard svg {
+  width: 100%;
+  height: auto;
+  display: block;
+  cursor: pointer;
+}
+.tgkeys {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+  min-height: 30px;
+  margin: 0 0 8px;
+}
+.tgkeys span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--grid);
+  border-radius: 8px;
+  background: var(--cell);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.tgkeys span.on {
+  border-color: var(--indigo);
+  box-shadow: inset 0 0 0 2px var(--indigo);
+}
+.tg .mbtext {
+  font-size: 14px;
+  text-align: center;
+  margin: 4px 0 0;
+}
+.tglist {
+  margin: 6px 0 0;
+  padding-left: 20px;
+  font-size: 14px;
+  line-height: 1.5;
 }
 .cmark {
   width: 16px;
@@ -2954,6 +3027,56 @@ textarea.io.note {
   background: linear-gradient(to right, var(--indigo) var(--f), var(--grid) var(--f));
 }
 
+/* A short line that opens to the whole text (tldr in core.js): quiet, with a small chevron to show there is more */
+details.tldr {
+  margin: 2px 0 10px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--mute);
+}
+details.tldr > summary {
+  list-style: none;
+  cursor: pointer;
+  display: inline;
+}
+details.tldr > summary::-webkit-details-marker {
+  display: none;
+}
+details.tldr > summary::after {
+  content: "›";
+  display: inline-block;
+  margin-left: 5px;
+  color: var(--indigo);
+  font-weight: 700;
+  transition: transform 0.15s;
+}
+details.tldr[open] > summary::after {
+  transform: rotate(90deg);
+}
+details.tldr > div {
+  margin-top: 4px;
+}
+details.tldr.inline {
+  display: inline;
+  margin: 0;
+}
+details.tldr.inline[open] {
+  display: block;
+  margin-top: 4px;
+}
+details.tldr.about {
+  text-align: center;
+  margin: 0 0 14px;
+}
+details.tldr.setnote {
+  margin: 2px 0 8px;
+  font-size: 12.5px;
+}
+details.tldr.estline,
+details.tldr.rnote {
+  margin-top: 10px;
+}
+
 /* Long explanations in the statistics, folded (foldLong in stats.js) */
 details.fold > summary {
   list-style: none;
@@ -3455,6 +3578,23 @@ body.guest .dock {
   font-size: 14px;
   font-weight: 600;
   padding: 4px 0;
+  list-style: none;
+}
+.campex > summary::-webkit-details-marker,
+.campsteps > summary::-webkit-details-marker {
+  display: none;
+}
+/* the same small chevron as the short lines (details.tldr) */
+.campex > summary::after,
+.campsteps > summary::after {
+  content: "›";
+  display: inline-block;
+  margin-left: 6px;
+  transition: transform 0.15s;
+}
+.campex[open] > summary::after,
+.campsteps[open] > summary::after {
+  transform: rotate(90deg);
 }
 .campexb {
   max-width: 280px;
@@ -3640,4 +3780,379 @@ body.guest .dock {
   font-weight: 400;
   color: var(--mute);
   text-align: center;
+}
+
+/* ---------- The statistics model (statui.js): the seal, the three indices, the technique ladder */
+/* The seal: the 解 stamp's rounded square, a little wider, holding Performance large and Skill and Focus small */
+.seal {
+  flex: none;
+  width: 86px;
+  height: 86px;
+  padding: 7px 4px 6px;
+  border: 3px solid var(--stamp);
+  border-radius: 11px;
+  color: var(--stamp);
+  background: transparent;
+  transform: rotate(-6deg);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  font: inherit;
+  cursor: pointer;
+}
+.seal .sic {
+  width: 11px;
+  height: 11px;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  flex: none;
+}
+.seal .sp {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+.seal .sp b {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 21px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.seal .sl {
+  width: 62px;
+  height: 1.5px;
+  background: var(--stamp);
+  opacity: 0.8;
+}
+.seal .sr {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.seal .sr > span {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.seal .sr i {
+  width: 1.5px;
+  height: 12px;
+  background: var(--stamp);
+  opacity: 0.6;
+}
+.seal.one .sp b {
+  font-size: 24px;
+}
+.seal.one .sic {
+  width: 13px;
+  height: 13px;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .sheet.open .seal {
+    animation: stampin 0.5s cubic-bezier(0.3, 1.6, 0.5, 1) 0.1s both;
+  }
+}
+.sealrow {
+  display: grid;
+  grid-template-columns: 22px 1fr;
+  gap: 10px;
+  align-items: start;
+  margin: 10px 0;
+}
+.sealrow > .sic {
+  width: 20px;
+  height: 20px;
+  stroke: var(--stamp);
+  margin-top: 2px;
+}
+.sealrow small {
+  color: var(--mute);
+  font-weight: 400;
+}
+.sic {
+  width: 1em;
+  height: 1em;
+  vertical-align: -0.12em;
+}
+.sealmini {
+  display: inline-flex;
+  gap: 2px;
+  align-items: center;
+  color: var(--stamp);
+  font-variant-numeric: tabular-nums;
+}
+.sealmini .sic {
+  width: 11px;
+  height: 11px;
+  stroke-width: 2.2;
+  margin-left: 4px;
+}
+.sealmini .sic:first-child {
+  margin-left: 0;
+}
+table.data th .sic {
+  width: 13px;
+  height: 13px;
+}
+/* The three indices on Overview */
+.idxs {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+  gap: 10px;
+}
+.idx {
+  background: var(--cell);
+  border: 0;
+  border-radius: 16px;
+  padding: 12px 10px;
+  box-shadow: inset 0 0 0 1px var(--grid);
+  text-align: left;
+  font: inherit;
+  color: var(--ink);
+  cursor: pointer;
+}
+.idx .sic {
+  width: 16px;
+  height: 16px;
+  stroke: var(--stamp);
+  stroke-width: 2;
+}
+.idx b {
+  display: block;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 28px;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+.idx span {
+  display: block;
+  font-size: 12.5px;
+  font-weight: 700;
+}
+.idx small {
+  display: block;
+  font-size: 11.5px;
+  color: var(--mute);
+}
+.idxnote {
+  margin: -4px 2px 0;
+  font-size: 12px;
+}
+.panelcard h3 .sic {
+  width: 15px;
+  height: 15px;
+  stroke: var(--stamp);
+  stroke-width: 2;
+}
+.panelcard h3 .hval {
+  float: right;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 22px;
+}
+.panelcard h4.dh {
+  margin: 14px 0 2px;
+  font-size: 13px;
+}
+/* The technique ladder (Skill) */
+.ladh,
+.lad {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr) 104px 44px;
+  gap: 6px;
+  align-items: center;
+}
+.ladh {
+  font-size: 11px;
+  color: var(--mute);
+  margin: 12px 0 2px;
+}
+.lad {
+  padding: 6px 0;
+  border-top: 1px solid var(--grid);
+  font-size: 13px;
+}
+.lad .ln {
+  font-family: var(--font-display);
+  font-weight: 800;
+  color: var(--mute);
+  text-align: center;
+}
+.lad .lname {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.lad .lsp {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.lad .lsp small {
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  min-width: 34px;
+  text-align: right;
+}
+.lbar {
+  position: relative;
+  flex: 1;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--chip);
+}
+.lbar i {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--indigo) 30%, transparent);
+}
+.lbar b {
+  position: absolute;
+  top: -2px;
+  width: 3px;
+  height: 12px;
+  margin-left: -1.5px;
+  border-radius: 2px;
+  background: var(--indigo);
+}
+.lad .lt {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.lad .lt.up {
+  color: var(--indigo);
+  font-weight: 700;
+}
+.lad .lt.down {
+  color: var(--warn);
+  font-weight: 700;
+}
+table.data td.few {
+  color: var(--mute);
+}
+.legendrow .lgi {
+  white-space: nowrap;
+  margin-right: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.legendrow.lg2 {
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  gap: 4px 0;
+}
+/* What moves your Focus: each group's median and band on one shared axis, like the technique ladder */
+.frh,
+.frow,
+.frs {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 128px 34px;
+  gap: 8px;
+  align-items: center;
+}
+.frh {
+  font-size: 11px;
+  color: var(--mute);
+  margin: 8px 0 0;
+}
+.fgrp {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--mute);
+  margin: 12px 0 2px;
+}
+.frow {
+  padding: 6px 0;
+  border-top: 1px solid var(--grid);
+  font-size: 13px;
+}
+.frow .fl {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.frow .fl small {
+  margin-left: 6px;
+  font-size: 11px;
+  color: var(--mute);
+}
+.frow .fv {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.frow .fv.low,
+.fbar b.low {
+  color: var(--warn);
+}
+.frow .fv.low,
+.frow .fv.high {
+  font-weight: 700;
+}
+.frow .fv.high {
+  color: var(--indigo);
+}
+.fbar b.low {
+  background: var(--warn);
+}
+.fbar u {
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  width: 0;
+  border-left: 1.5px dashed var(--mute);
+}
+.frs .fscale {
+  position: relative;
+  height: 16px;
+}
+.frs .fscale small {
+  position: absolute;
+  top: 2px;
+  transform: translateX(-50%);
+  font-size: 10.5px;
+  color: var(--mute);
+  white-space: nowrap;
+}
+.frs .fscale small:first-child {
+  transform: none;
+}
+.frs .fscale small:last-child {
+  transform: translateX(-100%);
+}
+.heatmax {
+  margin-left: 6px;
+}
+.frh span:nth-child(2) {
+  grid-column: 2 / 4;
+}
+.panelcard h3 .hval small {
+  display: block;
+  font-family: var(--font-body, inherit);
+  font-weight: 400;
+  font-size: 11px;
+  color: var(--mute);
+  text-align: right;
+}
+.panelcard h3 .hval .sic {
+  width: 16px;
+  height: 16px;
+}
+.fcard .pfacts {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: var(--mute);
+  font-variant-numeric: tabular-nums;
 }

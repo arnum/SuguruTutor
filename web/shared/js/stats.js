@@ -1,4 +1,4 @@
-// Statistics: tabs, key figures, activity and latest games.
+// Statistics: tabs, key figures, activity and latest games. The indices, Skill, Focus and Debug are in statui.js.
 
 function streaks() {
   const days = new Set(games.filter((g) => g.solved).map((g) => g.day));
@@ -77,54 +77,19 @@ function renderStatsIn() {
     <div class="kpi"><b>${won.length ? Math.round((100 * clean) / won.length) : 0} %</b><span>${tr("Without hints")}</span><small>${tr("{a} of {b} solved", { a: clean, b: won.length })}</small></div>
     <div class="kpi"><b>${totalTxt}</b><span>${tr("Total time")}</span><small>${won.length ? tr("average {time} per puzzle", { time: fmt(won.reduce((a, g) => a + g.ms, 0) / won.length) }) : ""}</small></div>
   </div>`;
-  html += progressLine();
-  html += TAB("fremgang") + progressPanel();
-  html += TAB("teknik") + focusPanel() + drillPanel() + TAB("overblik");
-  // Per level
-  const per = [];
-  for (let l = 1; l <= 9; l++) {
-    const gl = won.filter((g) => gBand(g) === l),
-      cl = gl.filter((g) => !g.hints);
-    per[l] = {
-      n: gl.length,
-      best: cl.length ? Math.min(...cl.map((g) => g.ms)) : null,
-      avg: gl.length ? gl.reduce((a, g) => a + g.ms, 0) / gl.length : null,
-    };
-  }
-  const maxN = Math.max(1, ...per.slice(1).map((x) => x.n));
-  html +=
-    `<div class="panelcard"><h3>${tr("Solved by difficulty")}</h3><p>${tr("Best time is without hints. Tap a row for the average.")}</p>` +
-    per
-      .slice(1)
-      .map((x, i) => {
-        const l = i + 1;
-        return (
-          `<div class="barrow ${x.n ? "" : "zero"}" data-tip="${esc(BAND[l])}: ${tr("{n} solved", { n: x.n })}${x.avg ? " · " + tr("average {time}", { time: fmt(x.avg) }) : ""}${x.best ? " · " + tr("best {time}", { time: fmt(x.best) }) : ""}">` +
-          `<span class="n">${l}</span><span class="name">${esc(BAND[l])}</span><span class="cnt">${x.n || "–"}</span><span class="best">${x.best ? fmt(x.best) : ""}</span>` +
-          `<span class="track"><span class="fill" style="display:block;width:${((100 * x.n) / maxN).toFixed(1)}%"></span></span></div>`
-        );
-      })
-      .join("") +
-    `</div>`;
+  // the three indices (statui.js), then the simple statistics
+  html += statIndicesHtml() + statSkillLine();
   // Activity
-  html += `<div class="panelcard"><h3>${tr("Activity")}</h3><p>${tr("Puzzles solved per day over the last 12 weeks. Tap a day to see its games.")}</p>${heatmap(won)}</div>`;
-  // Trend
-  html += TAB("opgaver") + ratingPanel();
-  const last = won.slice(-30);
-  if (last.length >= 2)
-    html +=
-      `<div class="panelcard"><h3>${tr("Difficulty over time")}</h3><p>${tr("Your last {n} solved puzzles. Tap a point.", { n: last.length })}</p>${trendChart(last)}` +
-      `<button class="tablelink" type="button" id="trendTable">${tr("Show as table")}</button><div id="trendTableBox"></div></div>`;
-  html += TAB("teknik") + routePanel();
-  html += timePanel();
-  // Hints
+  html += `<div class="panelcard"><h3>${tr("Activity")}</h3><p>${tr("Puzzles solved per day.")}</p>${heatmap(won)}</div>`;
+  // Skill: the level, the techniques, practice and hints
+  html += TAB("skill") + skillPanel() + drillPanel();
   const tc = new Array(E.TECH.length).fill(0);
   games.forEach((g) => (g.hintTechs || []).forEach((t) => tc[t]++));
   const totalHints = tc.reduce((a, b) => a + b, 0);
   if (totalHints) {
     const maxT = Math.max(...tc);
     html +=
-      `<div class="panelcard"><h3>${tr("What hints have taught you")}</h3><p>${tr("The hardest technique in each of your {n} hints.", { n: totalHints })}</p>` +
+      `<div class="panelcard"><h3>${tr("What hints have taught you")}</h3><p>${tr("The hardest technique in each hint.")}</p>` +
       tc
         .map((n, t) => [n, t])
         .sort((a, b) => TT.order(E.TECH[a[1]].level, E.TECH[b[1]].level) || a[1] - b[1]) // in the table's order (the mixed pair, 14, sits after the pairs)
@@ -138,24 +103,31 @@ function renderStatsIn() {
         .join("") +
       `</div>`;
   }
-  html += TAB("form") + concPanel() + formPanel();
-  // Latest
-  html += TAB("opgaver");
+  html += timePanel();
+  // Focus
+  html += TAB("fokus") + focusPanelNew();
+  // Games: the weeks, the grades and the route, then the games themselves
+  html += TAB("opgaver") + weeksHtml();
+  const last = won.slice(-30);
+  if (last.length >= 2) html += `<div class="panelcard"><h3>${tr("Difficulty over time")}</h3>${trendChart(last)}</div>`;
+  html += gradeSizeHtml() + routePanel();
   const recent = games.slice(-15).reverse();
   html +=
-    `<div class="panelcard"><h3>${tr("Recent games")}</h3><p>${tr("Tap to see the route or play the same puzzle again.")}</p><div class="games">` +
+    `<div class="panelcard"><h3>${tr("Recent games")}</h3><p>${tr("Tap a game for its route, or to play it again.")}</p><div class="games">` +
     recent.map(gameRow).join("") +
     `</div></div>`;
+  // Debug: the reference, how the model fits, and the grading against your times
+  html += TAB("debug") + debugPanel() + ratingPanel();
   // Spread the sections over tabs
   const parts = ("\u0001overblik\u0001" + html).split("\u0001"),
     chunks = {};
   for (let i = 1; i < parts.length; i += 2) chunks[parts[i]] = (chunks[parts[i]] || "") + parts[i + 1];
   const tabs = [
     ["overblik", tr("Overview")],
-    ["fremgang", tr("Progress")],
-    ["teknik", tr("Technique")],
-    ["form", tr("Form")],
-    ["opgaver", tr("Puzzles")],
+    ["skill", tr("Skill")],
+    ["fokus", tr("Focus")],
+    ["opgaver", tr("Games")],
+    ["debug", tr("Debug")],
   ];
   if (!chunks[ui.statsTab]) ui.statsTab = "overblik";
   body.innerHTML =
@@ -185,40 +157,19 @@ function renderStatsIn() {
     };
   bindFocus(body);
   bindDrillPanel(body);
-  const tp = $("toProgress");
-  if (tp)
-    tp.onclick = () => {
-      ui.statsTab = "fremgang";
-      saveUi();
-      renderStats();
-      window.scrollTo(0, 0);
-    };
+  // the indices and links that open a tab
+  body.querySelectorAll("[data-tab]").forEach(
+    (b) =>
+      (b.onclick = () => {
+        ui.statsTab = b.dataset.tab;
+        saveUi();
+        renderStats();
+        window.scrollTo(0, 0);
+      }),
+  );
   bindGameRows(body);
   // Tap a day in the activity map: show the day's games
   body.querySelectorAll(".heat rect[data-day]").forEach((r) => (r.onclick = () => daySheet(r.dataset.day)));
-  const tt = $("trendTable");
-  if (tt)
-    tt.onclick = () => {
-      const box = $("trendTableBox");
-      if (box.innerHTML) {
-        box.innerHTML = "";
-        tt.textContent = tr("Show as table");
-        return;
-      }
-      tt.textContent = tr("Hide table");
-      box.innerHTML =
-        `<table class="data"><tr><th>${tr("Date")}</th><th>${tr("Grade")}</th><th>${tr("Board")}</th><th>${tr("Time")}</th><th>${tr("Hints")}</th></tr>` +
-        last
-          .slice()
-          .reverse()
-          .map(
-            (g) =>
-              `<tr><td>${new Date(g.end).toLocaleDateString(LOCALE, { day: "numeric", month: "short" })}</td><td>${dec(gradeFor(g))}</td>` +
-              `<td>${g.cols}×${g.rows}</td><td>${fmt(g.ms)}</td><td>${g.hints || ""}</td></tr>`,
-          )
-          .join("") +
-        `</table>`;
-    };
 }
 // One line in a game list (latest games and the day's games)
 function gameRow(g) {
@@ -234,7 +185,7 @@ function gameRow(g) {
   ].filter(Boolean);
   return (
     `<button class="game ${g.solved ? "" : "lost"}" type="button" data-code="${esc(g.code)}" data-id="${esc(g.id)}"><span class="v">${dec(gradeFor(g))}</span>` +
-    `<span><span class="t">${esc(BAND[gBand(g)])} · ${g.cols}×${g.rows}</span><br><span class="s">${when}${tags.length ? " · " + tags.join(" · ") : ""}${g.peak != null ? "<br>" + plText(g) : ""}</span></span>` +
+    `<span><span class="t">${esc(BAND[gBand(g)])} · ${g.cols}×${g.rows}</span><br><span class="s">${when}${tags.length ? " · " + tags.join(" · ") : ""}${g.peak != null ? "<br>" + plText(g) : ""}${sealLine(g) ? "<br>" + sealLine(g) : ""}</span></span>` +
     `<span class="b">${g.solved ? fmt(g.ms) : Math.round((100 * (g.filled || 0)) / Math.max(1, g.empty || 1)) + " %"}</span></button>`
   );
 }
@@ -295,12 +246,18 @@ function heatmap(won) {
     L = 22,
     T = 16,
     W = 12;
-  const fills = [
-    "var(--chip)",
-    "color-mix(in srgb, var(--indigo) 38%, var(--cell))",
-    "color-mix(in srgb, var(--indigo) 68%, var(--cell))",
-    "var(--indigo)",
-  ];
+  // one hue from light to dark in six steps, scaled to your busiest day in the 12 weeks (a fixed 1, 2, 3+ put every day
+  // of a 15-game habit in the darkest step)
+  const fills = ["var(--chip)", 24, 38, 52, 66, 82, 100].map((p) => (typeof p === "string" ? p : `color-mix(in srgb, var(--indigo) ${p}%, var(--cell))`));
+  const d0 = new Date(start),
+    seen = [];
+  for (let k = 0; k < W * 7; k++) {
+    const d = new Date(d0);
+    d.setDate(d0.getDate() + k);
+    if (d <= today) seen.push(count[dayKey(d)] || 0);
+  }
+  const top = Math.max(1, ...seen),
+    step = (n) => (n ? Math.min(6, Math.max(1, Math.ceil((6 * n) / top))) : 0);
   let s = `<svg class="heat" viewBox="0 0 ${L + W * (C + Gp)} ${T + 7 * (C + Gp)}" role="img" aria-label="${tr("Activity over the last 12 weeks")}">`;
   [tr("M"), "", tr("W"), "", tr("F"), "", tr("S")].forEach((t, r) => {
     if (t) s += `<text x="0" y="${T + r * (C + Gp) + 12.5}" font-size="10" fill="var(--mute)">${t}</text>`;
@@ -323,12 +280,12 @@ function heatmap(won) {
       const label =
         d.toLocaleDateString(LOCALE, { weekday: "short", day: "numeric", month: "short" }) + ": " + (n ? tr("{n} solved", { n }) : tr("none"));
       s +=
-        `<rect x="${L + w * (C + Gp)}" y="${T + r * (C + Gp)}" width="${C}" height="${C}" rx="4" fill="${fills[Math.min(3, n)]}" data-tip="${esc(label)}" data-day="${k}" style="cursor:pointer"` +
+        `<rect x="${L + w * (C + Gp)}" y="${T + r * (C + Gp)}" width="${C}" height="${C}" rx="4" fill="${fills[step(n)]}" data-tip="${esc(label)}" data-day="${k}" style="cursor:pointer"` +
         (k === dayKey(today) ? ` stroke="var(--ink)" stroke-width="1.5"` : "") +
         `/>`;
     }
   }
-  s += `</svg><div class="legendrow">${tr("Fewer")} ${fills.map((f) => `<i style="background:${f}"></i>`).join("")} ${tr("More|count")}</div>`;
+  s += `</svg><div class="legendrow">${tr("Fewer")} ${fills.map((f) => `<i style="background:${f}"></i>`).join("")} ${tr("More|count")} <span class="heatmax">${tr("(up to {n} a day)", { n: top })}</span></div>`;
   return s;
 }
 function trendChart(list) {
@@ -371,7 +328,7 @@ function foldLong(root) {
   // the notes on method
   const done = new Set();
   root.querySelectorAll("p.caveat").forEach((p) => {
-    if (done.has(p)) return;
+    if (done.has(p) || p.closest("details.tldr")) return; // already behind a short line (tldr)
     const group = [p];
     let n = p.nextElementSibling;
     while (n && n.matches("p.caveat")) group.push(n), (n = n.nextElementSibling);

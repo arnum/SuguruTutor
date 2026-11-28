@@ -17,6 +17,11 @@ const TECH_LABELS = [
   tr("Both ways"),
   tr("What-if with techniques"),
   tr("Mixed pair"), // 14: a pair whose target sees one cell by its region and the other by touching (level 4)
+  tr("Mixed triple"), // 15: a triple whose target sees the three cells in different ways (unit 14)
+  tr("Short single-number chain"), // 16: the three-link single-number chain (a method of the single-number chain's unit)
+  tr("Nook"), // 17: a cell that touches all of a region but one cell is that cell's number (a method of neighbour elimination's unit)
+  tr("XY-Wing"), // 18: the three-cell chain of cells with two options (a method of that chain's unit)
+  tr("W-Wing"), // 19: two cells with the same two options joined by one number's two places (a method of the mixed chain's unit)
 ];
 
 // ---------- Lists the shared code uses (core.js, newgame.js, stats.js, play.js)
@@ -36,6 +41,11 @@ const GUIDE_IDS = [
   "begge-veje",
   "hvis-saa-dyb",
   "blandet-par",
+  "blandet-trippel",
+  "kort-kaede",
+  "krog",
+  "xy-wing",
+  "w-wing",
 ];
 const TECH_NAMES_UI = [
   tr("naked single"),
@@ -53,6 +63,11 @@ const TECH_NAMES_UI = [
   tr("both ways"),
   tr("what-if with techniques"),
   tr("mixed pair"),
+  tr("mixed triple"),
+  tr("short single-number chain"),
+  tr("nook"),
+  "XY-Wing",
+  "W-Wing",
 ];
 const SIZES = [
   { r: 4, c: 4, t: tr("Micro") },
@@ -76,6 +91,8 @@ const LEVEL_INFO = [
   tr("Assume, and find a contradiction with simple moves."),
   tr("Try both options: what they share is true."),
   tr("Long assumptions with the hard techniques."),
+  null, // 13: guessing
+  tr("A triple seen in different ways: some cells through the region, the rest by touching."), // 14: the mixed triple
 ];
 const LEVEL_TECH = [
   "",
@@ -92,6 +109,7 @@ const LEVEL_TECH = [
   tr("both ways"),
   tr("what-if with techniques"),
   tr("guessing"),
+  tr("mixed triple"), // 14
 ];
 
 // What to look for when you overlooked a technique. Ordered by the level that was the easiest at that moment.
@@ -109,6 +127,8 @@ const TECH_TIP = [
   tr("Try a number in your head: if it leads to a contradiction, it is wrong."),
   tr("Try both options in a cell: whatever happens in both cases is certain."),
   tr("Try a number in your head and follow it further: if it leads to a contradiction, it is wrong."),
+  "", // 13: guessing
+  tr("A triple can also be seen in different ways: a cell that shares a region with some of the three cells and touches the rest loses those three numbers as well."), // 14
 ];
 
 // ---------- Texts and rules the shared code looks up here
@@ -156,6 +176,7 @@ const GAME = {
     3: [tr("Find a pair"), tr("Two cells that see each other and share the same two options, or two numbers with only the same two places in a region. Tap the two cells.")],
     4: [tr("Find a mixed pair"), tr("Two touching cells with the same two options, and a cell that shares a region with one and touches the other. Tap the two cells.")],
     5: [tr("Find a triple"), tr("Three cells and three numbers locked to each other. Tap the three cells.")],
+    14: [tr("Find a mixed triple"), tr("Three cells with only three options between them, and a cell that shares a region with some of them and touches the rest. Tap the three cells.")],
   },
   // Practice games (games.js): six levels each, like the drills. cascade: how many numbers to place in a row; changed: how many
   // new easy numbers the placed number makes; sweep: which techniques, and at least how many cells lose options; count: how

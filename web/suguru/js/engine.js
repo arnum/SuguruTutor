@@ -57,6 +57,33 @@ function engineFactory() {
       label: tr("Mixed pair"),
       desc: tr("Two touching cells with the same two options are those two numbers. A cell in the same region as one of them that touches the other cannot hold them."),
     },
+    // 15 (28 Nov. 2026): a naked triple where a cell sees the three in different ways: some through its region, the rest
+    // only by touching (unit 14, after the triples)
+    {
+      label: tr("Mixed triple"),
+      desc: tr("Three cells that see each other with only three options between them are those three numbers. A cell that sees all three, some through its region and the rest by touching, cannot hold them."),
+    },
+    // 16 (28 Nov. 2026): the shortest single-number chain, three links: a number with two places in one region, one of
+    // them touching one of its two places in another region; cells that see both far ends lose it
+    {
+      label: tr("Short single-number chain"),
+      desc: tr("A number has two places in each of two regions, and one place in the first touches one in the second. They cannot both be the number, so one of the two far places is. Cells that see both far places cannot hold it."),
+    },
+    // 17 (28 Nov. 2026): the nook, a method of neighbour elimination's unit
+    {
+      label: tr("Nook"),
+      desc: tr("A cell touches every cell of a region but one, and its own region is no bigger. Its number must be in that region, and there only the one cell is left: the two cells are the same number."),
+    },
+    // 18 (28 Nov. 2026): XY-Wing, the three-cell chain of cells with two options
+    {
+      label: tr("XY-Wing"),
+      desc: tr("A cell with two options sees two cells with two options each, and each shares one of its numbers. The two outer cells share a third number, and one of them holds it: cells that see both cannot."),
+    },
+    // 19 (28 Nov. 2026): W-Wing, two cells with the same two options joined by a number with two places in a region
+    {
+      label: tr("W-Wing"),
+      desc: tr("Two cells have the same two options. If one of the numbers has only two places in a region, and each cell sees one of them, then one of the two cells holds the other number: cells that see both cannot."),
+    },
   ];
   // each technique's unit (its "level") and weight come from the technique table (TT, tools/grade/techniques.json)
   TECH.forEach((t, m) => Object.assign(t, { level: TT.unitOf(m), weight: TT.method(m).weight }));
@@ -75,6 +102,7 @@ function engineFactory() {
     tr("Both ways"),
     tr("What-if: techniques"),
     tr("Needs guessing"),
+    tr("Triple: mixed"), // 14: the mixed triple (the list is by unit code; its place comes from the technique table)
   ];
   const LIMIT = { limit: true };
 
@@ -506,8 +534,8 @@ function engineFactory() {
       }
       return false;
     }
-    // mode for pairs (k = 2): "simple" only removes from cells that see both cells the same way (both touching, or the same
-    // region), "mixed" only from cells that see one by the region and the other only by touching (the mixed pair, level 4)
+    // mode (k = 2 or 3): "simple" only removes from cells that see all the cells the same way (all touching, or the same
+    // region), "mixed" only from cells that see them in different ways (the mixed pair, unit 4; the mixed triple, unit 14)
     const touches = (a, b) => Math.abs(Math.floor(a / cols) - Math.floor(b / cols)) <= 1 && Math.abs((a % cols) - (b % cols)) <= 1;
     const sameWay = (p, ch, k) => {
       let t = true,
@@ -518,6 +546,34 @@ function engineFactory() {
       }
       return t || r;
     };
+    // The nook (28 Nov. 2026, method 17): a cell x that touches every cell of a region but one, y, while x's own region has
+    // no more cells than that region. x's number is one the region holds, and there it can only be in y: x and y are the
+    // same number, so each keeps only the options the other has. The pairs follow from the shapes alone.
+    const NOOKS = [];
+    for (const cells of regionCells) {
+      if (cells.length < 2) continue;
+      for (let x = 0; x < n; x++) {
+        if (region[x] === region[cells[0]] || regionSize[x] > cells.length) continue;
+        let y = -1,
+          miss = 0;
+        for (const c of cells)
+          if (!touches(x, c)) {
+            miss++;
+            y = c;
+          }
+        if (miss === 1) NOOKS.push([x, y]);
+      }
+    }
+    function nookElim(s) {
+      for (const [x, y] of NOOKS) {
+        const mx = s.val[x] ? 1 << s.val[x] : s.cand[x],
+          my = s.val[y] ? 1 << s.val[y] : s.cand[y];
+        let progress = eliminate(s, x, ~my & s.cand[x]);
+        progress = eliminate(s, y, ~mx & s.cand[y]) || progress;
+        if (progress) return true;
+      }
+      return false;
+    }
     function nakedSubset(s, k, mode) {
       const cs = [];
       for (let c = 0; c < n; c++) {
@@ -587,7 +643,10 @@ function engineFactory() {
     // and weak links: if a cell is d, the cells that see it are not d, and the cell is no other number.
     // The chain starts and ends with a strong link, so either the first or the last candidate is true.
     // Candidates that contradict both ends can be crossed out.
-    function chainElim(s, mode) {
+    // kLo, kHi: the number of strong links (2 is the shortest, three-link chain: the short single-number chain, method 16).
+    // wOnly: only the W-Wing's shape (method 19, 28 Nov. 2026): two cells with the same two options x, y, each seeing one
+    // of y's two places in a region; the chain runs x=y in the first cell, y between the two places, y=x in the second.
+    function chainElim(s, mode, kLo = 2, kHi = 7, wOnly = false) {
       const key = (c, d) => c * 8 + d;
       const strong = new Map();
       const addS = (a, b) => {
@@ -626,7 +685,17 @@ function engineFactory() {
         for (const p of peers[c]) if (!s.val[p] && s.cand[p] & (1 << d)) out.push(key(p, d));
         return out;
       };
-      const onPath = new Set();
+      const onPath = new Set(),
+        path = [],
+        isW = () =>
+          path.length === 6 &&
+          path[0] >> 3 === path[1] >> 3 &&
+          path[4] >> 3 === path[5] >> 3 &&
+          path[2] >> 3 !== path[3] >> 3 &&
+          (path[1] & 7) === (path[2] & 7) &&
+          (path[2] & 7) === (path[3] & 7) &&
+          (path[3] & 7) === (path[4] & 7) &&
+          (path[0] & 7) === (path[5] & 7);
       let budget = 20000,
         done = false;
       const tryEnd = (A, Y) => {
@@ -640,18 +709,20 @@ function engineFactory() {
       };
       const dfs = (A, Y, k) => {
         if (done || --budget < 0) return;
-        if (k >= 2 && tryEnd(A, Y)) {
+        if (k >= kLo && (!wOnly || isW()) && tryEnd(A, Y)) {
           done = true;
           return;
         }
-        if (k >= 7) return;
+        if (k >= kHi) return;
         for (const W of weakNbrs(Y)) {
           if (onPath.has(W) || !strong.has(W)) continue;
           onPath.add(W);
           for (const Z of strong.get(W)) {
             if (onPath.has(Z)) continue;
             onPath.add(Z);
+            path.push(W, Z);
             dfs(A, Z, k + 1);
+            path.length -= 2;
             onPath.delete(Z);
             if (done) return;
           }
@@ -662,6 +733,8 @@ function engineFactory() {
         onPath.add(A);
         for (const B of list) {
           onPath.add(B);
+          path.length = 0;
+          path.push(A, B);
           dfs(A, B, 1);
           onPath.delete(B);
           if (done) return true;
@@ -792,13 +865,18 @@ function engineFactory() {
     // each method's finder in this rater (true if it removed something); the order comes from the technique table
     const FINDERS = {
       2: (s) => neighborElimination(s),
+      17: (s) => nookElim(s),
       3: (s) => nakedSubset(s, 2, "simple"),
       4: (s) => hiddenSubset(s, 2),
       14: (s) => nakedSubset(s, 2, "mixed"),
-      5: (s) => nakedSubset(s, 3),
+      5: (s) => nakedSubset(s, 3, "simple"),
+      15: (s) => nakedSubset(s, 3, "mixed"),
       6: (s) => hiddenSubset(s, 3),
-      7: (s) => chainElim(s, "x"),
-      8: (s) => chainElim(s, "xy"),
+      16: (s) => chainElim(s, "x", 2, 2),
+      7: (s) => chainElim(s, "x", 3, 7),
+      18: (s) => chainElim(s, "xy", 3, 3),
+      8: (s) => chainElim(s, "xy", 4, 7),
+      19: (s) => chainElim(s, "all", 3, 3, true),
       9: (s) => chainElim(s, "all"),
       10: (s) => nishio(s),
       11: (s) => contradiction(s, TT.method(11).within),

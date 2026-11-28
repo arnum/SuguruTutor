@@ -14,12 +14,13 @@ function sizeIcon(s) {
 }
 // ---------- Play modes: choose everything yourself (Manual), or let the app pick the grade from your own games.
 // Your usual grade is the median of your latest 20 solved puzzles without hints on this size (all sizes with fewer than 5).
-//   Relax: a grade under your usual, so it goes smoothly. It stays put.
-//   Challenge: a little above your usual to start with, then it moves after each game in the mode (modeAfterGame): up after
-//     a solve without hints at or under your estimate, a little up when somewhat slower, down after a slow solve, hints or
-//     giving up. Kept per board size, in your own data (the guest has their own).
-//   Learn: puzzles that need your focus technique (the weakest in the statistics), or the one you have met least, around your
-//     usual grade, using "require a technique".
+// Each mode starts from it and then moves after each game in the mode (modeAfterGame; Relax and Learn since 28 Nov. 2026),
+// so the effort stays the same as you get better. Kept per board size, in your own data (the guest has their own).
+//   Relax: starts a grade under your usual. Aims well under the expected time without hints (0.8 of it), so it stays easy.
+//   Challenge: starts a little above your usual. Aims at the expected time without hints.
+//   Learn: puzzles that need your focus technique (the weakest in the statistics), or the one you have met least, using
+//     "require a technique"; starts at your usual. Aims at the expected time without hints, so the technique stays the
+//     hard part and not the rest of the board.
 const MODES = ["manual", "relax", "challenge", "learn"];
 const modeName = (m) => ({ manual: tr("Manual"), relax: tr("Relax"), challenge: tr("Challenge"), learn: tr("Learn") })[m];
 const sizeKey = (s) => s.c + "x" + s.r;
@@ -38,13 +39,9 @@ function usualGrade(s) {
   return pool.length >= 5 ? { g: median(pool.map(gradeFor)), same } : null;
 }
 function learnTech() {
-  try {
-    const fd = focusData();
-    if (fd.base) {
-      const w = fd.rows.filter((f) => f.score < -0.25 && focusReasons(f, true).length).sort((a, b) => a.score - b.score)[0];
-      if (w && TT.known(w.L) && TT.beyond(w.L)) return { L: w.L, focus: true };
-    }
-  } catch (e) {}
+  // the statistics' "Practise next" (statui.js): the technique where Skill has most to gain
+  const P2 = microNow() ? null : statPractiseL();
+  if (P2 && TT.known(P2) && TT.beyond(P2)) return { L: P2, focus: true };
   const cal = myCal(),
     L = TT.list("learn").sort((a, b) => ((cal.lvl[a] || {}).n || 0) - ((cal.lvl[b] || {}).n || 0))[0];
   return { L, focus: false };
@@ -54,39 +51,45 @@ function modePlan(mode) {
     u = usualGrade(s),
     base = u ? u.g : ui.level + 0.5,
     play = store.get("play", {}),
-    chal = (play.chal || {})[sizeKey(s)];
+    kept = (play[modeStore(mode)] || {})[sizeKey(s)];
   let t,
     must = 0,
-    why;
+    why,
+    short = "",
+    more = "";
   const usual = u ? (u.same ? tr("your usual {g} on this size", { g: dec(u.g) }) : tr("your usual {g}", { g: dec(u.g) })) : "";
+  if (MODE_STEP[mode]) short = tr("Moves after each game.");
   if (mode === "relax") {
-    t = Math.max(1, base - 1);
-    why = u ? tr("A grade under {usual}, so it goes smoothly.", { usual }) : tr("A gentle grade. After 5 solved puzzles without hints, it follows your own level.");
+    t = kept != null ? kept : Math.max(1, base - 1);
+    why = kept != null ? tr("Where puzzles go smoothly for you on this size.") : u ? tr("A grade under {usual}, so it goes smoothly.", { usual }) : tr("A gentle grade. After 5 solved puzzles without hints, it follows your own level.");
+    more = tr("It moves after each game: up after a solve without hints well under the expected time, down after a slow solve, hints or giving up. So it stays relaxing as you get better.");
   } else if (mode === "challenge") {
-    t = chal != null ? chal : base + 0.5;
-    why =
-      (u ? tr("A little above {usual}.", { usual }) : tr("A little above where you start.")) +
-      " " +
-      tr("It moves after each game: up after a solve without hints at or under your estimate, down after a slow solve, hints or giving up.");
+    t = kept != null ? kept : base + 0.5;
+    why = u ? tr("A little above {usual}.", { usual }) : tr("A little above where you start.");
+    more = tr("It moves after each game: up after a solve without hints at or under the expected time, down after a slow solve, hints or giving up.");
   } else if (mode === "learn" && microTop(s) < 2) {
     // nothing beyond singles fits on this board (a 4×4 Sudoku): no technique to require
-    t = base;
+    t = kept != null ? kept : base;
     why = GAME.microNote || "";
   } else if (mode === "learn") {
     const lt = withScope(s.r * s.c <= 16 ? "micro" : "main", learnTech);
     must = lt.L;
-    t = base;
+    t = kept != null ? kept : base;
+    more = tr("It moves after each game: up after a solve without hints at or under the expected time, down after a slow solve, hints or giving up. So the technique stays the hard part.");
     why = lt.focus
-      ? tr("Puzzles that need {tech}, your focus area, around {usualg}.", { tech: LEVEL_TECH[must], usualg: dec(t) })
+      ? tr("Puzzles that need {tech}, where your Skill has most to gain, around {usualg}.", { tech: LEVEL_TECH[must], usualg: dec(t) })
       : tr("Puzzles that need {tech}, the technique you have met least, around {usualg}.", { tech: LEVEL_TECH[must], usualg: dec(t) });
   }
   const top = microTop(s);
   t = Math.round(Math.min(top, Math.max(1, t)) * 10) / 10;
-  return { mode, t, level: Math.floor(t), must, why };
+  return { mode, t, level: Math.floor(t), must, why, short, more };
 }
 function modeLine(pl) {
   const s = SIZES[ui.sizeIdx];
-  return `<b>${modeName(pl.mode)}: ${esc(BAND[pl.level])} ${dec(pl.t)} · ${s.c}×${s.r}${pl.must ? " · " + esc(LEVEL_TECH[pl.must]) : ""}</b> ${esc(pl.why)}`;
+  return (
+    `<b>${modeName(pl.mode)}: ${esc(BAND[pl.level])} ${dec(pl.t)} · ${s.c}×${s.r}${pl.must ? " · " + esc(LEVEL_TECH[pl.must]) : ""}</b> ${esc(pl.why)}` +
+    (pl.more ? " " + tldr(esc(pl.short), esc(pl.more), "inline") : "")
+  );
 }
 // Start a game in the chosen mode: the grade within ±0.2 of the plan
 function startMode(mode = ui.mode) {
@@ -116,17 +119,29 @@ function startMode(mode = ui.mode) {
     },
   );
 }
-// After a game in Challenge: the grade for the next one on this size
+// After a game in a mode: the grade for the next one on this size. r = your time ÷ the expected time shown before the
+// game (the statistics model's, the old estimate where it has none). A solve without hints at or under the mode's aim
+// (fast) moves it up, up to the mode's ok a little or not at all, slower down 0.2, hints or giving up down 0.4. The aims
+// and steps are a first setting (TODO.md: tuning).
+const MODE_STEP = {
+  relax: { fast: 0.8, ok: 1.0, up: 0.2, mid: 0 },
+  challenge: { fast: 1.0, ok: 1.3, up: 0.3, mid: 0.1 },
+  learn: { fast: 1.0, ok: 1.3, up: 0.2, mid: 0 },
+};
+const modeStore = (mode) => (mode === "challenge" ? "chal" : mode); // where a mode keeps its grades ("chal" from before)
 function modeAfterGame(rec) {
-  if (rec.mode !== "challenge") return;
+  const st = MODE_STEP[rec.mode];
+  if (!st) return;
   const key = rec.cols + "x" + rec.rows,
     play = store.get("play", {}),
-    chal = Object.assign({}, play.chal),
-    old = chal[key] != null ? chal[key] : rec.modeT != null ? rec.modeT : gradeFor(rec),
-    r = rec.est ? rec.ms / 1000 / rec.est : 1;
-  const step = !rec.solved || rec.hints ? -0.4 : r <= 1 ? 0.3 : r <= 1.3 ? 0.1 : -0.2;
-  chal[key] = Math.round(Math.min(9.9, Math.max(1, old + step)) * 10) / 10;
-  store.set("play", Object.assign({}, play, { chal }));
+    k = modeStore(rec.mode),
+    kept = Object.assign({}, play[k]),
+    old = kept[key] != null ? kept[key] : rec.modeT != null ? rec.modeT : gradeFor(rec),
+    ex = (rec.lv && statExpectedFor(rec.lv, rec.rows, rec.cols, gradeFor(rec))) || rec.est,
+    r = ex ? rec.ms / 1000 / ex : 1;
+  const step = !rec.solved || rec.hints ? -0.4 : r <= st.fast ? st.up : r <= st.ok ? st.mid : -0.2;
+  kept[key] = Math.round(Math.min(9.9, Math.max(1, old + step)) * 10) / 10;
+  store.set("play", Object.assign({}, play, { [k]: kept }));
 }
 // The New game screen: how to play first; in a mode the grade, nuance, type and technique are picked for you
 function renderModes() {
@@ -268,20 +283,28 @@ function renderNew() {
         }),
     );
   const s = SIZES[ui.sizeIdx];
-  $("newNote").textContent = ui.mode !== "manual"
-    ? microNote(s)
+  // the note under the choices: a short line, the rest a tap away (tldr)
+  const note = (short, full) => (full ? tldr(esc(short), esc(full)) : esc(short));
+  $("newNote").innerHTML = ui.mode !== "manual"
+    ? note(microNote(s))
     : TT.beyond(ui.must) && ui.startAt
-    ? tr("The board starts part-solved, where {tech} is the next step. Once you have used it, you can skip to the next board.", { tech: LEVEL_TECH[ui.must] }) +
-      (TT.is(ui.must, "rare") ? " " + GAME.rareNote : "")
+    ? note(
+        tr("Starts where {tech} is next.", { tech: LEVEL_TECH[ui.must] }),
+        tr("The board starts part-solved, where {tech} is the next step. Once you have used it, you can skip to the next board.", { tech: LEVEL_TECH[ui.must] }) +
+          (TT.is(ui.must, "rare") ? " " + GAME.rareNote : ""),
+      )
     : ui.must
-    ? tr("The puzzle will require {tech}. The difficulty will be as close to {g} as possible.", { tech: LEVEL_TECH[ui.must], g: ui.level }) +
-      (TT.is(ui.must, "rare") ? " " + GAME.rareNote : "")
+    ? note(
+        tr("Needs {tech}, close to {g}.", { tech: LEVEL_TECH[ui.must], g: ui.level }),
+        tr("The puzzle will require {tech}. The difficulty will be as close to {g} as possible.", { tech: LEVEL_TECH[ui.must], g: ui.level }) +
+          (TT.is(ui.must, "rare") ? " " + GAME.rareNote : ""),
+      )
     : microNote(s) && ui.level > Math.floor(microTop(s))
-      ? microNote(s)
+      ? note(microNote(s))
       : ui.level >= 8
-      ? tr("The highest grades are rare, especially on small boards. It can take up to 20 seconds, and you get the closest one found.")
+      ? note(tr("Rare. Can take 20 seconds."), tr("The highest grades are rare, especially on small boards. It can take up to 20 seconds, and you get the closest one found."))
       : ui.level === 2
-        ? tr("Grade 2 is a narrow band between the very simple puzzles and those with eliminations.")
+        ? note(tr("A narrow band."), tr("Grade 2 is a narrow band between the very simple puzzles and those with eliminations."))
         : "";
   $("kinds").innerHTML = KINDS.map(
     ([k, t, d]) => `<button type="button" data-k="${k}" aria-pressed="${k === ui.kind}">${t}<small>${d}</small></button>`,

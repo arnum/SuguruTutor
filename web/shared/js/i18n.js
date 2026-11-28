@@ -34,6 +34,9 @@ function tr(s, p) {
   return p ? r.replace(/\{(\w+)\}/g, (m, k) => (k in p ? p[k] : m)) : r;
 }
 
+// A technique's name inside a sentence: lower case, except a name with capitals inside it (XY-Wing, X-Wing)
+const inText = (name) => (/[A-ZÆØÅ]/.test(name.slice(1)) ? name : name.toLowerCase());
+
 // Decimal number with the language's decimal separator: 4,2 in Danish, 4.2 in English
 function dec(x, d = 1) {
   const s = (+x).toFixed(d);

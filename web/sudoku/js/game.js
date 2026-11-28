@@ -20,12 +20,17 @@ const TECH_LABELS = [
   tr("Both ways"),
   tr("What-if with techniques"),
   "", // 14: the mixed pair needs touching cells, so Sudoku never has it (its level 4 stays empty and hidden)
+  "", // 15: the mixed triple, likewise (unit 14)
+  "", // 16: the short single-number chain is split off in Suguru only (here skyscrapers and kites stay in the chain)
+  "", // 17: the nook needs touching: Suguru only
+  "", // 18, 19: XY-Wing and W-Wing are named in Suguru only so far (here they stay in the chains)
+  "",
 ];
 
 // ---------- Lists the shared code uses (core.js, newgame.js, stats.js, play.js)
 // the guide's anchors per technique (sudoku/guide.html, built by tools/guide/build_sudoku.js). null = no example in the
 // guide, so hints about that technique do not link to it. Since 22 Nov. 2026 all 14 have an example.
-const GUIDE_IDS = ["eneste-kandidat", "eneste-plads", "laaste-kandidater", "noegent-par", "skjult-par", "noegen-trippel", "skjult-trippel", "kaede-et-tal", "kaede-to-muligheder", "kaede", "hvis-saa-et-tal", "hvis-saa-kort", "begge-veje", "hvis-saa-dyb", null];
+const GUIDE_IDS = ["eneste-kandidat", "eneste-plads", "laaste-kandidater", "noegent-par", "skjult-par", "noegen-trippel", "skjult-trippel", "kaede-et-tal", "kaede-to-muligheder", "kaede", "hvis-saa-et-tal", "hvis-saa-kort", "begge-veje", "hvis-saa-dyb", null, null, null, null, null, null];
 const TECH_NAMES_UI = [
   tr("naked single"),
   tr("hidden single"),
@@ -41,6 +46,11 @@ const TECH_NAMES_UI = [
   tr("what-if with singles"),
   tr("both ways"),
   tr("what-if with techniques"),
+  "",
+  "", // 15: the mixed triple (Suguru only)
+  "", // 16: the short single-number chain (Suguru only)
+  "", // 17: the nook (Suguru only)
+  "", // 18, 19: XY-Wing and W-Wing (Suguru only so far)
   "",
 ];
 // The board sizes: the classic 9×9 and the small ones (27 Nov. 2026), 6×6 with 2×3 boxes and 4×4 with 2×2 boxes

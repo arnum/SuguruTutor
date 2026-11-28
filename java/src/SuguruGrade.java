@@ -18,7 +18,8 @@ public final class SuguruGrade {
     public static final String[] BAND = {"", "Beginner", "Easy", "Medium", "Hard", "Very hard", "Expert", "Master", "Extreme", "Diabolical"};
     /** Short name of the technique for each technique level 1-11 (12 = guessing). */
     public static final String[] LEVEL_TECH = {"", "singles", "neighbour elimination", "pairs", "mixed pair", "triples", "single-number chain",
-        "bivalue chain", "mixed chain", "single-number what-if", "what-if with singles", "both ways", "what-if with techniques", "guessing"};
+        "bivalue chain", "mixed chain", "single-number what-if", "what-if with singles", "both ways", "what-if with techniques", "guessing",
+        "mixed triple"}; // by unit code: 14 is the mixed triple (28 Nov. 2026)
     // ---- The technique table's questions (as TT in tools/grade/techs.js). A unit is named by its code, which never changes;
     // the table's order (UNIT_ORDER, generated below) is the only order, so codes are never compared as numbers.
     static int rank(int code) {
@@ -50,9 +51,9 @@ public final class SuguruGrade {
      */
     // <gen:weights> Written by tools/grade/gen.py from tools/grade/weights.json. Edit there, not here.
     // Pencil terms: [0] with pencil, [1] without pencil, [2] as you used to play; each a list per technique (derived from base, diff and anchor).
-    static final int FIT = 12;
-    static final double[] RECOG = {0, 0, 0.6, 2.2, 2.9, 3, 3.7, 1.9, 2.2, 2.5, 2.8, 3.1, 3.5, 3.1, 2.6};
-    static final double[] LINK = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+    static final int FIT = 14;
+    static final double[] RECOG = {0, 0, 0.6, 2.2, 2.9, 3, 3.7, 1.9, 2.2, 2.5, 2.8, 3.1, 3.5, 3.1, 2.6, 3.4, 1.9, 0.6, 2.2, 2.5};
+    static final double[] LINK = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
     static final double[] SPOT = {0.5, 0.5, 0.3, 0.15, 0};
     static final double W_cap = 14.9;
     static final double W_inner = 0.25;
@@ -82,30 +83,30 @@ public final class SuguruGrade {
     static final double W_singlesFirst = 0;
     static final double W_singlesNakedW = 0;
     static final double W_singlesNakedSpan = 1;
-    static final double[][] P_mem = {{0.3, 0.3, 0.3, 0.1, 0.1, 0.2, 0.2, 0.1, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.1}, {0.3, 0.3, 0.3, 0.3, 0.3, 0.4, 0.4, 0.3, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.3}, {0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3}};
-    static final double[][] P_tech = {{0, 0, 0, -0.3, -0.5, -0.5, -0.6, -0.4, 0, 0, 0, 0, 0, 0, -0.3}, {0, 0, 0, 0, 0, 0.5, 0.6, 0, 1, 1.2, 0.3, 1.5, 1.5, 1.5, 0}, {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}};
-    static final double[][] P_multi = {{0, 0, 0, -0.25, -0.25, -0.125, -0.125, 0, 0, 0, 0, 0, 0, 0, -0.25}, {0, 0, 0, 0, 0, 0.125, 0.125, 0, 0.25, 0.25, 0, 0, 0.25, 0, 0}, {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}};
-    static final double[][] P_trial = {{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.3, 0.3, 0, 0.3, 0}, {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}};
-    static final double[][] P_built = {{0, 0, 0, -0.4, -0.4, -0.2, -0.2, -0.4, 0, 0, 0, 0, 0, 0, -0.4}, {0, 0, 0, 0, 0, 0.2, 0.2, 0, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0}, {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}};
-    static final double[][] P_repeat = {{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}};
-    static final double[][] P_partial = {{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}};
-    static final double[][] P_len = {{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.2, 0.2, 0.2, 0.2, 0}, {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}};
+    static final double[][] P_mem = {{0.3, 0.3, 0.3, 0.1, 0.1, 0.2, 0.2, 0.1, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.1, 0.2, 0.1, 0.3, 0.3, 0.3}, {0.3, 0.3, 0.3, 0.3, 0.3, 0.4, 0.4, 0.3, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.3, 0.4, 0.3, 0.3, 0.5, 0.5}, {0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3}};
+    static final double[][] P_tech = {{0, 0, 0, -0.3, -0.5, -0.5, -0.6, -0.4, 0, 0, 0, 0, 0, 0, -0.3, -0.5, -0.4, 0, 0, 0}, {0, 0, 0, 0, 0, 0.5, 0.6, 0, 1, 1.2, 0.3, 1.5, 1.5, 1.5, 0, 0.5, 0, 0, 1, 1.2}, {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}};
+    static final double[][] P_multi = {{0, 0, 0, -0.25, -0.25, -0.125, -0.125, 0, 0, 0, 0, 0, 0, 0, -0.25, -0.125, 0, 0, 0, 0}, {0, 0, 0, 0, 0, 0.125, 0.125, 0, 0.25, 0.25, 0, 0, 0.25, 0, 0, 0.125, 0, 0, 0.25, 0.25}, {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}};
+    static final double[][] P_trial = {{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.3, 0.3, 0, 0.3, 0, 0, 0, 0, 0, 0}, {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}};
+    static final double[][] P_built = {{0, 0, 0, -0.4, -0.4, -0.2, -0.2, -0.4, 0, 0, 0, 0, 0, 0, -0.4, -0.2, -0.4, 0, 0, 0}, {0, 0, 0, 0, 0, 0.2, 0.2, 0, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0, 0.2, 0, 0, 0.4, 0.4}, {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}};
+    static final double[][] P_repeat = {{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}};
+    static final double[][] P_partial = {{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}};
+    static final double[][] P_len = {{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.2, 0.2, 0.2, 0.2, 0, 0, 0, 0, 0, 0}, {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}};
     static final double P_multiCap = 1;
     // The technique table, from tools/grade/techniques.json: units in teaching order (codes never change; the order
     // is the only order), and per method (technique number) its unit and flags. See rank() below.
     static final int GUESS = 13;
-    static final int[] UNIT_ORDER = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12};
-    static final int[][] UNIT_METHODS = {{0, 1}, {2}, {3, 4}, {14}, {5, 6}, {7}, {8}, {9}, {10}, {11}, {12}, {13}};
-    static final String[] UNIT_ID = {"singles", "neighbour", "pairs", "mixedPair", "triples", "chain1", "chain2", "chainMixed", "whatIf1", "whatIfSingles", "bothWays", "whatIfTech"};
-    static final String[] UNIT_FAMILY = {"basic", "basic", "basic", "basic", "basic", "chain", "chain", "chain", "whatif", "whatif", "whatif", "whatif"};
-    static final String[] UNIT_GAMES = {"", "", "", "suguru", "", "", "", "", "", "", "", ""};
-    static final int[] METHOD_UNIT = {1, 1, 2, 3, 3, 5, 5, 6, 7, 8, 9, 10, 11, 12, 4};
-    static final int[] METHOD_WEIGHT = {1, 1, 4, 8, 10, 15, 18, 20, 22, 24, 26, 30, 40, 60, 12};
-    static final boolean[] METHOD_PATTERN = {false, false, true, true, true, true, true, false, false, false, false, false, false, false, true};
-    static final boolean[] METHOD_INNER = {false, false, true, true, true, true, true, true, true, true, true, false, false, false, true};
-    static final boolean[] METHOD_CHAIN = {false, false, false, false, false, false, false, true, true, true, false, false, false, false, false};
-    static final boolean[] METHOD_BYLENGTH = {false, false, false, false, false, false, false, true, true, true, true, true, true, true, false};
-    static final int[] METHOD_WITHIN = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 9, 0};
+    static final int[] UNIT_ORDER = {1, 2, 3, 4, 5, 14, 6, 7, 8, 9, 10, 11, 12};
+    static final int[][] UNIT_METHODS = {{0, 1}, {2, 17}, {3, 4}, {14}, {5, 6}, {15}, {16, 7}, {18, 8}, {19, 9}, {10}, {11}, {12}, {13}};
+    static final String[] UNIT_ID = {"singles", "neighbour", "pairs", "mixedPair", "triples", "mixedTriple", "chain1", "chain2", "chainMixed", "whatIf1", "whatIfSingles", "bothWays", "whatIfTech"};
+    static final String[] UNIT_FAMILY = {"basic", "basic", "basic", "basic", "basic", "basic", "chain", "chain", "chain", "whatif", "whatif", "whatif", "whatif"};
+    static final String[] UNIT_GAMES = {"", "", "", "suguru", "", "suguru", "", "", "", "", "", "", ""};
+    static final int[] METHOD_UNIT = {1, 1, 2, 3, 3, 5, 5, 6, 7, 8, 9, 10, 11, 12, 4, 14, 6, 2, 7, 8};
+    static final int[] METHOD_WEIGHT = {1, 1, 4, 8, 10, 15, 18, 20, 22, 24, 26, 30, 40, 60, 12, 16, 19, 5, 21, 23};
+    static final boolean[] METHOD_PATTERN = {false, false, true, true, true, true, true, false, false, false, false, false, false, false, true, true, false, true, false, false};
+    static final boolean[] METHOD_INNER = {false, false, true, true, true, true, true, true, true, true, true, false, false, false, true, true, true, true, true, true};
+    static final boolean[] METHOD_CHAIN = {false, false, false, false, false, false, false, true, true, true, false, false, false, false, false, false, true, false, true, true};
+    static final boolean[] METHOD_BYLENGTH = {false, false, false, false, false, false, false, true, true, true, true, true, true, true, false, false, true, false, true, true};
+    static final int[] METHOD_WITHIN = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 9, 0, 0, 0, 0, 0, 0};
     // </gen:weights>
     // (after the generated table, which they are made from)
     static final int SINGLES = METHOD_UNIT[0];
@@ -176,7 +177,7 @@ public final class SuguruGrade {
         f.base = 1.0 * RECOG[T];
         double[] v = s.vis;
         if (v != null) {
-            if ((T >= 2 && T <= 6) || T == 14) f.shapeT = W_vis * (W_shapeSize * Math.min(W_shapeSizeCap, Math.max(0, v[0] - 2)) + W_shapeBent * v[1]);
+            if (METHOD_PATTERN[T]) f.shapeT = W_vis * (W_shapeSize * Math.min(W_shapeSizeCap, Math.max(0, v[0] - 2)) + W_shapeBent * v[1]);
             f.openT = W_vis * W_open * (W_openMid - v[2]);
             f.workT = W_vis * Math.max(W_workLo, Math.min(W_workHi, W_workPer * (v[3] - W_workMid)));
         }

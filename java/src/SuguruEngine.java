@@ -17,7 +17,8 @@ public final class SuguruEngine {
     public static final String[] TECH_LABEL = {
         "Naked single", "Hidden single", "Neighbour elimination", "Naked pair", "Hidden pair",
         "Naked triple", "Hidden triple", "Single-number chain", "Bivalue chain", "Mixed chain",
-        "Single-number what-if", "What-if with singles", "Both ways", "What-if with techniques", "Mixed pair"
+        "Single-number what-if", "What-if with singles", "Both ways", "What-if with techniques", "Mixed pair", "Mixed triple",
+        "Short single-number chain", "Nook", "XY-Wing", "W-Wing"
     };
     public static final String[] TECH_DESC = {
         "The cell has only one possible number left.",
@@ -34,14 +35,20 @@ public final class SuguruEngine {
         "Assume a number and follow simple moves with all numbers. If it ends in a contradiction, the assumption was wrong.",
         "Try both options in a cell (or both places for a number). Whatever both ways give is true.",
         "Like the what-if with singles, but the path to the contradiction needs harder techniques along the way, such as pairs or chains.",
-        "Two touching cells with the same two options are those two numbers. A cell in the same region as one of them that touches the other cannot hold them."
+        "Two touching cells with the same two options are those two numbers. A cell in the same region as one of them that touches the other cannot hold them.",
+        "Three cells that see each other with only three options between them are those three numbers. A cell that sees all three, some through its region and the rest by touching, cannot hold them.",
+        "A number has two places in each of two regions, and one place in the first touches one in the second. They cannot both be the number, so one of the two far places is. Cells that see both far places cannot hold it.",
+        "A cell touches every cell of a region but one, and its own region is no bigger. Its number must be in that region, and there only the one cell is left: the two cells are the same number.",
+        "A cell with two options sees two cells with two options each, and each shares one of its numbers. The two outer cells share a third number, and one of them holds it: cells that see both cannot.",
+        "Two cells have the same two options. If one of the numbers has only two places in a region, and each cell sees one of them, then one of the two cells holds the other number: cells that see both cannot."
     };
     /** Levels since 26 Nov. 2026: the mixed pair (technique 14) is level 4, so triples and up moved one up; 13 = cannot be done. */
     // each technique's unit (its "level") and weight come from the technique table (SuguruGrade, tools/grade/techniques.json)
     public static final int[] TECH_LEVEL = SuguruGrade.METHOD_UNIT;
     public static final int[] TECH_WEIGHT = SuguruGrade.METHOD_WEIGHT;
     public static final String[] LEVELS = {"", "Easy", "Medium", "Hard", "Pair: mixed", "Very hard", "Chain: one number",
-        "Chain: two options", "Chain: mixed", "What-if: one number", "What-if: singles", "Both ways", "What-if: techniques", "Needs guessing"};
+        "Chain: two options", "Chain: mixed", "What-if: one number", "What-if: singles", "Both ways", "What-if: techniques", "Needs guessing",
+        "Triple: mixed"}; // by unit code: 14 is the mixed triple (28 Nov. 2026)
     public static final int TOP_LEVEL = SuguruGrade.last();
 
     private static final int[][] TARGET_SIZES = new int[7][];
@@ -403,6 +410,33 @@ public final class SuguruEngine {
             return false;
         }
         boolean touches(int a, int b) { return Math.abs(a / cols - b / cols) <= 1 && Math.abs(a % cols - b % cols) <= 1; }
+        /** The nook (28 Nov. 2026, method 17, as engine.js): x touches every cell of a region but y, and x's own region is no
+         *  bigger, so x and y are the same number. The pairs follow from the shapes alone. */
+        private int[][] nooks;
+        int[][] nooks() {
+            if (nooks != null) return nooks;
+            List<int[]> l = new ArrayList<>();
+            for (int[] cells : regionCells) {
+                if (cells.length < 2) continue;
+                for (int x = 0; x < n; x++) {
+                    if (region[x] == region[cells[0]] || regionSize[x] > cells.length) continue;
+                    int y = -1, miss = 0;
+                    for (int c : cells) if (!touches(x, c)) { miss++; y = c; }
+                    if (miss == 1) l.add(new int[]{x, y});
+                }
+            }
+            return nooks = l.toArray(new int[0][]);
+        }
+        boolean nookElim(S s) {
+            for (int[] p : nooks()) {
+                int x = p[0], y = p[1];
+                int mx = s.val[x] != 0 ? 1 << s.val[x] : s.cand[x], my = s.val[y] != 0 ? 1 << s.val[y] : s.cand[y];
+                boolean progress = eliminate(s, x, ~my & s.cand[x]);
+                progress = eliminate(s, y, ~mx & s.cand[y]) || progress;
+                if (progress) return true;
+            }
+            return false;
+        }
         /** p sees all chosen cells the same way: it touches all of them, or it is in their region */
         boolean sameWay(int p, int[] ch, int k) {
             boolean t = true, r = true;
@@ -410,7 +444,8 @@ public final class SuguruEngine {
             return t || r;
         }
         boolean nakedSubset(S s, int k) { return nakedSubset(s, k, 0); }
-        /** mode for pairs: 0 all, 1 only cells that see both the same way (level 3), 2 only the mixed pair's cells (level 4) */
+        /** mode for pairs and triples: 0 all, 1 only cells that see them all the same way (pairs, triples), 2 only the cells that
+         *  see them in different ways (the mixed pair, unit 4; the mixed triple, unit 14) */
         boolean nakedSubset(S s, int k, int mode) {
             List<Integer> l = new ArrayList<>();
             for (int c = 0; c < n; c++) { int b = popcount(s.cand[c]); if (s.val[c] == 0 && b >= 2 && b <= k) l.add(c); }
@@ -463,10 +498,21 @@ public final class SuguruEngine {
         private Set<Integer> onPath;
         private int budget;
         private boolean done;
+        private int kLo = 2, kHi = 7, plen;
+        private boolean wOnly;
+        private final int[] path = new int[2 + 2 * 8];
+        private boolean isW() {
+            return plen == 6 && path[0] >> 3 == path[1] >> 3 && path[4] >> 3 == path[5] >> 3 && path[2] >> 3 != path[3] >> 3
+                && (path[1] & 7) == (path[2] & 7) && (path[2] & 7) == (path[3] & 7) && (path[3] & 7) == (path[4] & 7) && (path[0] & 7) == (path[5] & 7);
+        }
         private boolean sameCellOK;
         private S cs;
 
-        boolean chainElim(S s, char mode) {
+        boolean chainElim(S s, char mode) { return chainElim(s, mode, 2, 7); }
+        /** kLo, kHi: the number of strong links (2: the three-link chain, the short single-number chain, method 16) */
+        boolean chainElim(S s, char mode, int kLo, int kHi) { return chainElim(s, mode, kLo, kHi, false); }
+        /** wOnly: only the W-Wing's shape (method 19, as engine.js) */
+        boolean chainElim(S s, char mode, int kLo, int kHi, boolean wOnly) {
             strong = new LinkedHashMap<>();
             if (mode != 'x') for (int c = 0; c < n; c++) if (s.val[c] == 0 && popcount(s.cand[c]) == 2) {
                 int lo = ctz(s.cand[c]), hi = ctz(s.cand[c] & ~(1 << lo));
@@ -482,11 +528,11 @@ public final class SuguruEngine {
             }
             if (strong.size() < 4) return false;
             sameCellOK = mode != 'x';
-            cs = s; onPath = new HashSet<>(); budget = 20000; done = false;
+            cs = s; onPath = new HashSet<>(); budget = 20000; done = false; this.kLo = kLo; this.kHi = kHi; this.wOnly = wOnly;
             for (Map.Entry<Integer, List<Integer>> e : strong.entrySet()) {
                 int A = e.getKey();
                 onPath.add(A);
-                for (int B : e.getValue()) { onPath.add(B); dfs(A, B, 1); onPath.remove(B); if (done) return true; }
+                for (int B : e.getValue()) { onPath.add(B); plen = 0; path[plen++] = A; path[plen++] = B; dfs(A, B, 1); onPath.remove(B); if (done) return true; }
                 onPath.remove(A);
                 if (budget < 0) break;
             }
@@ -516,14 +562,14 @@ public final class SuguruEngine {
         }
         private void dfs(int A, int Y, int k) {
             if (done || --budget < 0) return;
-            if (k >= 2 && tryEnd(A, Y)) { done = true; return; }
-            if (k >= 7) return;
+            if (k >= kLo && (!wOnly || isW()) && tryEnd(A, Y)) { done = true; return; }
+            if (k >= kHi) return;
             for (int W : weakNbrs(Y)) {
                 if (onPath.contains(W) || !strong.containsKey(W)) continue;
                 onPath.add(W);
                 for (int Z : strong.get(W)) {
                     if (onPath.contains(Z)) continue;
-                    onPath.add(Z); dfs(A, Z, k + 1); onPath.remove(Z);
+                    onPath.add(Z); path[plen++] = W; path[plen++] = Z; dfs(A, Z, k + 1); plen -= 2; onPath.remove(Z);
                     if (done) return;
                 }
                 onPath.remove(W);
@@ -616,13 +662,18 @@ public final class SuguruEngine {
         boolean find(S s, int m) {
             switch (m) {
                 case 2: return neighborElimination(s);
+                case 17: return nookElim(s);
                 case 3: return nakedSubset(s, 2, 1);
                 case 4: return hiddenSubset(s, 2);
                 case 14: return nakedSubset(s, 2, 2);
-                case 5: return nakedSubset(s, 3);
+                case 5: return nakedSubset(s, 3, 1);
+                case 15: return nakedSubset(s, 3, 2);
                 case 6: return hiddenSubset(s, 3);
-                case 7: return chainElim(s, 'x');
-                case 8: return chainElim(s, 'y');
+                case 16: return chainElim(s, 'x', 2, 2);
+                case 7: return chainElim(s, 'x', 3, 7);
+                case 18: return chainElim(s, 'y', 3, 3);
+                case 8: return chainElim(s, 'y', 4, 7);
+                case 19: return chainElim(s, 'a', 3, 3, true);
                 case 9: return chainElim(s, 'a');
                 case 10: return nishio(s);
                 case 11: return contradiction(s, SuguruGrade.METHOD_WITHIN[11]);

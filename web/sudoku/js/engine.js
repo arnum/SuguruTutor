@@ -29,6 +29,11 @@ function engineFactory() {
     { label: TECH_LABELS[12], desc: tr("Try both options: whatever happens in both cases is true.") },
     { label: TECH_LABELS[13], desc: tr("Long assumptions where the hard techniques are used along the way too.") },
     { label: TECH_LABELS[14], desc: "" }, // the mixed pair: Suguru only (level 4 is empty in Sudoku)
+    { label: TECH_LABELS[15], desc: "" }, // the mixed triple: Suguru only (in Sudoku three cells that see each other share a house)
+    { label: TECH_LABELS[16], desc: "" }, // the short single-number chain: split off in Suguru only (here it stays in the chain)
+    { label: TECH_LABELS[17], desc: "" }, // the nook: Suguru only (it needs touching)
+    { label: TECH_LABELS[18], desc: "" }, // XY-Wing and W-Wing: named in Suguru only so far (here they stay in the chains)
+    { label: TECH_LABELS[19], desc: "" },
   ];
   // each technique's unit (its "level") and weight come from the technique table (TT, tools/grade/techniques.json)
   TECH.forEach((t, m) => Object.assign(t, { level: TT.unitOf(m), weight: TT.method(m).weight }));

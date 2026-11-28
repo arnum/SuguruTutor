@@ -29,11 +29,14 @@ function openFromHash() {
 }
 window.claude?.hot?.snapshot?.(() => (P ? { current: { puzzle: P, entries, notes, elapsed: elapsed(), solved, meta }, view } : {}));
 
-// Old games are recomputed to the newest scale from the puzzle code, a little at a time, so the statistics do not mix scales
+// Old games are recomputed to the newest scale from the puzzle code, a little at a time, so the statistics do not mix scales.
+// The statistics wait for it (REGRADING, statui.js): they read each game's grade and steps.
+let REGRADING = false;
 function regradeOld() {
   // All at once in the background (40 ms at a time); newest first, saving along the way every 500 games
   const todo = games.filter((g) => (g.fit !== GW.fit || (!g.lv && !g.arc)) && g.code && !g.noRegrade).reverse();
   if (!todo.length) return;
+  REGRADING = true;
   let i = 0,
     lastSave = 0;
   const step = () => {
@@ -83,6 +86,8 @@ function regradeOld() {
       setTimeout(step, 30);
     } else {
       saveGames(todo.some((g) => g.arc)); // older games in the archive have changed
+      REGRADING = false;
+      statAfterRegrade();
       if (view === "home") renderHome();
       if (view === "stats") renderStats();
     }

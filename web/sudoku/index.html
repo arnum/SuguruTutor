@@ -129,6 +129,7 @@
     <button type="button" data-tool="S" aria-pressed="false" aria-label="Strong link: only two places, or only two options"><i class="cline" aria-hidden="true"></i>Strong</button>
     <button type="button" data-tool="W" aria-pressed="false" aria-label="Weak link: they see each other"><i class="cline w" aria-hidden="true"></i>Weak</button>
     <button type="button" id="chainClear" class="cclear">Clear</button>
+    <button type="button" id="chainHelp" class="chelp" aria-label="How the pencil and chains work">?</button>
   </div>
   <div class="pad" id="pad"></div>
   <div class="tools">
@@ -171,6 +172,12 @@
   <iframe id="guideFrame" title="Sudoku strategies"></iframe>
 </section>
 
+<!-- ============ PENCIL AND CHAINS (toolguide.js) ============ -->
+<section class="view" id="v-tools" aria-label="Pencil and chains">
+  <div class="bar"><button class="iconbtn" type="button" data-back aria-label="Back"><svg class="i" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg></button><h2>Pencil and chains</h2><span></span></div>
+  <div id="toolsBody" class="tgbody"></div>
+</section>
+
 <!-- ============ PRACTICE ============ -->
 <section class="view" id="v-drill" aria-label="Practice">
   <div class="bar"><button class="iconbtn" type="button" id="drillBack" aria-label="Back"><svg class="i" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg></button><h2 id="drillTitle">Practice</h2><span class="drillcount" id="drillCount"></span></div>
@@ -197,6 +204,9 @@
 <script src="../shared/js/grade.js"></script>
 <script src="js/code.js"></script>
 <script src="../shared/js/route.js"></script>
+<script src="js/statref.js"></script>
+<script src="js/statprof.js"></script>
+<script src="../shared/js/statmodel.js"></script>
 <script src="../shared/js/calib.js"></script>
 <script src="../shared/js/core.js"></script>
 <script src="../shared/js/home.js"></script>
@@ -207,8 +217,8 @@
 <script src="../shared/js/play.js"></script>
 <script src="../shared/js/stats.js"></script>
 <script src="../shared/js/analysis.js"></script>
+<script src="../shared/js/statui.js"></script>
 <script src="../shared/js/takeaway.js"></script>
-<script src="../shared/js/progress.js"></script>
 <script src="../shared/js/drillgen.js"></script>
 <script src="../shared/js/games.js"></script>
 <script src="../shared/js/drill.js"></script>
@@ -216,6 +226,7 @@
 <script src="../shared/js/trial.js"></script>
 <script src="../shared/js/train.js"></script>
 <script src="../shared/js/chains.js"></script>
+<script src="../shared/js/toolguide.js"></script>
 <script src="../shared/js/debug.js"></script>
 <script src="../shared/js/settings.js"></script>
 <script src="../shared/js/main.js"></script>

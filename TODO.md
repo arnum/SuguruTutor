@@ -19,10 +19,18 @@ Built, but the numbers are guesses or rest on little data.
   temporary log.
 - **Check afterwards:** at your comfortable level, the level should hover where it is instead of drifting.
 
-### The mixed pair: price and drill par
-- Its recognition in the grade (2.6, between the pair 2.2 and the triple 3.0) and its drill's par (7.5 s per find) are
-  guesses. The fit could not tell 2.2 from 3.4, because the cheapest way seldom needs it. Set both from its drill and
-  campaign step once they have times.
+### The modes' aims and steps
+- Relax, Challenge and Learn move after each game (28 Nov.): Relax aims at 0.8 of the expected time, Challenge and Learn
+  at the expected time; up 0.2 (Challenge 0.3) for a solve without hints at or under the aim, down 0.2 when slower than
+  the mode's ok (1.0 for Relax, 1.3 for the others), down 0.4 for hints or giving up. A first setting: check from the
+  games in each mode that the grade settles where the mode feels right, and that one bad game does not undo a week.
+
+### The mixed pair and mixed triple: price and drill par
+- The mixed pair's recognition in the grade (2.6, between the pair 2.2 and the triple 3.0) and its drill's par (7.5 s
+  per find) are guesses. The fit could not tell 2.2 from 3.4, because the cheapest way seldom needs it. Set both from
+  its drill and campaign step once they have times.
+- The same for the mixed triple (28 Nov.): recognition 3.4, rung 4.5, drill par 10.5 s per find, and its reference time
+  extrapolated from the triples. Six uses in 253 test puzzles, so only its drill will give it times.
 
 ### Campaign: the rating, the bar and practice
 - The rating's numbers (campaign.js): the start (1500 ± 350, or 1600 ± 250 after 3 solved games that need the
@@ -75,20 +83,48 @@ Built, but the numbers are guesses or rest on little data.
   - **Scope:** explanations only (`stepShow` and the step-through in `tutor.js`, texts in both languages); grades, Java
     and stored data are untouched. The branch's steps are already recorded in order, including the techniques inside.
 
-### Rework the statistics, the route analysis and the solved page
+### Statistics: Skill, Focus and Performance (what is left)
+- **Built (28 Nov, in the next build):** the model, the seal and the statistics' screens. How it works, every number and
+  its checks: `tools/stats/README.md`.
+- **Check it on the phone:** how long the first reading of the games takes (about 8 s for 250 games on a laptop), the
+  seal with a three-digit Focus, and the charts' tap targets.
+- **Feed drills, campaign, training and trial boards into Skill.** First measure the cue factors (`CUE`: how much faster
+  a find is when you know which technique to look for) from the practice log, drill finds against game finds of the
+  same technique. Then their result pages show Focus (read against your normal, without adding to it) instead of the
+  concentration line and the campaign's score move from the old estimate (`myCal`, `calSkew`, `rec.est`) to the model,
+  and the old estimate and concentration code go where nothing uses them. (The three modes already measure against the
+  model's expected time, 28 Nov.)
+- **Sudoku's own reference:** fit it on Sudoku exports; until then Sudoku shows Focus only.
+- **7×7 reads 0.3 grade below Skill** on your exports, but 22 of its 32 games are one evening (14 Nov) read against a
+  borrowed normal. Check on the next export.
+- **Tuning from later exports** (the README's "To be set from data"), especially exports made after hints became events
+  in the moves.
+- **Old moves keep the solver they were played with.** A move's technique is stored when the game is analysed. After
+  the nook (28 Nov.) your earlier games still count a move made through a nook as the chain or what-if the solver
+  needed then, in Skill and in the reference fit (`fit_reference.py` gave the same reference as before). New games
+  are classified with the nook, and Focus reads against your own last 15 games, so it settles. A full fix: re-analyse
+  the games that still keep their moves when `fit` changes, in the app and in `tools/stats/exports.js`.
+
+### Rework the route analysis and the solved page
 - **Why:** these are the hardest places to give learning value consistently. Too often they show numbers or long
   explanations rather than something you can act on next game.
-- **Scope:** the statistics tabs, the route analysis sheet, and the solved page with its moments.
+- **Scope:** the route analysis sheet and the solved page with its moments. The statistics have their own item above.
 - **First step:** go through them screen by screen. For each, decide what you can learn from it, and cut or fold what
   doesn't help, in the spirit of the after-game board (show, don't tell; one thing at a time).
-- **Found so far:**
-  - **Statistics by grade ignore the board size:** "Solved by difficulty" shows best and average times per grade across
-    all sizes, but a grade 3 on 6×6 and on 9×9 are different puzzles. Split by size, or use time per empty cell. The
-    personal grade (`personalModel` in `calib.js`) has no size in it either.
-  - **The concentration chart cannot be read:** what it shows and what to do about it is not clear. Redesign it or
-    replace it with something shown on the board.
-  - **Difficulty over time has a "Show as table" button:** tapping a point already gives the details, so the table
-    adds little. Remove it, or say what it is for.
+
+### Practice: the round's summary can contradict the level (Cascade, 28 Nov)
+- **Seen:** "Per board you used about 7.8 s. Par at your level is about 8.1 s", and the level went down from 2.6 to
+  2.1. Two boards were "ok" (blue ring) and the third "slow" (grey ring).
+- **Why:** the summary compares the median of the boards' raw times with the median par, but the level moves board by
+  board, from each board's counted time: a quarter added per wrong tap, and one slow board can move the level down by up
+  to 0.6, where an ok board moves it a little. The median hides the slow board and the wrong taps.
+- **The level overreacts to one interrupted board** (a kid asks something mid-board): the same problem the statistics
+  model solves with medians. A board far slower than par moves the level as much as the slowest allowed step.
+- **Fix:** the summary shows what the level used: each board's counted time against its par, and which board moved the
+  level and why ("board 3: 21 s with a wrong tap, against 8 s"). And make the level robust: move it from the median of
+  the last few boards' levels instead of each board alone, so one interrupted board can't pull it down by itself.
+- **The two-week chart** shows only the last level of each day, so rounds earlier the same evening are invisible: the
+  line jumps from 4.1 straight to 2.1 while the text says "down from 2.6". Show each round's end, not each day's.
 
 ### Hints after the game, at any step
 - **What:** after a game (solved, given up or timed out), step through your own solution move by move. At any move, get
@@ -107,21 +143,6 @@ Built, but the numbers are guesses or rest on little data.
   the statistics for older games that still have their moves.
 - **Builds on:** the route analysis already replays your moves and knows, for each one, the easiest technique
   available. The moments after the game already show some of these boards, but only a few chosen ones.
-
-### Relax and Learn adapt, like Challenge
-- **Goal:** each mode keeps the effort and the progress constant as you get better, the way Challenge already does. Today
-  only Challenge moves after each game (up 0.3 for a clean solve within your estimate, up 0.1 within 1.3 times it, down
-  0.2 when slower, down 0.4 for hints or giving up, per board size). Relax is fixed at one grade under your usual, and
-  Learn at your usual grade with the technique it picks.
-- **Relax:** a target well within your estimate and without hints (for example about 0.8 times it). The grade moves to
-  hold that: up when it was too easy, down when it was slow or needed hints. So it stays relaxing as you improve,
-  instead of sliding into boredom.
-- **Learn:** a target around your estimate, with the technique found without a hint. The grade moves for that
-  technique: up when you found it quickly, down when you needed a hint for it or were slow, so the technique stays the
-  hard part and not the rest of the board.
-- **To decide while building:** the target and step sizes per mode (provisional, then a tuning task), and one grade
-  per board size as in Challenge.
-- **A mode does not pick the board size:** you choose it (decided 27 November).
 
 ### The technique table: what is left
 The table is built (27 Nov.: `tools/grade/techniques.json`, see "Adding a technique" in `tools/grade/README.md`). Left:
@@ -159,24 +180,17 @@ The table is built (27 Nov.: `tools/grade/techniques.json`, see "Adding a techni
   HoDoKu solves with a Swordfish.
 - Add the common ones as named variants (their own name, guide entry, practice and price). Fish need their own search;
   the others are short chains the app already finds.
-- **Suguru:** the wings (XY-Wing, W-Wing) work the same way, with "see" meaning touching or the same region, and may
-  split like the pair (seen the same way or two ways). Fish need rows and columns, but a general form may exist: a
-  number whose places in two regions lie in two 2×2 squares, one in each, so both squares hold it and their other cells
-  lose it (with one region and one square it is neighbour elimination). Count with the solver how often it occurs
-  before naming it.
+- **Suguru is done (28 Nov.):** the short single-number chain, XY-Wing and W-Wing are methods of their chains' units,
+  each with a guide page. A Suguru fish (a number whose places in two regions lie in two 2×2 squares) was counted and
+  dropped: with the basic techniques it gave a number where the short chain did not at 2 hard steps in each set.
+  **Left: Sudoku**, where the same pattern names are better known (and fish need a search of their own).
 - Compare the order within a band against times, not against HoDoKu: the two disagree there, and only times can say
   which is better.
 
-### The shortest single-number chain as its own step (Suguru)
-- The three-link single-number chain (only two places in a region, a touch, only two places in another region) is
-  the Suguru version of the Sudoku skyscraper and two-string kite. It is 75 of the 92 single-number chain steps in
-  your 222 puzzles, so it deserves its own name, guide entry and practice.
-- As a new method in the single-number chain's unit: a finder, a weight and its texts, no new level (see "Adding a
-  technique" in `tools/grade/README.md`).
-
 ### Shapes you recognise at a glance
 - Other shapes that give a number whatever the numbers on the board, if any turn up.
-- Training the shapes as shapes in practice, and region shapes as a campaign step.
+- Training the shapes as shapes in practice (the nook included: neighbour elimination's drill leaves it out), and
+  region shapes as a campaign step.
 
 ### Grading experiments
 Ideas from how others grade, none decided; run them on the exports.

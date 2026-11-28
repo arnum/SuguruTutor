@@ -32,6 +32,7 @@ const PAR = {
   2: { look: 2.5, per: 5 }, // neighbour elimination / locked candidates
   3: { look: 3, per: 6 }, // pairs
   4: { look: 3, per: 7.5 }, // the mixed pair (26 Nov 2026, a guess between pairs and triples)
+  14: { look: 3, per: 10.5 }, // the mixed triple (28 Nov 2026, a guess: as far above the triple as the mixed pair is above the pair)
   5: { look: 3, per: 9 }, // triples (no data yet)
   cascade: { look: 1.5, per: 0.75 }, // per number, without choosing it on the pad
   changed: { look: 1.5, per: 1.4 },
@@ -712,7 +713,8 @@ function drillPanel() {
   const played = (k) => (drillOf(k).log || []).length > 0;
   if (!DRILL_TECHS.some(played) && !PRACTICE_GAMES.some(played)) return "";
   return (
-    `<div class="panelcard"><h3>${tr("Practice")}</h3><p>${tr("Your level in each drill, from 0 to 10. Each board has a par time; faster than par at your level moves the level up, slower down. Tap one to practise it.")}</p>` +
+    `<div class="panelcard"><h3>${tr("Practice")}</h3>` +
+    tldr(esc(tr("Beat par to go up.")), esc(tr("Your level in each drill, from 0 to 10. Each board has a par time; faster than par at your level moves the level up, slower down. Tap one to practise it."))) +
     `<div class="dlist">${drillListHtml(null)}</div>` +
     (PRACTICE_GAMES.some(played) ? `<h3 class="dhead">${tr("Games")}</h3><div class="dlist">${gameListHtml(null)}</div>` : "") +
     `</div>`

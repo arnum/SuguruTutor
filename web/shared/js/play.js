@@ -267,6 +267,14 @@ function commitHint() {
   clearTimeout(hintTimer);
   meta.hints++;
   meta.hintTechs.push(hint.data.hardest);
+  // the hint as an event in the moves, always before the number it was for: the route analysis marks that number as got
+  // past with help (statmodel.js). Placing the hinted number commits the hint, so then it goes in just before that move.
+  const ev = { hint: hint.data.hardestLevel, hc: hint.data.cell, t: elapsed() },
+    last = meta.moves[meta.moves.length - 1];
+  if (last && last.v && !last.u && last.c === hint.data.cell && last.v === hint.data.v) {
+    ev.t = last.t;
+    meta.moves.splice(meta.moves.length - 1, 0, ev);
+  } else meta.moves.push(ev);
   saveCurrent();
   renderStatus();
 }
@@ -392,6 +400,12 @@ const IC = {
   sliders:
     '<path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/>',
   home: '<path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>',
+  pen: '<path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4z"/>',
+  // the seal's three (statui.js): a bolt for Performance, a brain for Skill, a target for Focus
+  bolt: '<path d="M13 2L4.5 13.5H11L10 22l8.5-11.5H12z"/>',
+  brain:
+    '<path d="M12 5.5a3 3 0 0 0-5.4-1.8A3 3 0 0 0 4 8a3 3 0 0 0 .5 5.3A3.2 3.2 0 0 0 7 18.5a3 3 0 0 0 5 1.2z"/><path d="M12 5.5a3 3 0 0 1 5.4-1.8A3 3 0 0 1 20 8a3 3 0 0 1-.5 5.3 3.2 3.2 0 0 1-2.5 5.2 3 3 0 0 1-5 1.2z"/><path d="M12 5.5v14.2"/>',
+  target: '<circle cx="12" cy="12" r="7.5"/><circle cx="12" cy="12" r="2.5"/><path d="M12 1.5v4M12 18.5v4M1.5 12h4M18.5 12h4"/>',
 };
 function showMenu() {
   openSheet(
@@ -405,6 +419,7 @@ function showMenu() {
       menuItem("mRestart", IC.restart, tr("Start over")) +
       `</div><div class="menu">` +
       menuItem("mInfo", IC.info, tr("About the puzzle and its difficulty")) +
+      (meta.trial ? "" : menuItem("mTools", IC.pen, tr("Pencil and chains"), tr("how they work"))) +
       menuItem("mShare", IC.share, tr("Share puzzle"), FRAMED ? tr("copy code") : "") +
       `</div><div class="menu">` +
       menuItem("mAgain", IC.plus, ui.mode === "manual" ? tr("New puzzle with the same settings") : tr("New puzzle in the same mode"), newSameLabel()) +
@@ -418,6 +433,10 @@ function showMenu() {
         const x = b.querySelector("#" + id);
         if (x) x.onclick = f;
       };
+      on("mTools", () => {
+        closeSheet();
+        openToolGuide();
+      });
       on("mCheck", () => {
         closeSheet();
         checkErrors();
@@ -602,7 +621,7 @@ function effortStrip(g) {
   return (
     s +
     `<text x="0" y="${H + 11}" font-size="10" fill="var(--mute)">${tr("first number")}</text><text x="${W}" y="${H + 11}" font-size="10" text-anchor="end" fill="var(--mute)">${tr("last number")}</text></svg>` +
-    `<p style="font-size:12.5px;color:var(--mute);margin:0 0 10px">${tr("Each bar is one number in the solution. Tall bars are heavy steps, the red one is the heaviest, the grey ones are direct numbers.")}</p>`
+    tldr(esc(tr("Tallest bar: the hardest step.")), esc(tr("Each bar is one number in the solution. Tall bars are heavy steps, the red one is the heaviest, the grey ones are direct numbers.")))
   );
 }
 // Why exactly this pattern is easy or hard to spot
@@ -636,7 +655,7 @@ function visText(h) {
 function penReason(k, h) {
   switch (k) {
     case "nopenT":
-      return tr("{tech} requires remembering the cells' options", { tech: E.TECH[h.T].label.toLowerCase() });
+      return tr("{tech} requires remembering the cells' options", { tech: inText(E.TECH[h.T].label) });
     case "multiT":
       return h.multi === 1 ? tr("1 cell is left with several options after the elimination") : tr("{n} cells are left with several options after the elimination", { n: h.multi });
     case "memT":
@@ -717,12 +736,12 @@ function profileHtml(g0) {
       row(
         "+" + f(h.R),
         tr("Recognition."),
-        tr("The heaviest step ({tech}) comes {pct} % into the puzzle.", { tech: esc(techName.toLowerCase()), pct }) + (h.vis ? " " + visText(h) : ""),
+        tr("The heaviest step ({tech}) comes {pct} % into the puzzle.", { tech: esc(inText(techName)), pct }) + (h.vis ? " " + visText(h) : ""),
       ) +
       row("+" + f(h.memT), tr("Memory."), mem) +
       row("+" + f(h.lenT), tr("Length."), h.len === 1 ? tr("The reasoning has 1 link.") : tr("The reasoning has {n} links.", { n: h.len })) +
       (h.innerT
-        ? row("+" + f(h.innerT), tr("Along the way."), tr("Along the way in the assumption you need {tech}.", { tech: list2((h.inner || []).map((t) => esc(E.TECH[t].label.toLowerCase()))) }))
+        ? row("+" + f(h.innerT), tr("Along the way."), tr("Along the way in the assumption you need {tech}.", { tech: list2((h.inner || []).map((t) => esc(inText(E.TECH[t].label)))) }))
         : TT.method(h.T).within != null
           ? row("+0", tr("Along the way."), tr("Along the way in the assumption there are only singles."))
           : "") +
@@ -750,11 +769,13 @@ function profileHtml(g0) {
   }
   return (
     `<div class="decbar" aria-hidden="true">${bar}</div>` +
-    `<p>${tr("The number is the heaviest step (peak) plus an addition for how many heavy steps there are (load). It measures effort, not which technique is used.")}</p>` +
+    tldr(
+      esc(tr("The hardest step, plus a little for each other heavy step.")),
+      esc(tr("The number is the heaviest step (peak) plus an addition for how many heavy steps there are (load). It measures effort, not which technique is used.")),
+    ) +
     effortStrip(g) +
     `<dl class="profile">${rows}<dt><b>${f(total)}</b></dt><dd><b>${BAND[band]}</b>${total >= GW.cap ? " " + tr("(the scale stops at {max})", { max: dec(GW.cap) }) : ""}</dd></dl>` +
-    estLineHtml(g0.lv, P ? P.rows * P.cols : undefined) +
-    `<p>${tr("The weights are fitted to the first 17 rated puzzles. Keep answering “how did it feel?” so they can be adjusted again.")}</p>`
+    estLineHtml(g0.lv, P ? P.rows * P.cols : undefined, g0.value, P && P.rows, P && P.cols)
   );
 }
 
@@ -778,14 +799,15 @@ function showSolved(rec) {
     esc(BAND[gBand(rec)]) + " " + dec(gradeFor(rec)),
     rec.cols + "×" + rec.rows,
     rec.daily ? tr("Daily puzzle") : "",
-    rec.est && rec.solved ? "" : fmt(rec.ms), // with an estimate the time has its own line below
+    rec.solved ? "" : fmt(rec.ms), // a solved game's time has its own line below, with the bar once the seal has come
     rec.hints ? (rec.hints === 1 ? tr("1 hint") : tr("{n} hints", { n: rec.hints })) : tr("no hints"),
     st.current > 1 ? tr("{n} days in a row", { n: st.current }) : "",
   ].filter(Boolean);
   openSheet(
-    `<div class="solved v2"><div class="shead"><div class="smallstamp" aria-hidden="true">解</div>` +
+    // the 解 stamp until the route analysis is done; then the seal (statui.js) takes its place, with the time's bar
+    `<div class="solved v2"><div class="shead"><div id="sStamp">${gNow && gNow.seal && !gNow.routePending ? sealHtml(gNow.seal, { id: "sealBtn" }) : `<div class="smallstamp" aria-hidden="true">解</div>`}</div>` +
       `<div><h2>${rec.solved ? tr("Solved!") : tr("Filled in")}</h2><p class="sub">${facts.join(" · ")}</p></div></div>${record}` +
-      (rec.est && rec.solved ? timeMeterHtml(rec.ms, rec.est, tr("expected")) : "") +
+      (rec.solved ? `<div id="sMeter">${sealMeterHtml(gNow && !gNow.routePending ? gNow : rec)}</div>` : "") +
       (rec.solved ? "" : `<p class="sub">${tr("The solution was shown along the way, so it doesn't count as solved.")}</p>`) +
       `<div id="takeaway">${
         gNow && gNow.moves && !gNow.routePending
@@ -796,7 +818,7 @@ function showSolved(rec) {
       }</div>` +
       `<div class="actions sbtns"><span id="sPractice"></span><button class="primary big" type="button" id="sNew">${tr("New puzzle")} · ${esc(newSameLabel())}</button></div>` +
       `<button class="routeline" type="button" id="routeLine">${routeLineHtml(rec)}</button>` +
-      `<div id="concLine">${concWarnHtml(rec)}</div>` +
+      `<div id="focusLine">${gNow && !gNow.routePending ? focusNoteHtml(gNow) : ""}</div>` +
       `<p class="feltq">${tr("How did it feel compared with {v}?", { v: dec(gradeFor(rec)) })}</p><div class="seg felt" id="feltSeg">` +
       FELT.map((t, i) => `<button type="button" data-f="${i - 2}" aria-pressed="${feltNow === i - 2}">${t}</button>`).join("") +
       `</div>` +
@@ -805,6 +827,7 @@ function showSolved(rec) {
       if (gNow && gNow.moves && !gNow.routePending) {
         bindAfterGame(b, gNow);
         fillPractice(b, gNow);
+        sealFill(b, gNow);
       }
       b.querySelector("#sNew").onclick = () => {
         closeSheet();

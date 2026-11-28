@@ -61,7 +61,13 @@ function renderSettings() {
     `${sw("confirm", tr("Ask before overwriting a number"), tr("Tap a different number twice to change it."))}` +
     `${sw("coords", tr("Cell names in explanations"), tr("Explanations name the cells (b3, the region with c3 and d3) instead of pointing at the colours on the board."))}` +
     (GAME.anyDigit ? `${sw("anyDigit", tr("Allow all numbers in all cells"), GAME.anyDigit)}` : "") +
-    `<div class="set stack"><span>${tr("Pencil")}</span><small>${tr("Which grade you see, and which new puzzles are chosen by. Without pencil, triples, chains and what-ifs are harder because the options must be remembered. The statistics always use the grade that fits whether you actually used the pencil in the game.")}</small><div class="seg" id="penSeg">` +
+    `<div class="set stack"><span>${tr("Pencil")}</span>` +
+    tldr(
+      esc(tr("Grade with or without pencil.")),
+      esc(tr("Which grade you see, and which new puzzles are chosen by. Without pencil, triples, chains and what-ifs are harder because the options must be remembered. The statistics always use the grade that fits whether you actually used the pencil in the game.")),
+      "setnote",
+    ) +
+    `<div class="seg" id="penSeg">` +
     [
       ["med", tr("With pencil")],
       ["uden", tr("Without pencil")],
@@ -189,6 +195,7 @@ function renderSettings() {
       onOk: () => {
         games = [];
         saveGames(true);
+        statReset();
         renderSettings();
         toast(tr("Statistics have been reset"));
       },
@@ -222,12 +229,12 @@ function storageSheet() {
       row(tr("Compressed archive"), ARCH_LEN, ARCH_N ? tr("{n} older games, about {s} per game", { n: ARCH_N, s: Math.round(ARCH_LEN / Math.max(1, ARCH_N)) + " B" }) : tr("empty until you have over {n} games", { n: ARCH_MAX })) +
       row(tr("Current game and settings"), si.total - si.history - (si.keys.archive || 0)) +
       `</table>` +
-      `<p class="caveat">${tr("Older games move to the archive automatically once you have over {a} games. They are compressed without losing anything the statistics use.", { a: ARCH_MAX })}</p>` +
+      tldr(esc(tr("Old games are packed; nothing is lost.")), esc(tr("Older games move to the archive automatically once you have over {a} games. They are compressed without losing anything the statistics use.", { a: ARCH_MAX }))) +
       `<h3>${tr("Keep full route analysis for")}</h3>` +
       `<div class="seg" id="keepSeg">${opts.map((k) => `<button type="button" data-k="${k}" aria-pressed="${k === cur}">${k === 1 ? tr("latest only") : tr("{n} games", { n: k })}</button>`).join("")}</div>` +
       `<p class="sub" id="keepInfo"></p>` +
-      `<p class="caveat">${tr("Besides the latest games, games with debug notes keep their route analysis until the notes are copied, and so do the latest games worth a second look (a moment, a record, an unusual time, or help used), up to half as many. Ordinary games are cleared first.")}</p>` +
-      `<p class="caveat">${tr("What is cleared is the moves behind the full route analysis: the chart, the boards and the “key takeaway”. All numbers in the statistics are kept, including the focus area, progress, your time curve and concentration. New games are still saved with full analysis, and the oldest are cleared as you go.")}</p>` +
+      tldr(esc(tr("Some games keep it longer.")), esc(tr("Besides the latest games, games with debug notes keep their route analysis until the notes are copied, and so do the latest games worth a second look (a moment, a record, an unusual time, or help used), up to half as many. Ordinary games are cleared first."))) +
+      tldr(esc(tr("The numbers stay; the boards go.")), esc(tr("What is cleared is the moves behind the full route analysis: the chart, the boards and the “key takeaway”. All numbers in the statistics are kept, including the focus area, progress, your time curve and concentration. New games are still saved with full analysis, and the oldest are cleared as you go."))) +
       `<div class="actions row2"><button class="secondary" type="button" id="stClose">${tr("Close")}</button><button class="primary" type="button" id="stTrim">${tr("Save and clean up")}</button></div>`,
     (b) => {
       let k = cur;
@@ -328,6 +335,7 @@ function importData() {
         games = games.concat(add).sort((a, b2) => (a.end < b2.end ? -1 : 1));
         ARCH_N = 0; // the order may have changed: rewrite all of it
         saveGames(true);
+        if (add.length) statReset(); // the statistics' record is read again from all the games
         if (d.drills && typeof d.drills === "object") mergeDrills(d.drills);
         closeSheet();
         renderSettings();

@@ -16,7 +16,12 @@ function analyzeRoute(SE, p, moves, onProgress, typ) {
   let lastT = 0;
   const total = moves.filter((m) => m.v && !m.u).length;
   let chk = null; // "Check for errors"/errors shown by the hint button since the last number
+  let hintPend = null; // a hint that counted, waiting for the number it was for
   moves.forEach((m) => {
+    if (m.hint) {
+      hintPend = { L: m.hint, c: m.hc, t: m.t };
+      return;
+    }
     if (m.chk) {
       // The errors on the board were shown: mark them, and remember the check for the next number
       onBoard.forEach((idx) => (out[idx].shown = 1));
@@ -46,8 +51,13 @@ function analyzeRoute(SE, p, moves, onProgress, typ) {
       for (let i = 0; i < G.n; i++) if (shown[i] && ent[i] !== shown[i] && i !== m.c) er.push(i);
       if (er.length) rec.er = er;
       tagError(rec, onBoard, out);
-      if (m.h) rec.cls = "hint";
-      else if (m.v !== p.solution[m.c]) rec.cls = "wrong";
+      // the number a counted hint was for (or the next one, if the hint named no cell): got past with help
+      if (hintPend && m.v === p.solution[m.c] && (hintPend.c == null || hintPend.c === m.c)) {
+        rec.hint = hintPend.L;
+        rec.hintT = hintPend.t;
+        hintPend = null;
+      }
+      if (m.v !== p.solution[m.c]) rec.cls = "wrong";
       else {
         const known = p.givens.map((g, i) => g || (i !== m.c && ent[i] === p.solution[i] ? ent[i] : 0));
         const r = tu.routeMove(known, m.c, m.v);
@@ -73,6 +83,8 @@ function analyzeRoute(SE, p, moves, onProgress, typ) {
                   ? "guess"
                   : "harder";
         }
+        // inserted by the hint: rated like any move (so the needed technique, avail, is known), then marked as a hint
+        if (m.h) rec.cls = "hint";
       }
       settleError(rec);
       if (rec.cls === "wrong") onBoard.set(m.c, out.length);

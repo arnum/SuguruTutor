@@ -40,6 +40,14 @@ public final class SuguruText {
         da("Bivalue chain", "Kæde med to-mulighedsfelter");
         da("Mixed chain", "Blandet kæde");
         da("Mixed pair", "Blandet par");
+        da("Mixed triple", "Blandet trippel");
+        da("Short single-number chain", "Kort kæde med ét tal");
+        da("Nook", "Krog");
+        da("A cell with two options sees two cells with two options each, and each shares one of its numbers. The two outer cells share a third number, and one of them holds it: cells that see both cannot.", "Et felt med to muligheder ser to felter med to muligheder hver, og hver deler et af dets tal. De to yderste felter deler et tredje tal, og et af dem har det: felter, der ser dem begge, kan ikke.");
+        da("Two cells have the same two options. If one of the numbers has only two places in a region, and each cell sees one of them, then one of the two cells holds the other number: cells that see both cannot.", "To felter har de samme to muligheder. Har det ene tal kun to pladser i en region, og ser hvert felt en af dem, så har et af de to felter det andet tal: felter, der ser dem begge, kan ikke.");
+        da("A cell touches every cell of a region but one, and its own region is no bigger. Its number must be in that region, and there only the one cell is left: the two cells are the same number.", "Et felt rører alle felter i en region undtagen ét, og dets egen region er ikke større. Dets tal må stå i den region, og der er kun det ene felt tilbage: de to felter har samme tal.");
+        da("A number has two places in each of two regions, and one place in the first touches one in the second. They cannot both be the number, so one of the two far places is. Cells that see both far places cannot hold it.", "Et tal har to pladser i hver af to regioner, og den ene plads i den første rører den ene i den anden. De kan ikke begge være tallet, så en af de to fjerne pladser er det. Felter, der ser begge fjerne pladser, kan ikke have det.");
+        da("Three cells that see each other with only three options between them are those three numbers. A cell that sees all three, some through its region and the rest by touching, cannot hold them.", "Tre felter, der ser hinanden og tilsammen kun har tre muligheder, er de tre tal. Et felt, der ser alle tre, nogle gennem sin region og resten ved at røre dem, kan ikke have dem.");
         da("Two touching cells with the same two options are those two numbers. A cell in the same region as one of them that touches the other cannot hold them.", "To felter, der rører hinanden og har de samme to muligheder, er de to tal. Et felt i samme region som det ene, der rører det andet, kan ikke have dem.");
         da("Single-number what-if", "Hvis-så med ét tal");
         da("What-if with singles", "Hvis-så med enkle tal");
@@ -75,6 +83,7 @@ public final class SuguruText {
         da("Hard", "Svær");
         da("Very hard", "Meget svær");
         da("Pair: mixed", "Par: blandet");
+        da("Triple: mixed", "Trippel: blandet");
         da("Chain: one number", "Kæde: ét tal");
         da("Chain: two options", "Kæde: to muligheder");
         da("Chain: mixed", "Kæde: blandet");
@@ -93,6 +102,7 @@ public final class SuguruText {
         da("pairs", "par");
         da("triples", "tripler");
         da("mixed pair", "blandet par");
+        da("mixed triple", "blandet trippel");
         da("single-number chain", "kæde med ét tal");
         da("bivalue chain", "kæde med to-mulighedsfelter");
         da("mixed chain", "blandet kæde");
@@ -142,7 +152,7 @@ public final class SuguruText {
         da("The code gives a puzzle with no solution.", "Koden giver en opgave uden løsning.");
         da("The code gives a puzzle with more than one solution.", "Koden giver en opgave med mere end én løsning.");
         // the booklet (SuguruBook)
-        da("--technique must be 1-12", "--teknik skal være 1-12");
+        da("--technique must be 1-12 or 14", "--teknik skal være 1-12 eller 14");
         da("--max must be 4, 5 or 6", "--maks skal være 4, 5 eller 6");
         da("Regions of at most 4 cells can only be made up to 7x7", "Regioner på højst 4 felter kan kun laves op til 7x7");
         da("--per-page must be 1, 2 or 4", "--pr-side skal være 1, 2 eller 4");

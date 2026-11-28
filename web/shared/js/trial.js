@@ -295,12 +295,15 @@ function trialChart(hist) {
   ticks.forEach((v) => (s += `<text x="${L - 6}" y="${y(v) + 4}" text-anchor="end" class="ax">${v}</text>`));
   s += `<polyline points="${mid.map((v, i) => x(i) + "," + y(v)).join(" ")}" fill="none" stroke="var(--indigo)" stroke-width="2" stroke-linejoin="round"/>`;
   const outName = { solved: tr("in time"), timeout: tr("time out"), giveup: tr("given up"), wrong: tr("wrong number") };
+  // no markers on the line (28 Nov. 2026): each board is a strip of its own to tap for its details, and only the latest
+  // board is marked, filled when solved in time and hollow when not
+  const step = (W - L - R) / Math.max(1, pts.length - 1);
   pts.forEach((h, i) => {
-    const ok = h.out === "solved";
-    s +=
-      `<circle cx="${x(i)}" cy="${y(mid[i])}" r="4" fill="${ok ? "var(--indigo)" : "var(--paper)"}" stroke="var(--indigo)" stroke-width="2"/>` +
-      `<circle cx="${x(i)}" cy="${y(mid[i])}" r="12" fill="transparent" data-tip="${esc(new Date(h.d).toLocaleDateString(LOCALE, { day: "numeric", month: "short" }) + " · " + dec(h.g) + " · " + outName[h.out] + " · " + fmt(Math.min(h.ms, h.lim * 1000)) + " / " + fmt(h.lim * 1000) + " · " + tr("index {i}", { i: mid[i] }) + (h.rd ? " (" + dn[i] + "–" + up[i] + ")" : ""))}"/>`;
+    const tip = new Date(h.d).toLocaleDateString(LOCALE, { day: "numeric", month: "short" }) + " · " + dec(h.g) + " · " + outName[h.out] + " · " + fmt(Math.min(h.ms, h.lim * 1000)) + " / " + fmt(h.lim * 1000) + " · " + tr("index {i}", { i: mid[i] }) + (h.rd ? " (" + dn[i] + "–" + up[i] + ")" : "");
+    s += `<rect x="${(x(i) - step / 2).toFixed(1)}" y="${Tp}" width="${step.toFixed(1)}" height="${H - Tp - B}" fill="transparent" data-tip="${esc(tip)}"/>`;
   });
+  const k = pts.length - 1;
+  s += `<circle cx="${x(k)}" cy="${y(mid[k])}" r="4.5" fill="${pts[k].out === "solved" ? "var(--indigo)" : "var(--paper)"}" stroke="var(--indigo)" stroke-width="2" pointer-events="none"/>`;
   return s + "</svg>";
 }
 function renderTrial() {
@@ -318,14 +321,19 @@ function renderTrial() {
         `<td style="text-align:right">${fmt(Math.min(h.ms, h.lim * 1000))} / ${fmt(h.lim * 1000)}</td><td style="text-align:right">${trialIndex(h.T1)}</td></tr>`,
     )
     .join("");
-  // the rules, short, only until the flavour's first board
-  const rules =
-    fl === "hard"
-      ? tr("In time: the next board is harder. Out of time or given up: easier. The first wrong number ends the board. No pencil, no hints.")
-      : tr("In time: the next board is harder. Out of time or given up: easier. No pencil, no hints.");
+  // the rules: a short line, the whole of them a tap away (tldr)
+  const rules = tldr(
+    esc(tr("In time: harder. Out of time: easier.")),
+    esc(
+      fl === "hard"
+        ? tr("In time: the next board is harder. Out of time or given up: easier. The first wrong number ends the board. No pencil, no hints.")
+        : tr("In time: the next board is harder. Out of time or given up: easier. No pencil, no hints."),
+    ),
+    "about",
+  );
   $("trialBody").innerHTML =
     `<div class="seg" id="trialSeg">${TRIAL_FLAVOURS.map((k) => `<button type="button" data-f="${k}" aria-pressed="${k === fl}">${trialName(k)}</button>`).join("")}</div>` +
-    (f.n ? "" : `<p class="about">${rules}</p>`) +
+    rules +
     `<div class="kpis"><div class="kpi"><b>${trialIndex(lv.T)}</b><span>${tr("Index")}</span></div><div class="kpi"><b>${f.n}</b><span>${tr("Boards")}</span></div></div>` +
     trialChart(f.hist) +
     (recent ? `<table class="data trialtab"><tr><th>${tr("Date")}</th><th>${tr("Grade")}</th><th>${tr("Result")}</th><th style="text-align:right">${tr("Time")}</th><th style="text-align:right">${tr("Index")}</th></tr>${recent}</table>` : "") +

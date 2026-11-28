@@ -30,8 +30,9 @@ function takeaway(g) {
       time: fmtS(fast.dt / 1000),
       usual: fmtS(base[moveLevel(fast)].med),
     });
-  else if (g.est && g.solved && g.ms / 1000 <= 0.87 * g.est)
-    good = tr("You were faster than your estimate: {pct}% of the time.", { pct: Math.round((100 * g.ms) / 1000 / g.est) });
+  // the same expected time as the bar above it: the seal's (statui.js), else the other modes' estimate
+  else if (expOf(g) && g.solved && g.ms / 1000 <= 0.87 * expOf(g))
+    good = tr("You were faster than expected: {pct}% of the expected time.", { pct: Math.round((100 * g.ms) / 1000 / expOf(g)) });
   else if (!primary.length && pct >= 90) (good = tr("No errors, and {pct}% of your moves were the easiest available.", { pct })), (noErrSaid = true);
   else if (r.ahead) good = r.ahead === 1 ? tr("You thought ahead once and got it right.") : tr("You thought ahead {n} times and got it right.", { n: r.ahead });
   else if (pct >= 75) good = tr("{pct}% of your moves were the easiest available.", { pct });
@@ -232,3 +233,4 @@ function errWhy(g, m, nm) {
     tr("When in doubt, pencil in the options before placing the number.")
   );
 }
+const expOf = (g) => (g.seal && g.seal.expected) || g.est || null;

@@ -35,8 +35,32 @@ const CAMP_KEEP = 20, // campaign boards kept (for the sheet afterwards, the rou
 
 const campLevels = () => TT.list();
 function campState() {
-  const c = store.get("campaign", null) || {};
-  return { passed: c.passed || {}, run: c.run || null, practice: c.practice || {}, rate: c.rate || {}, log: c.log || [], boards: c.boards || [] };
+  const s = store.get("campaign", null) || {};
+  const c = { passed: s.passed || {}, run: s.run || null, practice: s.practice || {}, rate: s.rate || {}, log: s.log || [], boards: s.boards || [] };
+  // Boards played before the rating (27 Nov. 2026, logged without a score) are replayed into it once, by the new rule: a
+  // step whose bar they fill is passed on the board that filled it ("ok" then meant solved without help within 1.5 times
+  // your usual time). In build 2026-11-27a the replay was only shown and did not pass the step, so a full bar could
+  // stand on a step not passed.
+  let moved = false;
+  for (const L of new Set(c.log.filter((e) => e.s === undefined).map((e) => e.L))) {
+    if (c.rate[L] || c.passed[L] || !TT.known(L)) continue;
+    let rt = campFresh(L);
+    for (const e of c.log) {
+      if (e.L !== L || e.s !== undefined) continue;
+      const r = e.est ? e.ms / 1000 / e.est : null;
+      rt = Object.assign(campGlicko(campAged(rt, +new Date(e.end)), campScore(e.solved && (e.ok || (r != null && r > 1.5)), r)), { t: e.end });
+      if (campDone(rt)) {
+        c.passed[L] = e.end;
+        delete c.practice[L];
+        if (c.run && c.run.L === L) c.run = null;
+        break;
+      }
+    }
+    c.rate[L] = rt;
+    moved = true;
+  }
+  if (moved) campSave(c);
+  return c;
 }
 function campSave(c) {
   const boards = c.boards.slice(-CAMP_KEEP).map((b, i, a) => {
@@ -120,17 +144,9 @@ function campAged(rt, now = Date.now()) {
 const campScore = (clean, r) => (!clean ? 0 : r == null ? 0.75 : Math.max(0, Math.min(1, (CAMP_ZERO - r) / (CAMP_ZERO - CAMP_FAST))));
 // The step's rating now. A step without one starts fresh, after the boards played before the rating came in (27 Nov.
 // 2026, logged without a score) are replayed: "ok" then meant solved without help within 1.5 times your usual time.
+// The step's rating now (boards from before the rating are replayed into it by campState)
 function campRating(L, c = campState(), now = Date.now()) {
-  let rt = c.rate[L];
-  if (!rt) {
-    rt = campFresh(L);
-    for (const e of c.log)
-      if (e.L === L && e.s === undefined) {
-        const r = e.est ? e.ms / 1000 / e.est : null;
-        rt = Object.assign(campGlicko(campAged(rt, +new Date(e.end)), campScore(e.solved && (e.ok || (r != null && r > 1.5)), r)), { t: e.end });
-      }
-  }
-  return campAged(rt, now);
+  return campAged(c.rate[L] || campFresh(L), now);
 }
 const campDone = (rt) => rt.r - rt.rd >= CAMP_BAR;
 const campPct = (rt) => Math.max(0, Math.min(1, (rt.r - rt.rd - rt.lb0) / (CAMP_BAR - rt.lb0)));
@@ -352,8 +368,8 @@ function campResult(rec) {
         ? tr("The bar is full: the boards show that you master it.")
         : out === "next"
           ? pg && pg.to < pg.from
-            ? tr("Slower than your usual time, so the bar went down a little. Quick, clean boards fill it.")
-            : tr("Quick, clean boards fill the bar the most; it moves less as it settles.")
+            ? tr("Slower than usual, so the bar went down a little.")
+            : tr("Quick boards count most.")
           : !rec.solved
             ? ""
             : rec.campRatio != null && rec.campRatio > CAMP_SLOW
@@ -467,22 +483,31 @@ function renderCamp() {
           `<button class="primary" type="button" data-cplay="${L}">${esc(tr("Play a puzzle with {tech}", { tech: LEVEL_TECH[L] }))}</button>` +
           (campCanPractise(L) ? `<button class="secondary" type="button" data-cdrill="${L}">${esc(tr("Practise {tech}", { tech: LEVEL_TECH[L] }))}</button>` : "");
       } else if (isCur) {
-        sub =
-          (TT.beyond(L) && campRating(L, c).n < CAMP_PART ? tr("The first boards start where {tech} is the next step.", { tech: LEVEL_TECH[L] }) + " " : "") +
-          tr("Quick, clean boards fill the bar; a full bar passes the step.");
+        // short; the rule in full is a tap away
+        sub = tldr(
+          esc(tr("Quick, clean boards fill the bar.")),
+          esc(
+            (TT.beyond(L) && campRating(L, c).n < CAMP_PART ? tr("The first boards start where {tech} is the next step.", { tech: LEVEL_TECH[L] }) + " " : "") +
+              tr("Quick, clean boards fill the bar; a full bar passes the step."),
+          ),
+        );
         act = `<button class="primary" type="button" id="campGo">${esc(st.board ? tr("Next board") : c.practice[L] ? tr("Try again") : tr("Start"))}</button>`;
       }
       return (
         `<li class="campstep ${st.kind === "passed" ? "done" : isCur ? "cur" : "later"}">` +
         `<span class="campn" aria-hidden="true">${st.kind === "passed" ? "✓" : i + 1}</span>` +
-        `<div><strong>${esc(cap(LEVEL_TECH[L]))}</strong>${sub ? `<span class="sub">${esc(sub)}</span>` : ""}` +
+        `<div><strong>${esc(cap(LEVEL_TECH[L]))}</strong>${sub ? (sub.startsWith("<details") ? sub : `<span class="sub">${esc(sub)}</span>`) : ""}` +
         (isCur ? campBarHtml(L, campPct(campRating(L, c))) + campExampleHtml(L) : "") +
         `${act ? `<div class="campact">${act}</div>` : ""}</div></li>`
       );
     })
     .join("");
   $("campBody").innerHTML =
-    `<p class="about">${tr("One step per technique, in order. Boards have no hints and stay out of your statistics. Quick, clean boards fill a step's bar, slow ones a little; after a long break it drops a little. If a board does not go well, practise the technique in normal games or practice and come back.")}</p>` +
+    tldr(
+      esc(tr("One step per technique. No hints.")),
+      esc(tr("One step per technique, in order. Boards have no hints and stay out of your statistics. Quick, clean boards fill a step's bar, slow ones a little; after a long break it drops a little. If a board does not go well, practise the technique in normal games or practice and come back.")),
+      "about",
+    ) +
     `<ol class="campath">${rows}</ol>`;
   const g = $("campGo");
   if (g) g.onclick = campStart;

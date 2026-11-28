@@ -85,6 +85,9 @@ const STANDALONE = (window.matchMedia && matchMedia("(display-mode: standalone)"
 const IOS = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 const cap = (s) => (s ? s[0].toUpperCase() + s.slice(1) : s); // capital first letter
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+// A short line that opens to the whole text (27 Nov. 2026): the short line is what most players need, the rest is a tap
+// away. short and full are HTML (escape them first).
+const tldr = (short, full, cls = "") => `<details class="tldr${cls ? " " + cls : ""}"><summary>${short}</summary><div>${full}</div></details>`;
 
 // ---------- Storage. Everything is wrapped in try/catch: in some views storage is turned off, and then the app only remembers in memory.
 // The player's own data (PERSONAL) lives in keys of its own for a guest (guest mode, below); settings are shared.
@@ -373,7 +376,7 @@ function syncClock() {
 }
 
 // ---------- Navigation between screens
-const ORDER = { home: 0, new: 1, stats: 1, settings: 1, camp: 1, trial: 1, guide: 2, game: 2, drill: 3 };
+const ORDER = { home: 0, new: 1, stats: 1, settings: 1, camp: 1, trial: 1, guide: 2, game: 2, tools: 3, drill: 3 };
 let backTo = "home";
 function go(v, opts = {}) {
   const prev = view;
@@ -390,13 +393,14 @@ function go(v, opts = {}) {
   if (v === "settings") renderSettings();
   if (v === "camp") renderCamp();
   if (v === "trial") renderTrial();
+  if (v === "tools") renderToolGuide();
   if (v === "game") renderAll();
   syncClock();
   if (prev === "game") saveCurrent();
 }
 document
   .querySelectorAll("[data-back]")
-  .forEach((b) => (b.onclick = () => go(view === "guide" && backTo === "game" ? "game" : "home", { back: true })));
+  .forEach((b) => (b.onclick = () => go((view === "guide" || view === "tools") && backTo === "game" ? "game" : "home", { back: true })));
 
 // ---------- Sheets, toast and tooltip
 let sheetToken = 0,

@@ -18,8 +18,8 @@ import java.util.*;
  *   --count N          number of puzzles (default 12)
  *   --size WxH         width x height, e.g. 6x6 or 8x10 (default 6x6)
  *   --grade X          difficulty: one number (1-9), a range (3-6) or a list (2,4,6). Default 3-6
- *   --technique T      the puzzle must need technique level T (1-12): 2 neighbour elimination, 3 pairs, 4 mixed pair,
- *                      5 triples, 6-8 chains, 9-12 what-if
+ *   --technique T      the puzzle must need technique level T (1-12 or 14): 2 neighbour elimination, 3 pairs,
+ *                      4 mixed pair, 5 triples, 14 mixed triple, 6-8 chains, 9-12 what-if
  *   --type K           all | short (few heavy moves) | long (many heavy moves). Default all
  *   --nuance N         all | mild (.0-.3) | medium (.4-.6) | hard (.7-.9). Default all
  *   --max M            largest region size 4, 5 or 6 (default 5; 4 only up to 7x7)
@@ -51,7 +51,7 @@ public final class SuguruBook {
         int cols = Integer.parseInt(wh[0].trim()), rows = Integer.parseInt(wh[1].trim());
         List<Integer> levels = parseLevels(o.getOrDefault("grade", o.getOrDefault("level", "3-6")));
         int must = Integer.parseInt(o.getOrDefault("technique", "0"));
-        if (must != 0 && !SuguruGrade.known(must)) throw new IllegalArgumentException(SuguruText.t("--technique must be 1-12"));
+        if (must != 0 && !SuguruGrade.known(must)) throw new IllegalArgumentException(SuguruText.t("--technique must be 1-12 or 14"));
         String kind = KIND.getOrDefault(o.getOrDefault("type", "all").toLowerCase(), "all");
         int[] band = nuance(o.getOrDefault("nuance", "all"));
         int maxRegion = Integer.parseInt(o.getOrDefault("max", "5"));
